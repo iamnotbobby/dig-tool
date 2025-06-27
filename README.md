@@ -22,6 +22,7 @@ A highly configurable automation tool specifically for the ROBLOX game ["Dig"](h
 - Clone this repository: `git clone https://github.com/iamnotbobby/dig-tool`
 - Install dependencies: `pip install -r requirements.txt`
 - Run the application: `python main.py`
+  
 If you wish to also compile from source you can run: ``python -m nuitka --onefile --enable-plugin=tk-inter --include-package=ahk --include-package-data=ahk --include-package-data=jinja2 --lto=yes --windows-console-mode=disable --windows-icon-from-ico=assets/icon.ico main.py``
 
 > [!NOTE]
