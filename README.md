@@ -29,7 +29,7 @@ A highly configurable automation tool specifically for the ROBLOX game ["Dig"](h
 
 ### How It Works
 
-The tool captures the screen continuously and analyzes each frame to find moving lines and colored zones. When it detects a line moving toward the target area, it calculates where the line will be in the future and attempts to click precisely inb the middle of the colored zone.
+The tool captures the screen continuously and analyzes each frame to find moving lines and colored zones. When it detects a line moving toward the target area, it calculates where the line will be in the future and attempts to click precisely in the middle of the colored zone.
 
 ### Detection Process
 
@@ -40,6 +40,6 @@ The tool captures the screen continuously and analyzes each frame to find moving
 
 This tool is meant to perform its detection tasks with minimal delay and minimal resource usage.
 
-## Contribution
+## Footnotes
 
-Feel free to contribute by opening a PR!
+Feel free to contribute by opening a PR! For issues or questions, you can join the [discord](https://discord.com/invite/mxE7dzXMGf).
