@@ -43,7 +43,7 @@ jobs:
           script-name: main.py
           mode: onefile
           enable-plugins: tk-inter
-          windows-disable-console: true
+          windows-console-mode: disable
           windows-icon-from-ico: assets/icon.ico
           lto: yes
           include-module: ahk,jinja2
