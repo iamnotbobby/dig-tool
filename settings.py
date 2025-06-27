@@ -20,13 +20,14 @@ class SettingsManager:
             'system_latency': 0,
             'max_prediction_time': 50,
             'min_velocity_threshold': 30,
-            'prediction_confidence_threshold': 0.85,
+            'prediction_confidence_threshold': 0.7,
             'zone_smoothing_factor': 1.0,
-            'post_click_blindness': 200,
+            'post_click_blindness': 250,
             'max_zone_width_percent': 30,
             'main_on_top': True,
             'preview_on_top': True,
-            'debug_on_top': True
+            'debug_on_top': True,
+            'debug_clicks_enabled': False
         }
 
         self.param_descriptions = {
@@ -46,7 +47,8 @@ class SettingsManager:
             'prediction_confidence_threshold': "How confident the prediction must be (0.0-1.0). Higher = more conservative prediction.",
             'main_on_top': "Keep the main window always on top of other windows.",
             'preview_on_top': "Keep the preview window always on top of other windows.",
-            'debug_on_top': "Keep the debug window always on top of other windows."
+            'debug_on_top': "Keep the debug window always on top of other windows.",
+            'debug_clicks_enabled': "Save screenshots and debug information for every click performed."
         }
 
         self.default_keybinds = {
@@ -137,7 +139,7 @@ class SettingsManager:
                 elif key == 'prediction_confidence_threshold':
                     return 0.0 <= val <= 1.0
                 return True
-            elif key in ['prediction_enabled', 'main_on_top', 'preview_on_top', 'debug_on_top']:
+            elif key in ['prediction_enabled', 'main_on_top', 'preview_on_top', 'debug_on_top', 'debug_clicks_enabled']:
                 return isinstance(value, bool)
             return True
         except (ValueError, TypeError):

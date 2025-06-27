@@ -212,13 +212,15 @@ class DigTool:
         self.hotkey_thread = None
         self.results_queue = queue.Queue(maxsize=1)
         self.debug_dir = "debug_clicks"
-        if not os.path.exists(self.debug_dir):
-            os.makedirs(self.debug_dir)
         self.debug_log_path = os.path.join(self.debug_dir, "click_log.txt")
 
         self.create_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, self.update_gui_from_queue)
+
+    def ensure_debug_dir(self):
+        if self.get_param('debug_clicks_enabled') and not os.path.exists(self.debug_dir):
+            os.makedirs(self.debug_dir)
 
     def on_closing(self):
         self.preview_active = False
@@ -372,9 +374,10 @@ class DigTool:
         detection_pane = CollapsiblePane(config_frame, text="Detection", manager=self.accordion)
         behavior_pane = CollapsiblePane(config_frame, text="Behavior", manager=self.accordion)
         window_pane = CollapsiblePane(config_frame, text="Window", manager=self.accordion)
+        debug_pane = CollapsiblePane(config_frame, text="Debug", manager=self.accordion)
         hotkeys_pane = CollapsiblePane(config_frame, text="Hotkeys", manager=self.accordion)
         settings_pane = CollapsiblePane(config_frame, text="Settings", manager=self.accordion)
-        for pane in [detection_pane, behavior_pane, window_pane, hotkeys_pane, settings_pane]:
+        for pane in [detection_pane, behavior_pane, window_pane, debug_pane, hotkeys_pane, settings_pane]:
             pane.pack(fill='x', pady=2)
             self.accordion.add_pane(pane)
 
@@ -438,6 +441,8 @@ class DigTool:
 
         debug_top_check = create_checkbox_param(window_pane.sub_frame, "Debug Window Always on Top", 'debug_on_top')
         self.param_vars['debug_on_top'].trace_add('write', self.toggle_debug_on_top)
+
+        create_checkbox_param(debug_pane.sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
 
         def set_hotkey_thread(key_var, button):
             button.config(text="Press any key...", state=tk.DISABLED, bg="#0078D4", fg="#ffffff")
@@ -623,7 +628,8 @@ class DigTool:
             self.update_status("Clicking Started...")
             self.click_count = 0
             self.velocity_calculator = VelocityCalculator()
-            self.init_debug_log()
+            if self.get_param('debug_clicks_enabled'):
+                self.init_debug_log()
             if self.click_lock.locked(): self.click_lock.release()
         else:
             self.running = False
@@ -632,6 +638,7 @@ class DigTool:
 
     def init_debug_log(self):
         try:
+            self.ensure_debug_dir()
             with open(self.debug_log_path, 'w') as f:
                 f.write("Dig Tool Debug Log\n")
                 f.write("==================\n")
@@ -644,6 +651,8 @@ class DigTool:
 
     def log_click_debug(self, click_num, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
                         prediction_used, confidence, screenshot_filename):
+        if not self.get_param('debug_clicks_enabled'):
+            return
         try:
             timestamp = int(time.time())
             click_type = "PREDICTION" if prediction_used else "DIRECT"
@@ -672,26 +681,33 @@ class DigTool:
 
     def save_debug_screenshot(self, screenshot, line_pos, sweet_spot_start, sweet_spot_end, zone_y2_cached, velocity,
                               acceleration, prediction_used=False, confidence=0.0):
-        debug_img = screenshot.copy()
-        height = debug_img.shape[0]
+        if not self.get_param('debug_clicks_enabled'):
+            return
 
-        if self.smoothed_zone_x is not None:
-            cv2.rectangle(debug_img, (int(self.smoothed_zone_x), 0),
-                          (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2_cached), (0, 255, 0), 3)
+        try:
+            self.ensure_debug_dir()
+            debug_img = screenshot.copy()
+            height = debug_img.shape[0]
 
-        if sweet_spot_start is not None and sweet_spot_end is not None:
-            cv2.rectangle(debug_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2_cached), (0, 255, 255),
-                          3)
+            if self.smoothed_zone_x is not None:
+                cv2.rectangle(debug_img, (int(self.smoothed_zone_x), 0),
+                              (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2_cached), (0, 255, 0), 3)
 
-        if line_pos != -1:
-            cv2.line(debug_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 4)
+            if sweet_spot_start is not None and sweet_spot_end is not None:
+                cv2.rectangle(debug_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2_cached),
+                              (0, 255, 255), 3)
 
-        filename = f"click_{self.click_count:03d}_{int(time.time())}.jpg"
-        filepath = os.path.join(self.debug_dir, filename)
-        cv2.imwrite(filepath, debug_img)
+            if line_pos != -1:
+                cv2.line(debug_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 4)
 
-        self.log_click_debug(self.click_count, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
-                             prediction_used, confidence, filename)
+            filename = f"click_{self.click_count:03d}_{int(time.time())}.jpg"
+            filepath = os.path.join(self.debug_dir, filename)
+            cv2.imwrite(filepath, debug_img)
+
+            self.log_click_debug(self.click_count, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
+                                 prediction_used, confidence, filename)
+        except Exception as e:
+            print(f"Error saving debug screenshot: {e}")
 
     def run_main_loop(self):
         target_fps = 120
