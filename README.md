@@ -15,7 +15,7 @@ A highly configurable automation tool specifically for the ROBLOX game ["Dig"](h
 ## Installation 
 
 ### Option 1: Quick Start (Recommended)
-- Download the pre-compiled executable from the [releases page](https://github.com/iamnotbobby/dig-tool/releases/tag/v1.1)
+- Download the pre-compiled executable from the [releases page](https://github.com/iamnotbobby/dig-tool/releases)
 - No Python installation required - just run the .exe file
 
 > [!WARNING]
