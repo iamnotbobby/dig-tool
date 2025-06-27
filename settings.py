@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 class SettingsManager:
     def __init__(self, dig_tool_instance):
         self.dig_tool = dig_tool_instance
+
         self.default_params = {
             'line_sensitivity': 50,
             'line_min_height': 100,
@@ -59,6 +60,23 @@ class SettingsManager:
             'toggle_gui': "Show/hide the main control window.",
             'toggle_overlay': "Toggle the game overlay display on/off."
         }
+
+    def get_default_value(self, key):
+        return self.default_params.get(key)
+
+    def get_default_keybind(self, key):
+        return self.default_keybinds.get(key)
+
+    def get_param_type(self, key):
+        default_value = self.get_default_value(key)
+        if isinstance(default_value, bool):
+            return tk.BooleanVar
+        elif isinstance(default_value, float):
+            return tk.DoubleVar
+        elif isinstance(default_value, int):
+            return tk.IntVar
+        else:
+            return tk.StringVar
 
     def get_description(self, key):
         return self.param_descriptions.get(key, "No description available.")
@@ -119,9 +137,7 @@ class SettingsManager:
                 elif key == 'prediction_confidence_threshold':
                     return 0.0 <= val <= 1.0
                 return True
-            elif key == 'prediction_enabled':
-                return isinstance(value, bool)
-            elif key in ['main_on_top', 'preview_on_top', 'debug_on_top']:
+            elif key in ['prediction_enabled', 'main_on_top', 'preview_on_top', 'debug_on_top']:
                 return isinstance(value, bool)
             return True
         except (ValueError, TypeError):

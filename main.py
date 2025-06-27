@@ -30,7 +30,7 @@ check_dependencies()
 import cv2
 import numpy as np
 import tkinter as tk
-from tkinter import Label, Button, Frame, Checkbutton, TclError, ttk
+from tkinter import Label, Button, Frame, Checkbutton, TclError, ttk, filedialog
 import threading
 import time
 from PIL import Image, ImageTk
@@ -39,6 +39,7 @@ import collections
 import queue
 import warnings
 import os
+import json
 
 from ui_components import GameOverlay, CollapsiblePane, AccordionManager, Tooltip
 from utils import ScreenCapture, send_click
@@ -378,7 +379,7 @@ class DigTool:
             pane.pack(fill='x', pady=2)
             self.accordion.add_pane(pane)
 
-        def create_param_entry(parent, text, var_key, default_value, var_type=tk.IntVar):
+        def create_param_entry(parent, text, var_key):
             frame = Frame(parent, bg=FRAME_BG)
             frame.pack(fill='x', pady=4, padx=5)
             label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=FRAME_BG, fg=TEXT_COLOR)
@@ -387,59 +388,57 @@ class DigTool:
             tooltip_text = self.settings_manager.get_description(var_key)
             Tooltip(label, tooltip_text)
 
+            default_value = self.settings_manager.get_default_value(var_key)
+            var_type = self.settings_manager.get_param_type(var_key)
+
             self.param_vars[var_key] = var_type(value=default_value)
             self.last_known_good_params[var_key] = default_value
-            tk.Entry(frame, textvariable=self.param_vars[var_key], font=(FONT_FAMILY, 9), bg=FRAME_BG, fg=TEXT_COLOR,
-                     relief='solid', width=15, borderwidth=1).pack(side='right', ipady=4)
 
-        create_param_entry(detection_pane.sub_frame, "Line Sensitivity:", 'line_sensitivity', 50, tk.IntVar)
-        create_param_entry(detection_pane.sub_frame, "Line Min Height (%):", 'line_min_height', 100, tk.IntVar)
-        create_param_entry(detection_pane.sub_frame, "Zone Min Width:", 'zone_min_width', 100, tk.IntVar)
-        create_param_entry(detection_pane.sub_frame, "Zone Max Width (%):", 'max_zone_width_percent', 30, tk.IntVar)
-        create_param_entry(detection_pane.sub_frame, "Zone Min Height (%):", 'min_zone_height_percent', 100, tk.IntVar)
-        create_param_entry(detection_pane.sub_frame, "Initial Saturation Thresh:", 'saturation_threshold', 1, tk.IntVar)
-        create_param_entry(behavior_pane.sub_frame, "Zone Smoothing:", 'zone_smoothing_factor', 1.0, tk.DoubleVar)
-        create_param_entry(behavior_pane.sub_frame, "Target Width (%):", 'sweet_spot_width_percent', 15, tk.IntVar)
-        create_param_entry(behavior_pane.sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness', 250,
-                           tk.IntVar)
+            if var_type != tk.BooleanVar:
+                tk.Entry(frame, textvariable=self.param_vars[var_key], font=(FONT_FAMILY, 9), bg=FRAME_BG,
+                         fg=TEXT_COLOR, relief='solid', width=15, borderwidth=1).pack(side='right', ipady=4)
 
-        self.param_vars['prediction_enabled'] = tk.BooleanVar(value=True)
-        pred_check = Checkbutton(behavior_pane.sub_frame, text="Enable Prediction",
-                                 variable=self.param_vars['prediction_enabled'], bg=FRAME_BG, fg=TEXT_COLOR,
-                                 selectcolor=BG_COLOR, activebackground=FRAME_BG, activeforeground=TEXT_COLOR,
-                                 font=(FONT_FAMILY, 9))
-        pred_check.pack(anchor='w', pady=5, padx=5)
-        Tooltip(pred_check, self.settings_manager.get_description('prediction_enabled'))
+        def create_checkbox_param(parent, text, var_key):
+            default_value = self.settings_manager.get_default_value(var_key)
+            self.param_vars[var_key] = tk.BooleanVar(value=default_value)
+            self.last_known_good_params[var_key] = default_value
 
-        create_param_entry(behavior_pane.sub_frame, "Latency (ms):", 'system_latency', 0, tk.IntVar)
-        create_param_entry(behavior_pane.sub_frame, "Max Prediction (ms):", 'max_prediction_time', 50, tk.IntVar)
-        create_param_entry(behavior_pane.sub_frame, "Min Velocity:", 'min_velocity_threshold', 30, tk.IntVar)
-        create_param_entry(behavior_pane.sub_frame, "Prediction Confidence:", 'prediction_confidence_threshold', 0.7,
-                           tk.DoubleVar)
+            check = Checkbutton(parent, text=text, variable=self.param_vars[var_key], bg=FRAME_BG, fg=TEXT_COLOR,
+                                selectcolor=BG_COLOR, activebackground=FRAME_BG, activeforeground=TEXT_COLOR,
+                                font=(FONT_FAMILY, 9))
+            check.pack(anchor='w', pady=5, padx=5)
 
-        check_style = {'bg': FRAME_BG, 'fg': TEXT_COLOR, 'selectcolor': BG_COLOR, 'activebackground': FRAME_BG,
-                       'activeforeground': TEXT_COLOR, 'font': (FONT_FAMILY, 9)}
+            tooltip_text = self.settings_manager.get_description(var_key)
+            Tooltip(check, tooltip_text)
+            return check
 
-        self.param_vars['main_on_top'] = tk.BooleanVar(value=True)
+        create_param_entry(detection_pane.sub_frame, "Line Sensitivity:", 'line_sensitivity')
+        create_param_entry(detection_pane.sub_frame, "Line Min Height (%):", 'line_min_height')
+        create_param_entry(detection_pane.sub_frame, "Zone Min Width:", 'zone_min_width')
+        create_param_entry(detection_pane.sub_frame, "Zone Max Width (%):", 'max_zone_width_percent')
+        create_param_entry(detection_pane.sub_frame, "Zone Min Height (%):", 'min_zone_height_percent')
+        create_param_entry(detection_pane.sub_frame, "Initial Saturation Thresh:", 'saturation_threshold')
+
+        create_param_entry(behavior_pane.sub_frame, "Zone Smoothing:", 'zone_smoothing_factor')
+        create_param_entry(behavior_pane.sub_frame, "Target Width (%):", 'sweet_spot_width_percent')
+        create_param_entry(behavior_pane.sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
+
+        create_checkbox_param(behavior_pane.sub_frame, "Enable Prediction", 'prediction_enabled')
+
+        create_param_entry(behavior_pane.sub_frame, "Latency (ms):", 'system_latency')
+        create_param_entry(behavior_pane.sub_frame, "Max Prediction (ms):", 'max_prediction_time')
+        create_param_entry(behavior_pane.sub_frame, "Min Velocity:", 'min_velocity_threshold')
+        create_param_entry(behavior_pane.sub_frame, "Prediction Confidence:", 'prediction_confidence_threshold')
+
+        main_top_check = create_checkbox_param(window_pane.sub_frame, "Main Window Always on Top", 'main_on_top')
         self.param_vars['main_on_top'].trace_add('write', self.toggle_main_on_top)
-        main_top_check = Checkbutton(window_pane.sub_frame, text="Main Window Always on Top",
-                                     variable=self.param_vars['main_on_top'], **check_style)
-        main_top_check.pack(anchor='w', pady=5, padx=5)
-        Tooltip(main_top_check, self.settings_manager.get_description('main_on_top'))
 
-        self.param_vars['preview_on_top'] = tk.BooleanVar(value=True)
+        preview_top_check = create_checkbox_param(window_pane.sub_frame, "Preview Window Always on Top",
+                                                  'preview_on_top')
         self.param_vars['preview_on_top'].trace_add('write', self.toggle_preview_on_top)
-        preview_top_check = Checkbutton(window_pane.sub_frame, text="Preview Window Always on Top",
-                                        variable=self.param_vars['preview_on_top'], **check_style)
-        preview_top_check.pack(anchor='w', pady=5, padx=5)
-        Tooltip(preview_top_check, self.settings_manager.get_description('preview_on_top'))
 
-        self.param_vars['debug_on_top'] = tk.BooleanVar(value=True)
+        debug_top_check = create_checkbox_param(window_pane.sub_frame, "Debug Window Always on Top", 'debug_on_top')
         self.param_vars['debug_on_top'].trace_add('write', self.toggle_debug_on_top)
-        debug_top_check = Checkbutton(window_pane.sub_frame, text="Debug Window Always on Top",
-                                      variable=self.param_vars['debug_on_top'], **check_style)
-        debug_top_check.pack(anchor='w', pady=5, padx=5)
-        Tooltip(debug_top_check, self.settings_manager.get_description('debug_on_top'))
 
         def set_hotkey_thread(key_var, button):
             button.config(text="Press any key...", state=tk.DISABLED, bg="#0078D4", fg="#ffffff")
@@ -454,7 +453,7 @@ class DigTool:
                 button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
                 self.apply_keybinds()
 
-        def create_hotkey_setter(parent, text, key_name, default_value):
+        def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=FRAME_BG)
             frame.pack(fill='x', pady=10, padx=5)
             label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=FRAME_BG, fg=TEXT_COLOR)
@@ -463,7 +462,9 @@ class DigTool:
             tooltip_text = self.settings_manager.get_keybind_description(key_name)
             Tooltip(label, tooltip_text)
 
+            default_value = self.settings_manager.get_default_keybind(key_name)
             self.keybind_vars[key_name] = tk.StringVar(value=default_value)
+
             hotkey_btn = Button(frame, text=default_value.upper(), font=(FONT_FAMILY, 10, 'bold'), bg=BTN_BG,
                                 fg=TEXT_COLOR, relief='solid', borderwidth=1, width=15, pady=5)
             hotkey_btn.config(
@@ -472,9 +473,9 @@ class DigTool:
                                                                                              daemon=True).start())
             hotkey_btn.pack(side='right')
 
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Bot:", 'toggle_bot', 'f1')
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle GUI:", 'toggle_gui', 'f2')
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Overlay:", 'toggle_overlay', 'f3')
+        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Bot:", 'toggle_bot')
+        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle GUI:", 'toggle_gui')
+        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Overlay:", 'toggle_overlay')
 
         settings_btn_frame = Frame(settings_pane.sub_frame, bg=FRAME_BG)
         settings_btn_frame.pack(fill='x', pady=10, padx=5)

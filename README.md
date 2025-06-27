@@ -1,8 +1,7 @@
 
 <div align="center">
   
-
-# Dig Tool
+<h1>Dig Tool</h1>
   
 </div>
 
@@ -10,7 +9,8 @@
 
 A highly configurable automation tool specifically for the ROBLOX game ["Dig"](https://www.roblox.com/games/126244816328678) where several algorithms are used in order achieve accuracy during the minigame.
 
-> **Note:** If in any circumstances tools like these become *banned* by Dig staff, this repository and its contents will be archived.
+> [!NOTE]
+> If in any circumstances tools like these become *banned* by Dig staff, this repository and its contents will be archived.
 
 ## Installation 
 
@@ -19,16 +19,17 @@ A highly configurable automation tool specifically for the ROBLOX game ["Dig"](h
 - No Python installation required - just run the .exe file
 
 ### Option 2: Run from Source
-- Clone this repository: `git clone `
+- Clone this repository: `git clone https://github.com/iamnotbobby/dig-tool`
 - Install dependencies: `pip install -r requirements.txt`
 - Run the application: `python main.py`
 
-> **Note:** Option 1 is recommended for most users as it requires no technical setup and comes with a performance boost. Choose Option 2 if you want to modify the code or prefer running from source.
+> [!NOTE]
+> Option 1 is recommended for most users as it requires no technical setup and comes with a performance boost due to it's compilation nature. Choose Option 2 if you want to modify the code or prefer running from source.
 ## Technical Overview
 
 ### How It Works
 
-The tool captures your screen continuously and analyzes each frame to find moving lines and colored zones. When it detects a line moving toward the target area, it calculates where the line will be in the future and attempts to click precisely inb the middle of the colored zone.
+The tool captures the screen continuously and analyzes each frame to find moving lines and colored zones. When it detects a line moving toward the target area, it calculates where the line will be in the future and attempts to click precisely inb the middle of the colored zone.
 
 ### Detection Process
 
