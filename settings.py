@@ -13,7 +13,7 @@ class SettingsManager:
             'line_sensitivity': 50,
             'line_min_height': 100,
             'zone_min_width': 100,
-            'saturation_threshold': 1,
+            'saturation_threshold': 1.0,
             'min_zone_height_percent': 100,
             'sweet_spot_width_percent': 15,
             'prediction_enabled': True,
