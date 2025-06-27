@@ -176,7 +176,7 @@ class DigTool:
         except:
             pass
 
-        self.base_height = 360
+        self.base_height = 400
         self.width = 450
         self.root.geometry(f"{self.width}x{self.base_height}")
         self.root.minsize(self.width, self.base_height)
