@@ -30,7 +30,15 @@ If you wish to also compile from source you can run: ``python -m nuitka --onefil
 
 > [!NOTE]
 > Option 1 is recommended for most users as it requires no technical setup and comes with a performance boost due to it's compilation nature. Choose Option 2 if you want to modify the code or prefer running from source.
+
+## Usage
+
+You just need to select an area where it is not being interfered by text or other icons. See the example picture below. 
+![example](assets/example.png)
+This is different for other resolutions as the UI elements in-game will be scaled differently! That also means you may have to change detection parameters like Zone Min. Width since it measures by pixels.
+
 ## Technical Overview
+
 
 ### How It Works
 
