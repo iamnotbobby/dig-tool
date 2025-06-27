@@ -41,11 +41,12 @@ jobs:
         with:
           nuitka-version: main
           script-name: main.py
-          mode: standalone
+          mode: onefile
           enable-plugins: tk-inter
           windows-icon-from-ico: assets/icon.ico
           lto: yes
-          include-module: ahk
+          include-module: ahk,jinja2
+          include-package-data: ahk,jinja2
 
       - name: Get executable name
         id: get_exe_name
