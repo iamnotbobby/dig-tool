@@ -1,0 +1,5 @@
+.idea
+debug_clicks
+__pycache__
+main.build
+main.dist
