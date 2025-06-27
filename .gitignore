@@ -3,3 +3,5 @@ debug_clicks
 __pycache__
 main.build
 main.dist
+main.onefile-build
+main.exe
