@@ -1,92 +1,70 @@
-name: Build and Release DigTool
+name: Build and Release with PyInstaller
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version tag (e.g., v1.0.0)'
+      release_tag:
+        description: 'v1.0'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.0'
+      release_name:
+        description: 'v1.0'
+        required: true
+        default: 'release v1.0'
+      release_notes:
+        description: 'release notes'
+        required: false
+        default: 'compiled with PyInstaller'
 
 jobs:
-  build-windows:
+  build-and-release:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Check-out repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install opencv-python numpy Pillow keyboard pywin32 ahk pyinstaller
+      - name: Install Dependencies
+        run: |
+          pip install opencv-python numpy Pillow keyboard pywin32 ahk pyinstaller
 
-    - name: Build executable
-      run: |
-        pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="ui_components.py;." --add-data="utils.py;." --add-data="settings.py;." main.py
+      - name: Build Executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="ui_components.py;." --add-data="utils.py;." --add-data="settings.py;." main.py
 
-    - name: Create release package
-      run: |
-        mkdir release
-        copy dist\DigTool.exe release\
-        copy README.md release\
-        copy LICENSE release\ 2>nul || echo "No LICENSE file found"
+      - name: Get executable name
+        id: get_exe_name
+        run: |
+          $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=dist/$exeName" >> $env:GITHUB_OUTPUT
+        shell: powershell
 
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: DigTool-Windows
-        path: release/
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          release_name: ${{ github.event.inputs.release_name }}
+          body: ${{ github.event.inputs.release_notes }}
+          draft: false
+          prerelease: false
 
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.event.inputs.version || github.ref_name }}
-        name: DigTool
-        body: |
-          Built on ${{ github.run_date }} with Pyinstaller
-        files: |
-          release/DigTool.exe
-          release/README.md
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test-build:
-    runs-on: windows-latest
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install opencv-python numpy Pillow keyboard pywin32 ahk pyinstaller
-
-    - name: Test build
-      run: |
-        pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="ui_components.py;." --add-data="utils.py;." --add-data="settings.py;." main.py
-
-    - name: Upload test build
-      uses: actions/upload-artifact@v3
-      with:
-        name: DigTool-Test-Build
-        path: dist/DigTool.exe
-        retention-days: 7
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.get_exe_name.outputs.exe_path }}
+          asset_name: ${{ steps.get_exe_name.outputs.exe_name }}
+          asset_content_type: application/octet-stream
