@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import Label, Button, Frame, ttk
+from tkinter import Label, Frame, ttk
 import win32gui, win32con
 from PIL import Image, ImageTk
 import cv2

@@ -30,7 +30,7 @@ check_dependencies()
 import cv2
 import numpy as np
 import tkinter as tk
-from tkinter import Label, Button, Frame, Checkbutton, TclError, ttk, filedialog
+from tkinter import Label, Button, Frame, Checkbutton, TclError, ttk
 import threading
 import time
 from PIL import Image, ImageTk
@@ -39,7 +39,6 @@ import collections
 import queue
 import warnings
 import os
-import json
 
 from ui_components import GameOverlay, CollapsiblePane, AccordionManager, Tooltip
 from utils import ScreenCapture, send_click
