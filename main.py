@@ -1,168 +1,39 @@
-import sys
-import importlib
+import warnings
+import os
 
-
-def check_dependencies():
-    required_packages = {
-        'cv2': 'opencv-python',
-        'numpy': 'numpy',
-        'PIL': 'Pillow',
-        'keyboard': 'keyboard',
-        'win32gui': 'pywin32',
-        'ahk': 'ahk'
-    }
-    missing_packages = []
-    for module, package in required_packages.items():
-        try:
-            importlib.import_module(module)
-        except ImportError:
-            missing_packages.append(package)
-    if missing_packages:
-        print("Missing required packages:")
-        for package in missing_packages:
-            print(f"  pip install {package}")
-        print("\nPlease install the missing packages and try again.")
-        sys.exit(1)
-
+from utils.system_utils import check_dependencies
 
 check_dependencies()
+
+try:
+    import ctypes
+
+    PROCESS_PER_MONITOR_DPI_AWARE = 2
+    ctypes.windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
+except:
+    pass
 
 import cv2
 import numpy as np
 import tkinter as tk
-from tkinter import Label, Button, Frame, Checkbutton, TclError, ttk
+from tkinter import Label, Frame, TclError
 import threading
 import time
 from PIL import Image, ImageTk
 import keyboard
-import collections
 import queue
-import warnings
-import os
 
-from ui_components import GameOverlay, CollapsiblePane, AccordionManager, Tooltip
-from utils import ScreenCapture, send_click
-from settings import SettingsManager
+from interface.components import GameOverlay
+from interface.main_window import MainWindow
+from interface.settings import SettingsManager
+from utils.screen_capture import ScreenCapture
+from utils.system_utils import send_click, check_display_scale
+from core.detection import find_line_position, VelocityCalculator
+from core.automation import AutomationManager
+from core.notifications import DiscordNotifier
 
 warnings.filterwarnings("ignore")
-
-
-def find_line_position(gray_array, sensitivity_threshold=50, min_height_ratio=0.7):
-    height, width = gray_array.shape
-    if width < 3:
-        return -1
-    left_cols = gray_array[:, :-2].astype(np.float32)
-    center_cols = gray_array[:, 1:-1].astype(np.float32)
-    right_cols = gray_array[:, 2:].astype(np.float32)
-    gradients = np.abs(center_cols - left_cols) + np.abs(center_cols - right_cols)
-    vertical_sum = np.sum(gradients, axis=0)
-    best_x = -1
-    max_gradient_sum = -1
-    thresh = sensitivity_threshold * height * 0.2
-    candidate_indices = np.where(vertical_sum > thresh)[0]
-    strong_edge_threshold = sensitivity_threshold * 0.5
-    min_pixels = height * min_height_ratio
-    for x_idx in candidate_indices:
-        x = x_idx + 1
-        col_gradients = gradients[:, x_idx]
-        if np.sum(col_gradients > strong_edge_threshold) >= min_pixels:
-            current_sum = vertical_sum[x_idx]
-            if current_sum > max_gradient_sum:
-                max_gradient_sum = current_sum
-                best_x = x
-    return best_x
-
-
-class VelocityCalculator:
-    def __init__(self, history_length=10):
-        self.position_history = collections.deque(maxlen=history_length)
-        self.velocity_history = collections.deque(maxlen=5)
-
-    def add_position(self, position, timestamp):
-        if position == -1:
-            return 0
-        self.position_history.append((position, timestamp))
-        return self.calculate_velocity()
-
-    def calculate_velocity(self):
-        if len(self.position_history) < 2:
-            return 0
-
-        valid_points = [(pos, t) for pos, t in self.position_history if pos != -1]
-        if len(valid_points) < 2:
-            return 0
-
-        if len(valid_points) >= 3:
-            velocity = self._weighted_velocity(valid_points)
-        else:
-            pos1, t1 = valid_points[-2]
-            pos2, t2 = valid_points[-1]
-            dt = t2 - t1
-            velocity = (pos2 - pos1) / dt if dt > 0 else 0
-
-        self.velocity_history.append(velocity)
-        return self._smooth_velocity()
-
-    def _weighted_velocity(self, points):
-        if len(points) < 3:
-            return 0
-
-        weights = np.exp(np.linspace(-1, 0, len(points)))
-        weights = weights / np.sum(weights)
-
-        velocities = []
-        for i in range(1, len(points)):
-            pos1, t1 = points[i - 1]
-            pos2, t2 = points[i]
-            dt = t2 - t1
-            if dt > 0:
-                velocities.append((pos2 - pos1) / dt)
-
-        if not velocities:
-            return 0
-
-        if len(velocities) == 1:
-            return velocities[0]
-
-        velocity_weights = weights[-len(velocities):]
-        velocity_weights = velocity_weights / np.sum(velocity_weights)
-
-        return np.average(velocities, weights=velocity_weights)
-
-    def _smooth_velocity(self):
-        if len(self.velocity_history) == 0:
-            return 0
-        if len(self.velocity_history) == 1:
-            return self.velocity_history[-1]
-
-        weights = np.array([0.1, 0.2, 0.3, 0.4, 0.5])[-len(self.velocity_history):]
-        weights = weights / np.sum(weights)
-
-        return np.average(list(self.velocity_history), weights=weights)
-
-    def get_acceleration(self):
-        if len(self.velocity_history) < 2:
-            return 0
-
-        recent_velocities = list(self.velocity_history)[-3:]
-        if len(recent_velocities) < 2:
-            return 0
-
-        time_interval = 1.0 / 120.0
-        accel = (recent_velocities[-1] - recent_velocities[0]) / (time_interval * (len(recent_velocities) - 1))
-        return accel
-
-    def predict_position(self, current_pos, target_pos, current_time, prediction_time):
-        if len(self.velocity_history) == 0:
-            return current_pos
-
-        velocity = self.velocity_history[-1]
-        acceleration = self.get_acceleration()
-
-        predicted_pos = current_pos + (velocity * prediction_time) + (
-                    0.5 * acceleration * prediction_time * prediction_time)
-
-        return predicted_pos
+check_display_scale()
 
 
 class DigTool:
@@ -176,7 +47,7 @@ class DigTool:
         except:
             pass
 
-        self.base_height = 400
+        self.base_height = 570
         self.width = 450
         self.root.geometry(f"{self.width}x{self.base_height}")
         self.root.minsize(self.width, self.base_height)
@@ -184,15 +55,21 @@ class DigTool:
         self.param_vars = {}
         self.keybind_vars = {}
         self.last_known_good_params = {}
+
         self.settings_manager = SettingsManager(self)
+        self.automation_manager = AutomationManager(self)
+        self.discord_notifier = DiscordNotifier()
+        self.main_window = MainWindow(self)
 
         self.game_area = None
+        self.cursor_position = None
         self.running = False
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
         self.screen_grabber = ScreenCapture()
         self.click_count = 0
+        self.dig_count = 0
         self.click_lock = threading.Lock()
         self.velocity_calculator = VelocityCalculator()
         self.blind_until = 0
@@ -214,7 +91,10 @@ class DigTool:
         self.debug_dir = "debug_clicks"
         self.debug_log_path = os.path.join(self.debug_dir, "click_log.txt")
 
-        self.create_ui()
+        self.last_milestone_notification = 0
+        self.milestone_interval = 100
+
+        self.main_window.create_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, self.update_gui_from_queue)
 
@@ -223,6 +103,16 @@ class DigTool:
             os.makedirs(self.debug_dir)
 
     def on_closing(self):
+        if self.running:
+            try:
+                webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+                user_id = self.param_vars.get('user_id', tk.StringVar()).get()
+                if webhook_url:
+                    self.discord_notifier.set_webhook_url(webhook_url)
+                    self.discord_notifier.send_shutdown_notification(user_id if user_id else None)
+            except:
+                pass
+
         self.preview_active = False
         self.running = False
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -321,180 +211,148 @@ class DigTool:
         if self.game_area:
             x1, y1, x2, y2 = self.game_area
             width, height = x2 - x1, y2 - y1
-            area_text = f"Area: {width}x{height} at ({x1}, {y1})"
+            area_text = f"Game Area: {width}x{height} at ({x1}, {y1})"
         else:
-            area_text = "Area: Not set"
+            area_text = "Game Area: Not set"
         self.area_info_label.config(text=area_text)
 
-    def create_ui(self):
-        BG_COLOR = "#f0f0f0"
-        FRAME_BG = "#ffffff"
-        TEXT_COLOR = "#000000"
-        BTN_BG = "#e1e1e1"
-        FONT_FAMILY = "Segoe UI"
-        self.root.configure(bg=BG_COLOR)
-        self.controls_panel = Frame(self.root, bg=BG_COLOR, padx=10, pady=10)
-        self.controls_panel.pack(side=tk.TOP, fill=tk.X, expand=False)
-        Label(self.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 14, 'bold'), bg=BG_COLOR, fg=TEXT_COLOR).pack(
-            pady=(0, 5), anchor='center')
-        self.status_label = Label(self.controls_panel, text="Status: Select a game area to begin.",
-                                  font=(FONT_FAMILY, 9), bg=BG_COLOR, fg=TEXT_COLOR, wraplength=780, justify='left')
-        self.status_label.pack(fill=tk.X, pady=(0, 5), anchor='w')
-        self.area_info_label = Label(self.controls_panel, text="Area: Not set", font=(FONT_FAMILY, 8), bg=BG_COLOR,
-                                     fg="#666666", wraplength=780, justify='left')
-        self.area_info_label.pack(fill=tk.X, pady=(0, 10), anchor='w')
-        actions_frame = Frame(self.controls_panel, bg=BG_COLOR)
-        actions_frame.pack(fill=tk.X, pady=(0, 5))
-        button_style = {'font': (FONT_FAMILY, 9), 'bg': BTN_BG, 'fg': TEXT_COLOR, 'relief': 'solid', 'borderwidth': 1,
-                        'pady': 5}
-        Button(actions_frame, text="Select Area", command=self.start_area_selection, **button_style).pack(side=tk.LEFT,
-                                                                                                          expand=True,
-                                                                                                          fill=tk.X,
-                                                                                                          padx=(0, 2))
-        self.start_stop_btn = Button(actions_frame, text="Start", command=self.toggle_detection, **button_style)
-        self.start_stop_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        self.toggle_gui_btn = Button(actions_frame, text="Show/Hide", command=self.toggle_gui, **button_style)
-        self.toggle_gui_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        self.overlay_btn = Button(actions_frame, text="Overlay", command=self.toggle_overlay, **button_style)
-        self.overlay_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
-        preview_actions_frame = Frame(self.controls_panel, bg=BG_COLOR)
-        preview_actions_frame.pack(fill=tk.X, pady=5)
-        self.preview_btn = Button(preview_actions_frame, text="Show Preview", command=self.toggle_preview_window,
-                                  state=tk.DISABLED, **button_style)
-        self.preview_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        self.debug_btn = Button(preview_actions_frame, text="Show Debug", command=self.toggle_debug_window,
-                                state=tk.DISABLED, **button_style)
-        self.debug_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        config_frame = Frame(self.controls_panel, bg=BG_COLOR)
-        config_frame.pack(fill='x', expand=True, pady=(5, 0))
-        style = ttk.Style()
-        style.configure("Header.TButton", font=(FONT_FAMILY, 9, 'bold'), background="#dcdcdc", relief="flat")
-        style.map("Header.TButton", background=[('active', '#c8c8c8')])
-        self.accordion = AccordionManager(self)
-        detection_pane = CollapsiblePane(config_frame, text="Detection", manager=self.accordion)
-        behavior_pane = CollapsiblePane(config_frame, text="Behavior", manager=self.accordion)
-        window_pane = CollapsiblePane(config_frame, text="Window", manager=self.accordion)
-        debug_pane = CollapsiblePane(config_frame, text="Debug", manager=self.accordion)
-        hotkeys_pane = CollapsiblePane(config_frame, text="Hotkeys", manager=self.accordion)
-        settings_pane = CollapsiblePane(config_frame, text="Settings", manager=self.accordion)
-        for pane in [detection_pane, behavior_pane, window_pane, debug_pane, hotkeys_pane, settings_pane]:
-            pane.pack(fill='x', pady=2)
-            self.accordion.add_pane(pane)
+    def update_sell_info(self):
+        if self.automation_manager.sell_button_position:
+            x, y = self.automation_manager.sell_button_position
+            sell_text = f"Sell Button: Set at ({x}, {y})"
+        else:
+            sell_text = "Sell Button: Not set"
+        self.sell_info_label.config(text=sell_text)
 
-        def create_param_entry(parent, text, var_key):
-            frame = Frame(parent, bg=FRAME_BG)
-            frame.pack(fill='x', pady=4, padx=5)
-            label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=FRAME_BG, fg=TEXT_COLOR)
-            label.pack(side='left')
+    def update_cursor_info(self):
+        if hasattr(self, 'cursor_position') and self.cursor_position:
+            x, y = self.cursor_position
+            cursor_text = f"Cursor Position: Set at ({x}, {y})"
+        else:
+            cursor_text = "Cursor Position: Not set"
+        self.cursor_info_label.config(text=cursor_text)
 
-            tooltip_text = self.settings_manager.get_description(var_key)
-            Tooltip(label, tooltip_text)
+    def start_area_selection(self):
+        self.root.iconify()
+        self.selection_overlay = tk.Toplevel()
+        self.selection_overlay.attributes('-fullscreen', True, '-alpha', 0.2, '-topmost', True)
+        self.selection_overlay.configure(bg='blue', cursor='crosshair')
+        self.selection_rect = tk.Frame(self.selection_overlay, bg='red', highlightthickness=1,
+                                       highlightbackground='white')
+        self.selection_overlay.bind('<Button-1>', self.on_drag_start)
+        self.selection_overlay.bind('<B1-Motion>', self.on_drag_motion)
+        self.selection_overlay.bind('<ButtonRelease-1>', self.on_drag_end)
 
-            default_value = self.settings_manager.get_default_value(var_key)
-            var_type = self.settings_manager.get_param_type(var_key)
+    def on_drag_start(self, event):
+        self.drag_start = (event.x_root, event.y_root)
+        self.selection_rect.place(x=event.x, y=event.y, width=1, height=1)
 
-            self.param_vars[var_key] = var_type(value=default_value)
-            self.last_known_good_params[var_key] = default_value
+    def on_drag_motion(self, event):
+        x1, y1 = self.drag_start;
+        x2, y2 = event.x_root, event.y_root
+        x, y = self.selection_overlay.winfo_rootx(), self.selection_overlay.winfo_rooty()
+        self.selection_rect.place(x=min(x1, x2) - x, y=min(y1, y2) - y, width=abs(x1 - x2), height=abs(y1 - y2))
 
-            if var_type != tk.BooleanVar:
-                tk.Entry(frame, textvariable=self.param_vars[var_key], font=(FONT_FAMILY, 9), bg=FRAME_BG,
-                         fg=TEXT_COLOR, relief='solid', width=15, borderwidth=1).pack(side='right', ipady=4)
-
-        def create_checkbox_param(parent, text, var_key):
-            default_value = self.settings_manager.get_default_value(var_key)
-            self.param_vars[var_key] = tk.BooleanVar(value=default_value)
-            self.last_known_good_params[var_key] = default_value
-
-            check = Checkbutton(parent, text=text, variable=self.param_vars[var_key], bg=FRAME_BG, fg=TEXT_COLOR,
-                                selectcolor=BG_COLOR, activebackground=FRAME_BG, activeforeground=TEXT_COLOR,
-                                font=(FONT_FAMILY, 9))
-            check.pack(anchor='w', pady=5, padx=5)
-
-            tooltip_text = self.settings_manager.get_description(var_key)
-            Tooltip(check, tooltip_text)
-            return check
-
-        create_param_entry(detection_pane.sub_frame, "Line Sensitivity:", 'line_sensitivity')
-        create_param_entry(detection_pane.sub_frame, "Line Min Height (%):", 'line_min_height')
-        create_param_entry(detection_pane.sub_frame, "Zone Min Width:", 'zone_min_width')
-        create_param_entry(detection_pane.sub_frame, "Zone Max Width (%):", 'max_zone_width_percent')
-        create_param_entry(detection_pane.sub_frame, "Zone Min Height (%):", 'min_zone_height_percent')
-        create_param_entry(detection_pane.sub_frame, "Initial Saturation Thresh:", 'saturation_threshold')
-
-        create_param_entry(behavior_pane.sub_frame, "Zone Smoothing:", 'zone_smoothing_factor')
-        create_param_entry(behavior_pane.sub_frame, "Target Width (%):", 'sweet_spot_width_percent')
-        create_param_entry(behavior_pane.sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
-
-        create_checkbox_param(behavior_pane.sub_frame, "Enable Prediction", 'prediction_enabled')
-
-        create_param_entry(behavior_pane.sub_frame, "Latency (ms):", 'system_latency')
-        create_param_entry(behavior_pane.sub_frame, "Max Prediction (ms):", 'max_prediction_time')
-        create_param_entry(behavior_pane.sub_frame, "Min Velocity:", 'min_velocity_threshold')
-        create_param_entry(behavior_pane.sub_frame, "Prediction Confidence:", 'prediction_confidence_threshold')
-
-        main_top_check = create_checkbox_param(window_pane.sub_frame, "Main Window Always on Top", 'main_on_top')
-        self.param_vars['main_on_top'].trace_add('write', self.toggle_main_on_top)
-
-        preview_top_check = create_checkbox_param(window_pane.sub_frame, "Preview Window Always on Top",
-                                                  'preview_on_top')
-        self.param_vars['preview_on_top'].trace_add('write', self.toggle_preview_on_top)
-
-        debug_top_check = create_checkbox_param(window_pane.sub_frame, "Debug Window Always on Top", 'debug_on_top')
-        self.param_vars['debug_on_top'].trace_add('write', self.toggle_debug_on_top)
-
-        create_checkbox_param(debug_pane.sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
-
-        def set_hotkey_thread(key_var, button):
-            button.config(text="Press any key...", state=tk.DISABLED, bg="#0078D4", fg="#ffffff")
-            self.root.update_idletasks()
-            try:
-                event = keyboard.read_event(suppress=True)
-                if event.event_type == keyboard.KEY_DOWN:
-                    key_var.set(event.name)
-            except Exception as e:
-                self.update_status(f"Hotkey capture failed: {e}")
-            finally:
-                button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
-                self.apply_keybinds()
-
-        def create_hotkey_setter(parent, text, key_name):
-            frame = Frame(parent, bg=FRAME_BG)
-            frame.pack(fill='x', pady=10, padx=5)
-            label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=FRAME_BG, fg=TEXT_COLOR)
-            label.pack(side='left', padx=(0, 20))
-
-            tooltip_text = self.settings_manager.get_keybind_description(key_name)
-            Tooltip(label, tooltip_text)
-
-            default_value = self.settings_manager.get_default_keybind(key_name)
-            self.keybind_vars[key_name] = tk.StringVar(value=default_value)
-
-            hotkey_btn = Button(frame, text=default_value.upper(), font=(FONT_FAMILY, 10, 'bold'), bg=BTN_BG,
-                                fg=TEXT_COLOR, relief='solid', borderwidth=1, width=15, pady=5)
-            hotkey_btn.config(
-                command=lambda v=self.keybind_vars[key_name], b=hotkey_btn: threading.Thread(target=set_hotkey_thread,
-                                                                                             args=(v, b),
-                                                                                             daemon=True).start())
-            hotkey_btn.pack(side='right')
-
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Bot:", 'toggle_bot')
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle GUI:", 'toggle_gui')
-        create_hotkey_setter(hotkeys_pane.sub_frame, "Toggle Overlay:", 'toggle_overlay')
-
-        settings_btn_frame = Frame(settings_pane.sub_frame, bg=FRAME_BG)
-        settings_btn_frame.pack(fill='x', pady=10, padx=5)
-        Button(settings_btn_frame, text="Save Settings", command=self.settings_manager.save_settings,
-               **button_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        Button(settings_btn_frame, text="Load Settings", command=self.settings_manager.load_settings,
-               **button_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        reset_btn_frame = Frame(settings_pane.sub_frame, bg=FRAME_BG)
-        reset_btn_frame.pack(fill='x', pady=(5, 10), padx=5)
-        Button(reset_btn_frame, text="Reset to Defaults", command=self.settings_manager.reset_to_defaults,
-               **button_style).pack(side=tk.LEFT, expand=True, fill=tk.X)
-
-        self.update_main_button_text()
-        self.toggle_main_on_top()
+    def on_drag_end(self, event):
+        x1, y1 = self.drag_start;
+        x2, y2 = event.x_root, event.y_root
+        self.game_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+        self.selection_overlay.destroy()
+        self.root.deiconify()
+        self.update_status("Game area set. Press Start to begin.")
+        self.preview_btn.config(state=tk.NORMAL)
+        self.debug_btn.config(state=tk.NORMAL)
         self.update_area_info()
+        self.start_threads()
+
+    def start_sell_button_selection(self):
+        self.root.iconify()
+        self.sell_selection_overlay = tk.Toplevel()
+        self.sell_selection_overlay.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
+        self.sell_selection_overlay.configure(bg='red', cursor='crosshair')
+
+        instruction_label = Label(self.sell_selection_overlay,
+                                  text="FIRST: Press 'G' to open your inventory\nTHEN: Click on the SELL BUTTON",
+                                  font=("Arial", 20, "bold"), bg='red', fg='white')
+        instruction_label.pack(pady=100)
+
+        self.sell_selection_overlay.bind('<Button-1>', self.on_sell_button_click)
+
+    def on_sell_button_click(self, event):
+        self.automation_manager.sell_button_position = (event.x_root, event.y_root)
+        self.sell_selection_overlay.destroy()
+        self.root.deiconify()
+        self.update_status(f"Sell button set at ({event.x_root}, {event.y_root})")
+        self.update_sell_info()
+
+    def start_cursor_position_selection(self):
+        self.root.iconify()
+        self.cursor_selection_overlay = tk.Toplevel()
+        self.cursor_selection_overlay.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
+        self.cursor_selection_overlay.configure(bg='blue', cursor='crosshair')
+
+        instruction_label = Label(self.cursor_selection_overlay,
+                                  text="Click to set cursor position for clicking",
+                                  font=("Arial", 20, "bold"), bg='blue', fg='white')
+        instruction_label.pack(pady=100)
+
+        self.cursor_selection_overlay.bind('<Button-1>', self.on_cursor_position_click)
+
+    def on_cursor_position_click(self, event):
+        self.cursor_position = (event.x_root, event.y_root)
+        self.cursor_selection_overlay.destroy()
+        self.root.deiconify()
+        self.update_status(f"Cursor position set at ({event.x_root}, {event.y_root})")
+        self.update_cursor_info()
+
+    def test_sell_button_click(self):
+        """Delegate to AutomationManager's test method"""
+        self.automation_manager.test_sell_button_click()
+
+    def test_discord_ping(self):
+        try:
+            webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+            user_id = self.param_vars.get('user_id', tk.StringVar()).get()
+
+            if not webhook_url:
+                self.update_status("Webhook URL not set!")
+                return
+
+            self.update_status("Testing Discord ping...")
+            self.discord_notifier.set_webhook_url(webhook_url)
+
+            success = self.discord_notifier.test_webhook(user_id if user_id else None)
+
+            if success:
+                self.update_status("Discord ping test completed successfully!")
+            else:
+                self.update_status("Discord ping test failed!")
+
+        except Exception as e:
+            self.update_status(f"Discord ping test error: {e}")
+
+    def check_milestone_notifications(self):
+        try:
+            webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+            user_id = self.param_vars.get('user_id', tk.StringVar()).get()
+            milestone_interval = self.param_vars.get('milestone_interval', tk.IntVar()).get()
+
+            if not webhook_url or milestone_interval <= 0:
+                return
+
+            if (self.dig_count > 0 and
+                    self.dig_count % milestone_interval == 0 and
+                    self.dig_count != self.last_milestone_notification):
+                self.discord_notifier.set_webhook_url(webhook_url)
+                self.discord_notifier.send_milestone_notification(
+                    self.dig_count,
+                    self.click_count,
+                    user_id if user_id else None
+                )
+                self.last_milestone_notification = self.dig_count
+
+        except Exception as e:
+            print(f"Error sending milestone notification: {e}")
 
     def toggle_main_on_top(self, *args):
         self.root.attributes('-topmost', self.param_vars['main_on_top'].get())
@@ -555,39 +413,6 @@ class DigTool:
             self.debug_label = None
             self.color_swatch_label = None
 
-    def start_area_selection(self):
-        self.root.iconify()
-        self.selection_overlay = tk.Toplevel()
-        self.selection_overlay.attributes('-fullscreen', True, '-alpha', 0.2, '-topmost', True)
-        self.selection_overlay.configure(bg='blue', cursor='crosshair')
-        self.selection_rect = tk.Frame(self.selection_overlay, bg='red', highlightthickness=1,
-                                       highlightbackground='white')
-        self.selection_overlay.bind('<Button-1>', self.on_drag_start)
-        self.selection_overlay.bind('<B1-Motion>', self.on_drag_motion)
-        self.selection_overlay.bind('<ButtonRelease-1>', self.on_drag_end)
-
-    def on_drag_start(self, event):
-        self.drag_start = (event.x_root, event.y_root)
-        self.selection_rect.place(x=event.x, y=event.y, width=1, height=1)
-
-    def on_drag_motion(self, event):
-        x1, y1 = self.drag_start;
-        x2, y2 = event.x_root, event.y_root
-        x, y = self.selection_overlay.winfo_rootx(), self.selection_overlay.winfo_rooty()
-        self.selection_rect.place(x=min(x1, x2) - x, y=min(y1, y2) - y, width=abs(x1 - x2), height=abs(y1 - y2))
-
-    def on_drag_end(self, event):
-        x1, y1 = self.drag_start;
-        x2, y2 = event.x_root, event.y_root
-        self.game_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
-        self.selection_overlay.destroy()
-        self.root.deiconify()
-        self.update_status("Game area set. Press Start to begin.")
-        self.preview_btn.config(state=tk.NORMAL)
-        self.debug_btn.config(state=tk.NORMAL)
-        self.update_area_info()
-        self.start_threads()
-
     def update_gui_from_queue(self):
         try:
             preview_array, debug_mask, overlay_info = self.results_queue.get_nowait()
@@ -624,16 +449,39 @@ class DigTool:
     def _toggle_detection_thread_safe(self):
         if not self.running:
             if not self.game_area: self.update_status("Select game area first"); return
+
             self.running = True
-            self.update_status("Clicking Started...")
+            self.update_status("Bot Started...")
             self.click_count = 0
+            self.dig_count = 0
             self.velocity_calculator = VelocityCalculator()
+            self.automation_manager.walk_pattern_index = 0
             if self.get_param('debug_clicks_enabled'):
                 self.init_debug_log()
             if self.click_lock.locked(): self.click_lock.release()
+
+            try:
+                webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+                user_id = self.param_vars.get('user_id', tk.StringVar()).get()
+                if webhook_url:
+                    self.discord_notifier.set_webhook_url(webhook_url)
+                    self.discord_notifier.send_startup_notification(user_id if user_id else None)
+            except:
+                pass
+
         else:
             self.running = False
             self.update_status("Stopped")
+
+            try:
+                webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+                user_id = self.param_vars.get('user_id', tk.StringVar()).get()
+                if webhook_url:
+                    self.discord_notifier.set_webhook_url(webhook_url)
+                    self.discord_notifier.send_shutdown_notification(user_id if user_id else None)
+            except:
+                pass
+
         self.update_main_button_text()
 
     def init_debug_log(self):
@@ -656,7 +504,10 @@ class DigTool:
         try:
             timestamp = int(time.time())
             click_type = "PREDICTION" if prediction_used else "DIRECT"
-            sweet_spot_range = f"{int(sweet_spot_start)}-{int(sweet_spot_end)}" if sweet_spot_start is not None else "N/A"
+            if sweet_spot_start is not None and sweet_spot_end is not None:
+                sweet_spot_range = f"{int(sweet_spot_start)}-{int(sweet_spot_end)}"
+            else:
+                sweet_spot_range = "N/A"
 
             log_entry = f"{click_num:03d} | {timestamp} | {line_pos:4d} | {velocity:6.1f} | {acceleration:6.1f} | {sweet_spot_range:>10} | {click_type:>10} | {confidence:4.2f} | {screenshot_filename}\n"
 
@@ -674,6 +525,15 @@ class DigTool:
         if not self.running:
             self.click_lock.release()
             return
+
+        if self.get_param('use_custom_cursor') and self.cursor_position:
+            try:
+                current_pos = self.cursor_position
+                ctypes.windll.user32.SetCursorPos(*current_pos)
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Error setting cursor position: {e}")
+
         send_click()
         self.last_click_time = time.time() * 1000
         self.click_count += 1
@@ -700,11 +560,12 @@ class DigTool:
             if line_pos != -1:
                 cv2.line(debug_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 4)
 
-            filename = f"click_{self.click_count:03d}_{int(time.time())}.jpg"
+            filename = f"click_{self.click_count + 1:03d}_{int(time.time())}.jpg"
             filepath = os.path.join(self.debug_dir, filename)
             cv2.imwrite(filepath, debug_img)
 
-            self.log_click_debug(self.click_count, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
+            self.log_click_debug(self.click_count + 1, line_pos, velocity, acceleration, sweet_spot_start,
+                                 sweet_spot_end,
                                  prediction_used, confidence, filename)
         except Exception as e:
             print(f"Error saving debug screenshot: {e}")
@@ -717,11 +578,18 @@ class DigTool:
         zone_y2_cached = None
         kernel = np.ones((5, 15), np.uint8)
 
+        auto_walk_state = "move"
+        move_completed_time = 0
+        wait_for_target_start = 0
+        dig_completed_time = 0
+        max_wait_time = 3000
+        post_dig_delay = 2000
+
         while self.preview_active:
             start_time = time.perf_counter()
             current_time_ms = time.time() * 1000
 
-            if self.game_area is None or current_time_ms < self.blind_until:
+            if self.game_area is None:
                 time.sleep(target_delay)
                 continue
 
@@ -813,9 +681,51 @@ class DigTool:
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
 
-            if self.running and sweet_spot_center is not None and not self.click_lock.locked():
-                line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
+            if self.running and self.get_param('auto_walk_enabled') and not self.automation_manager.is_selling:
+
+                if auto_walk_state == "move":
+                    if (self.get_param('auto_sell_enabled') and self.automation_manager.sell_button_position and
+                            self.dig_count > 0 and self.dig_count % self.get_param('sell_every_x_digs') == 0 and
+                            dig_completed_time > 0 and current_time_ms - dig_completed_time >= post_dig_delay):
+                        threading.Thread(target=self.automation_manager.perform_auto_sell, daemon=True).start()
+                        dig_completed_time = 0
+                        while self.automation_manager.is_selling and self.running:
+                            time.sleep(0.1)
+
+                    if not self.automation_manager.is_selling:
+                        direction = self.automation_manager.get_next_walk_direction()
+                        threading.Thread(target=self.automation_manager.perform_walk_step, args=(direction,),
+                                         daemon=True).start()
+
+                        auto_walk_state = "click_to_start"
+                        move_completed_time = current_time_ms + self.get_param('walk_duration') + 300
+
+                elif auto_walk_state == "click_to_start" and current_time_ms >= move_completed_time and not self.automation_manager.is_selling:
+                    if not self.click_lock.locked():
+                        self.click_lock.acquire()
+                        threading.Thread(target=self.perform_click, args=(0,)).start()
+                        auto_walk_state = "wait_for_target"
+                        wait_for_target_start = current_time_ms
+
+                elif auto_walk_state == "wait_for_target" and not self.automation_manager.is_selling:
+                    if raw_zone_x is not None and sweet_spot_center is not None:
+                        auto_walk_state = "digging"
+                    elif current_time_ms - wait_for_target_start > max_wait_time:
+                        auto_walk_state = "move"
+
+                elif auto_walk_state == "digging":
+                    pass
+
+            should_allow_clicking = True
+            if self.get_param('auto_walk_enabled'):
+                should_allow_clicking = auto_walk_state == "digging" and not self.automation_manager.is_selling
+
+            if (self.running and should_allow_clicking and current_time_ms >= self.blind_until and
+                    sweet_spot_center is not None and not self.click_lock.locked()):
+
                 should_click, click_delay, prediction_used, confidence = False, 0, False, 0.0
+
+                line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
 
                 if self.get_param('prediction_enabled') and line_pos != -1:
                     min_velocity = self.get_param('min_velocity_threshold')
@@ -823,7 +733,7 @@ class DigTool:
 
                     if abs(velocity) >= min_velocity:
                         is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
-                                    line_pos > sweet_spot_center and velocity < 0)
+                                line_pos > sweet_spot_center and velocity < 0)
 
                         if is_moving_towards:
                             max_pred_time = self.get_param('max_prediction_time') / 1000.0
@@ -850,11 +760,20 @@ class DigTool:
                     confidence = 1.0
 
                 if should_click:
-                    self.save_debug_screenshot(screenshot, line_pos, sweet_spot_start, sweet_spot_end, zone_y2_cached,
-                                               velocity, acceleration, prediction_used, confidence)
+                    if self.get_param('debug_clicks_enabled'):
+                        self.save_debug_screenshot(screenshot, line_pos, sweet_spot_start, sweet_spot_end,
+                                                   zone_y2_cached,
+                                                   velocity, acceleration, prediction_used, confidence)
                     self.blind_until = current_time_ms + self.get_param('post_click_blindness')
                     self.click_lock.acquire()
                     threading.Thread(target=self.perform_click, args=(click_delay,)).start()
+
+            if (self.get_param('auto_walk_enabled') and auto_walk_state == "digging" and
+                    raw_zone_x is None and self.frames_since_last_zone_detection > 30):
+                self.dig_count += 1
+                dig_completed_time = current_time_ms
+                auto_walk_state = "move"
+                self.check_milestone_notifications()
 
             if self.results_queue.empty():
                 preview_img = screenshot.copy()
@@ -867,9 +786,17 @@ class DigTool:
                     cv2.line(preview_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 3)
                 h, w = preview_img.shape[:2]
                 thumbnail = cv2.resize(preview_img, (150, int(150 * h / w)), interpolation=cv2.INTER_NEAREST)
-                overlay_info = {'sweet_spot_center': sweet_spot_center, 'velocity': velocity,
-                                'click_count': self.click_count, 'locked_color_hex': self.locked_color_hex,
-                                'preview_thumbnail': thumbnail}
+
+                overlay_info = {
+                    'sweet_spot_center': sweet_spot_center,
+                    'velocity': velocity,
+                    'click_count': self.click_count,
+                    'locked_color_hex': self.locked_color_hex,
+                    'preview_thumbnail': thumbnail,
+                    'dig_count': self.dig_count,
+                    'automation_status': self.automation_manager.get_current_status(),
+                    'sell_count': self.automation_manager.sell_count
+                }
                 try:
                     self.results_queue.put_nowait((preview_img, final_mask, overlay_info))
                 except queue.Full:

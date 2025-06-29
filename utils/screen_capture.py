@@ -1,48 +1,6 @@
 import cv2
 import numpy as np
 import win32gui, win32ui, win32con
-import os
-import sys
-
-
-def get_ahk_path():
-    if getattr(sys, 'frozen', False):
-        bundle_dir = sys._MEIPASS
-        ahk_exe_path = os.path.join(bundle_dir, 'AutoHotkey.exe')
-        if os.path.exists(ahk_exe_path):
-            return ahk_exe_path
-    else:
-        ahk_exe_path = os.path.join('assets', 'AutoHotkey.exe')
-        if os.path.exists(ahk_exe_path):
-            return ahk_exe_path
-    return None
-
-
-try:
-    from ahk import AHK
-
-    ahk_path = get_ahk_path()
-    if ahk_path:
-        ahk = AHK(executable_path=ahk_path)
-    else:
-        ahk = AHK()
-except Exception as e:
-    print(f"AHK initialization error: {e}")
-    ahk = None
-
-
-def send_click():
-    if ahk:
-        try:
-            ahk.send_input('{Click}')
-            return
-        except Exception as e:
-            print(f"AHK click failed: {e}")
-
-    import win32api
-    import win32con
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 
 class ScreenCapture:
@@ -75,10 +33,27 @@ class ScreenCapture:
 
     def _cleanup(self):
         try:
-            if self.srcdc: self.srcdc.DeleteDC()
-            if self.memdc: self.memdc.DeleteDC()
-            if self.hwindc: win32gui.ReleaseDC(self.hwnd, self.hwindc)
-            if self.bmp: win32gui.DeleteObject(self.bmp.GetHandle())
+            if self.srcdc:
+                self.srcdc.DeleteDC()
+                self.srcdc = None
+        except Exception:
+            pass
+        try:
+            if self.memdc:
+                self.memdc.DeleteDC()
+                self.memdc = None
+        except Exception:
+            pass
+        try:
+            if self.hwindc:
+                win32gui.ReleaseDC(self.hwnd, self.hwindc)
+                self.hwindc = None
+        except Exception:
+            pass
+        try:
+            if self.bmp:
+                win32gui.DeleteObject(self.bmp.GetHandle())
+                self.bmp = None
         except Exception:
             pass
         self._initialized = False

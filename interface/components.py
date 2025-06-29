@@ -57,18 +57,22 @@ class Tooltip:
 
 
 class CollapsiblePane(Frame):
-    def __init__(self, parent, text="", manager=None, **kwargs):
+    def __init__(self, parent, text="", manager=None, bg_color="#ffffff", **kwargs):
         Frame.__init__(self, parent, **kwargs)
         self.configure(bg=parent.cget('bg'))
         self.text = text
         self.manager = manager
+        self.bg_color = bg_color
         self.is_open = tk.BooleanVar(value=False)
+
         self.header_frame = Frame(self, bg="#dcdcdc")
         self.header_frame.pack(fill="x")
+
         self.toggle_button = ttk.Button(self.header_frame, text=f'+ {self.text}', command=self.toggle,
                                         style="Header.TButton")
         self.toggle_button.pack(fill="x", pady=2, padx=2)
-        self.sub_frame = Frame(self, relief="sunken", borderwidth=1, bg="#ffffff")
+
+        self.sub_frame = Frame(self, relief="solid", borderwidth=1, bg=self.bg_color)
 
     def toggle(self):
         if self.manager:
@@ -136,27 +140,34 @@ class GameOverlay:
             pass
 
         Label(self.overlay, text="Dig Tool", fg='white', bg='black', font=('Consolas', 11, 'bold')).pack(pady=(5, 5))
+
         self.status_label = Label(self.overlay, text="STATUS: STOPPED", fg='red', bg='black',
                                   font=('Consolas', 10, 'bold'))
         self.status_label.pack(pady=(0, 5), padx=5, fill='x')
+
         self.target_label = Label(self.overlay, text="TARGET: ---", fg='red', bg='black', font=('Consolas', 10, 'bold'))
         self.target_label.pack(pady=(0, 5), padx=5, fill='x')
+
         self.swatch_frame = Frame(self.overlay, bg='black')
         Label(self.swatch_frame, text="LOCK:", fg='white', bg='black', font=('Consolas', 9)).pack(side=tk.LEFT)
         self.color_swatch_overlay_label = Label(self.swatch_frame, text=" " * 10, bg='black', relief='solid', bd=1)
         self.color_swatch_overlay_label.pack(side=tk.LEFT, fill='x', expand=True, padx=5)
         self.swatch_frame.pack(pady=(0, 5), padx=5, fill='x')
+
         stats_frame = Frame(self.overlay, bg='black')
         stats_frame.pack(pady=2, padx=10, fill='x')
+
         self.spd_label = Label(stats_frame, text="SPD: 0", fg='cyan', bg='black', font=('Consolas', 9))
         self.spd_label.grid(row=0, column=0, sticky='w')
         self.clicks_label = Label(stats_frame, text="CLICKS: 0", fg='orange', bg='black', font=('Consolas', 9))
         self.clicks_label.grid(row=0, column=1, sticky='w', padx=10)
+
         self.pred_label = Label(stats_frame, text="PRED: ON", fg='cyan', bg='black', font=('Consolas', 9))
         self.pred_label.grid(row=1, column=0, sticky='w')
         self.latency_label = Label(stats_frame, text=f"LAT: {self.parent.get_param('system_latency')}ms", fg='cyan',
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
+
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
         self.toggle_bot_label = Label(key_frame, text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get()}", fg='gray',
@@ -168,6 +179,7 @@ class GameOverlay:
         self.toggle_overlay_label = Label(key_frame, text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get()}",
                                           fg='gray', bg='black', font=('Consolas', 8))
         self.toggle_overlay_label.pack(side=tk.LEFT, expand=True)
+
         self.preview_label_overlay = Label(self.overlay, bg='black')
         self.preview_label_overlay.pack(pady=(5, 5), padx=5, fill='both', expand=True)
         self.position_overlay()
@@ -181,22 +193,37 @@ class GameOverlay:
     def update_info(self, **kwargs):
         if not self.visible or not self.overlay: return
         try:
-            is_running = self.parent.running
-            self.status_label.config(text=f"STATUS: {'ACTIVE' if is_running else 'STOPPED'}",
-                                     fg='lime' if is_running else 'red')
+            # Update status with automation mode
+            automation_status = kwargs.get('automation_status', 'STOPPED')
+            if automation_status == "AUTO SELLING":
+                self.status_label.config(text="STATUS: AUTO SELLING", fg='orange')
+            elif automation_status == "WALKING":
+                self.status_label.config(text="STATUS: WALKING", fg='yellow')
+            elif automation_status == "AUTO WALKING":
+                self.status_label.config(text="STATUS: AUTO WALKING", fg='lime')
+            elif automation_status == "ACTIVE":
+                self.status_label.config(text="STATUS: ACTIVE", fg='lime')
+            else:
+                self.status_label.config(text="STATUS: STOPPED", fg='red')
+
             target_locked = kwargs.get('sweet_spot_center') is not None
             self.target_label.config(text=f"TARGET: {'LOCKED' if target_locked else '---'}",
                                      fg='lime' if target_locked else 'red')
+
             locked_color = kwargs.get('locked_color_hex')
             self.color_swatch_overlay_label.config(bg=locked_color if locked_color else 'black')
+
             self.spd_label.config(text=f"SPD: {kwargs.get('velocity', 0):>5.0f}")
             self.clicks_label.config(text=f"CLICKS: {kwargs.get('click_count', 0):<5}")
+
             is_pred = self.parent.get_param('prediction_enabled')
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')
             self.latency_label.config(text=f"LAT: {self.parent.get_param('system_latency')}ms")
+
             self.toggle_bot_label.config(text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get().upper()}")
             self.toggle_gui_label.config(text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get().upper()}")
             self.toggle_overlay_label.config(text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get().upper()}")
+
             preview_thumbnail = kwargs.get('preview_thumbnail')
             if preview_thumbnail is not None and self.preview_label_overlay:
                 img = Image.fromarray(cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB))

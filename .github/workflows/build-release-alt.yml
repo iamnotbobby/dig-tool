@@ -33,11 +33,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install opencv-python numpy Pillow keyboard pywin32 ahk pyinstaller
+          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-binary="assets/AutoHotkey64.exe;." --add-data="ui_components.py;." --add-data="utils.py;." --add-data="settings.py;." --hidden-import=ahk main.py
+          pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="ui_components.py;." --add-data="utils.py;." --add-data="settings.py;." --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
 
       - name: Get executable name
         id: get_exe_name

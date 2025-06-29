@@ -1,5 +1,4 @@
 import PyInstaller.__main__
-import os
 
 PyInstaller.__main__.run([
     'main.py',
@@ -8,11 +7,12 @@ PyInstaller.__main__.run([
     '--name=DigTool',
     '--icon=assets/icon.ico',
     '--add-data=assets;assets',
-    '--add-data=ui_components.py;.',
-    '--add-data=utils.py;.',
-    '--add-data=settings.py;.',
+    '--add-data=core;core',
+    '--add-data=interface;interface',
+    '--add-data=utils;utils',
     '--distpath=dist',
     '--workpath=build',
     '--specpath=.',
+    '--collect-all=autoit',
     '--clean'
 ])
