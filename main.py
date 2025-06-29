@@ -78,16 +78,20 @@ check_display_scale()
 class DigTool:
     def __init__(self):
         # Initialize Tkinter
-        self.root = tk.Tk()
-        self.root.title("Dig Tool")
+        try:
+            self.root = tk.Tk()
+            self.root.title("Dig Tool")
 
-        # Load icon if available
-        icon_path = os.path.join("assets", "icon.ico")
-        if os.path.exists(icon_path):
-            try:
-                self.root.wm_iconbitmap(icon_path)
-            except Exception:
-                pass  # Silently fail if icon can't be loaded
+            # Load icon if available
+            icon_path = os.path.join("assets", "icon.ico")
+            if os.path.exists(icon_path):
+                try:
+                    self.root.wm_iconbitmap(icon_path)
+                except Exception as e:
+                    print(f"Warning: Could not load icon: {e}")
+        except Exception as e:
+            print(f"Error initializing Tkinter: {e}")
+            raise
 
         # Window settings
         self.base_height = 570
@@ -104,6 +108,8 @@ class DigTool:
         self.settings_manager = SettingsManager(self)
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
+        
+        # Initialize UI components after root is set
         self.main_window = MainWindow(self)
 
         # Game state
@@ -564,12 +570,6 @@ class DigTool:
         except Exception as e:
             print(f"Error creating debug log: {e}")
 
-    def __init__(self):
-        # ... existing code ...
-        self._debug_file = None
-        self._debug_file_last_open = 0
-        self._debug_file_keep_open = 30  # Keep file open for 30 seconds
-        
     def _get_debug_file(self):
         """Get debug file handle with auto-close after timeout"""
         current_time = time.time()
@@ -931,6 +931,30 @@ class DigTool:
         self.root.mainloop()
 
 
+def main():
+    try:
+        # Check dependencies first
+        from utils.system_utils import check_dependencies
+        check_dependencies()
+        
+        # Import required modules
+        import cv2
+        import numpy as np
+        from PIL import Image, ImageTk
+        import keyboard
+        import autoit
+        
+        # Initialize and run the application
+        app = DigTool()
+        app.run()
+    except ImportError as e:
+        print(f"Error: Missing required dependency - {e}")
+        print("Please install the required packages using:")
+        print("pip install -r requirements.txt")
+        input("Press Enter to exit...")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        input("Press Enter to exit...")
+
 if __name__ == "__main__":
-    app = DigTool()
-    app.run()
+    main()
