@@ -8,11 +8,11 @@ on:
         required: true
         default: 'v1.0'
       release_name:
-        description: 'Release name'
+        description: 'v1.0'
         required: true
-        default: 'DigTool Release v1.0'
+        default: 'release v1.0'
       release_notes:
-        description: 'Release notes'
+        description: 'release notes'
         required: false
         default: 'compiled with PyInstaller'
 
@@ -27,59 +27,24 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.x'
           architecture: 'x64'
           cache: 'pip'
 
       - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller
-
-      - name: Verify Directory Structure
-        run: |
-          echo "Checking project structure..."
-          if (Test-Path "assets") { echo "✓ assets directory found" } else { echo "✗ assets directory missing" }
-          if (Test-Path "core") { echo "✓ core directory found" } else { echo "✗ core directory missing" }
-          if (Test-Path "interface") { echo "✓ interface directory found" } else { echo "✗ interface directory missing" }
-          if (Test-Path "utils") { echo "✓ utils directory found" } else { echo "✗ utils directory missing" }
-          if (Test-Path "main.py") { echo "✓ main.py found" } else { echo "✗ main.py missing" }
-          if (Test-Path "assets/icon.ico") { echo "✓ icon.ico found" } else { echo "✗ icon.ico missing" }
-        shell: powershell
 
       - name: Build Executable with PyInstaller
         run: |
-          echo "Building DigTool executable..."
           pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
 
-      - name: Verify Build Output
+      - name: Get executable name
+        id: get_exe_name
         run: |
-          echo "Checking build output..."
-          if (Test-Path "dist") { 
-            echo "✓ dist directory created"
-            Get-ChildItem -Path "dist" -Recurse | ForEach-Object { echo "Found: $($_.FullName)" }
-          } else { 
-            echo "✗ dist directory missing"
-            exit 1
-          }
-        shell: powershell
-
-      - name: Get executable info
-        id: get_exe_info
-        run: |
-          $exeFile = Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1
-          if ($exeFile) {
-            $exeName = $exeFile.Name
-            $exePath = "dist/$exeName"
-            $exeSize = [math]::Round($exeFile.Length / 1MB, 2)
-            echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
-            echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
-            echo "exe_size=$exeSize MB" >> $env:GITHUB_OUTPUT
-            echo "✓ Executable found: $exeName ($exeSize MB)"
-          } else {
-            echo "✗ No executable found in dist directory"
-            exit 1
-          }
+          $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=dist/$exeName" >> $env:GITHUB_OUTPUT
         shell: powershell
 
       - name: Create Release
@@ -90,27 +55,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           release_name: ${{ github.event.inputs.release_name }}
-          body: |
-            ${{ github.event.inputs.release_notes }}
-            
-            **Build Information:**
-            - Build Date: 2025-06-29
-            - Python Version: 3.11
-            - Platform: Windows x64
-            - Executable Size: ${{ steps.get_exe_info.outputs.exe_size }}
-            
-            **Included Features:**
-            - Core detection engine
-            - Advanced prediction system
-            - Auto-walking capabilities
-            - Auto-selling functionality
-            - Discord notifications
-            - Game overlay
-            - Debug tools
-            
-            **Requirements:**
-            - Windows 10/11
-            - Display scaling set to 100%
+          body: ${{ github.event.inputs.release_notes }}
           draft: false
           prerelease: false
 
@@ -120,14 +65,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.get_exe_info.outputs.exe_path }}
-          asset_name: ${{ steps.get_exe_info.outputs.exe_name }}
+          asset_path: ${{ steps.get_exe_name.outputs.exe_path }}
+          asset_name: ${{ steps.get_exe_name.outputs.exe_name }}
           asset_content_type: application/octet-stream
-
-      - name: Build Summary
-        run: |
-          echo "🚀 Build completed successfully!"
-          echo "📦 Executable: ${{ steps.get_exe_info.outputs.exe_name }}"
-          echo "📏 Size: ${{ steps.get_exe_info.outputs.exe_size }}"
-          echo "🔗 Release: ${{ github.event.inputs.release_tag }}"
-        shell: powershell
