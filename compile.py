@@ -10,7 +10,6 @@ PyInstaller.__main__.run([
     '--add-data=core;core',
     '--add-data=interface;interface',
     '--add-data=utils;utils',
-    '--collect-all=autoit',
     '--collect-all=ahk',
     '--hidden-import=ahk',
     '--distpath=dist',

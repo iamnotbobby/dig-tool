@@ -37,7 +37,7 @@ jobs:
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name=DigTool-AHK --icon=assets/icon.ico --add-data="assets;assets" --hidden-import=ahk --add-binary="assets/AutoHotkey64.exe;." --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --specpath=. --clean main.py
+          pyinstaller --onefile --windowed --name=DigTool-AHK --icon=assets/icon.ico --add-data="assets;assets" --add-binary="assets/AutoHotkey64.exe;." --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --clean main.py
 
       - name: Get executable name
         id: get_exe_name
