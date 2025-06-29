@@ -1,28 +1,13 @@
 import warnings
 import os
-
-from utils.system_utils import check_dependencies
-
-check_dependencies()
-
-try:
-    import ctypes
-
-    PROCESS_PER_MONITOR_DPI_AWARE = 2
-    ctypes.windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
-except:
-    pass
-
-import cv2
-import numpy as np
-import tkinter as tk
-from tkinter import Label, Frame, TclError
+import sys
+import importlib.util
 import threading
 import time
-from PIL import Image, ImageTk
-import keyboard
 import queue
+from functools import lru_cache
 
+# Import remaining components after setting up lazy loading
 from interface.components import GameOverlay
 from interface.main_window import MainWindow
 from interface.settings import SettingsManager
@@ -32,35 +17,96 @@ from core.detection import find_line_position, VelocityCalculator
 from core.automation import AutomationManager
 from core.notifications import DiscordNotifier
 
+# Lightweight imports
+import tkinter as tk
+from tkinter import Label, Frame, TclError
+
+# Lazy loading decorator
+def lazy_import(module_name, package=None):    
+    def _load():
+        spec = importlib.util.find_spec(module_name, package)
+        module = importlib.import_module(spec.name)
+        return module
+    
+    return property(lru_cache(1)(_load), doc=f"Lazy-loaded {module_name}")
+
+class LazyImports:
+    @property
+    def cv2(self):
+        import cv2
+        return cv2
+    
+    @property
+    def np(self):
+        import numpy as np
+        return np
+    
+    @property
+    def Image(self):
+        from PIL import Image
+        return Image
+    
+    @property
+    def ImageTk(self):
+        from PIL import ImageTk
+        return ImageTk
+    
+    @property
+    def keyboard(self):
+        import keyboard
+        return keyboard
+
+lazy = LazyImports()
+
+# Check dependencies first
+from utils.system_utils import check_dependencies
+check_dependencies()
+
+# Set DPI awareness if on Windows
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        PROCESS_PER_MONITOR_DPI_AWARE = 2
+        ctypes.windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
+    except (AttributeError, OSError):
+        pass
+
 warnings.filterwarnings("ignore")
 check_display_scale()
 
 
 class DigTool:
     def __init__(self):
+        # Initialize Tkinter
         self.root = tk.Tk()
         self.root.title("Dig Tool")
 
-        try:
-            if os.path.exists("assets/icon.ico"):
-                self.root.wm_iconbitmap("assets/icon.ico")
-        except:
-            pass
+        # Load icon if available
+        icon_path = os.path.join("assets", "icon.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.root.wm_iconbitmap(icon_path)
+            except Exception:
+                pass  # Silently fail if icon can't be loaded
 
+        # Window settings
         self.base_height = 570
         self.width = 450
         self.root.geometry(f"{self.width}x{self.base_height}")
         self.root.minsize(self.width, self.base_height)
 
+        # Configuration and state
         self.param_vars = {}
         self.keybind_vars = {}
         self.last_known_good_params = {}
 
+        # Initialize components
         self.settings_manager = SettingsManager(self)
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         self.main_window = MainWindow(self)
 
+        # Game state
         self.game_area = None
         self.cursor_position = None
         self.running = False
@@ -68,32 +114,45 @@ class DigTool:
         self.overlay = None
         self.overlay_enabled = False
         self.screen_grabber = ScreenCapture()
+        
+        # Counters and timing
         self.click_count = 0
         self.dig_count = 0
         self.click_lock = threading.Lock()
         self.velocity_calculator = VelocityCalculator()
         self.blind_until = 0
         self.frames_since_last_zone_detection = 0
+        self.last_milestone_notification = 0
+        self.milestone_interval = 100
+        
+        # Zone detection
         self.smoothed_zone_x = None
         self.smoothed_zone_w = None
         self.is_color_locked = False
         self.locked_color_hsv = None
         self.locked_color_hex = None
         self.is_low_sat_lock = False
+        
+        # UI elements
         self.preview_window = None
         self.debug_window = None
         self.preview_label = None
         self.debug_label = None
         self.color_swatch_label = None
+        
+        # Threading
         self.main_loop_thread = None
         self.hotkey_thread = None
         self.results_queue = queue.Queue(maxsize=1)
+        
+        # Debugging
         self.debug_dir = "debug_clicks"
         self.debug_log_path = os.path.join(self.debug_dir, "click_log.txt")
+        self._debug_file = None
+        self._debug_file_last_open = 0
+        self._debug_file_keep_open = 30  # Keep file open for 30 seconds
 
-        self.last_milestone_notification = 0
-        self.milestone_interval = 100
-
+        # Initialize UI
         self.main_window.create_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, self.update_gui_from_queue)
@@ -110,13 +169,19 @@ class DigTool:
                 if webhook_url:
                     self.discord_notifier.set_webhook_url(webhook_url)
                     self.discord_notifier.send_shutdown_notification(user_id if user_id else None)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error sending shutdown notification: {e}")
 
+        # Clean up resources
         self.preview_active = False
         self.running = False
+        self._close_debug_file()  # Ensure debug file is closed
+        
+        # Prevent further window operations
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
         self.update_status("Shutting down...")
+        
+        # Start shutdown process
         self.root.after(100, self._check_shutdown)
 
     def _check_shutdown(self):
@@ -143,8 +208,10 @@ class DigTool:
 
     def hotkey_listener(self):
         self.root.after(0, self.apply_keybinds)
+        # Use a more efficient waiting mechanism
         while self.preview_active:
-            time.sleep(0.5)
+            time.sleep(0.5)  # Keep this sleep to prevent CPU overuse
+            # The actual hotkey handling is done by the keyboard library's event system
 
     def apply_keybinds(self):
         keyboard.unhook_all()
@@ -497,22 +564,77 @@ class DigTool:
         except Exception as e:
             print(f"Error creating debug log: {e}")
 
+    def __init__(self):
+        # ... existing code ...
+        self._debug_file = None
+        self._debug_file_last_open = 0
+        self._debug_file_keep_open = 30  # Keep file open for 30 seconds
+        
+    def _get_debug_file(self):
+        """Get debug file handle with auto-close after timeout"""
+        current_time = time.time()
+        if (self._debug_file is None or 
+            current_time - self._debug_file_last_open > self._debug_file_keep_open):
+            self._close_debug_file()
+            self.ensure_debug_dir()
+            self._debug_file = open(self.debug_log_path, 'a', buffering=1)  # Line buffering
+            self._debug_file_last_open = current_time
+        return self._debug_file
+        
+    def _close_debug_file(self):
+        """Safely close the debug file if open"""
+        if self._debug_file is not None:
+            try:
+                self._debug_file.close()
+            except Exception:
+                pass
+            finally:
+                self._debug_file = None
+                
+    def _get_debug_file(self):
+        """Get debug file handle with auto-close after timeout"""
+        current_time = time.time()
+        if (self._debug_file is None or 
+            current_time - self._debug_file_last_open > self._debug_file_keep_open):
+            self._close_debug_file()
+            self.ensure_debug_dir()
+            self._debug_file = open(self.debug_log_path, 'a', buffering=1)  # Line buffering
+            self._debug_file_last_open = current_time
+        return self._debug_file
+        
+    def _close_debug_file(self):
+        """Safely close the debug file if open"""
+        if self._debug_file is not None:
+            try:
+                self._debug_file.close()
+            except Exception:
+                pass
+            finally:
+                self._debug_file = None
+                
     def log_click_debug(self, click_num, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
                         prediction_used, confidence, screenshot_filename):
         if not self.get_param('debug_clicks_enabled'):
             return
+            
         try:
             timestamp = int(time.time())
             click_type = "PREDICTION" if prediction_used else "DIRECT"
-            if sweet_spot_start is not None and sweet_spot_end is not None:
-                sweet_spot_range = f"{int(sweet_spot_start)}-{int(sweet_spot_end)}"
-            else:
-                sweet_spot_range = "N/A"
+            sweet_spot_range = (
+                f"{int(sweet_spot_start)}-{int(sweet_spot_end)}" 
+                if sweet_spot_start is not None and sweet_spot_end is not None 
+                else "N/A"
+            )
 
-            log_entry = f"{click_num:03d} | {timestamp} | {line_pos:4d} | {velocity:6.1f} | {acceleration:6.1f} | {sweet_spot_range:>10} | {click_type:>10} | {confidence:4.2f} | {screenshot_filename}\n"
+            log_entry = (
+                f"{click_num:03d} | {timestamp} | {line_pos:4d} | {velocity:6.1f} | "
+                f"{acceleration:6.1f} | {sweet_spot_range:>10} | {click_type:>10} | "
+                f"{confidence:4.2f} | {screenshot_filename}\n"
+            )
 
-            with open(self.debug_log_path, 'a') as f:
-                f.write(log_entry)
+            debug_file = self._get_debug_file()
+            debug_file.write(log_entry)
+            
         except Exception as e:
             print(f"Error logging click debug: {e}")
 
