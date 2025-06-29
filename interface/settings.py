@@ -12,7 +12,7 @@ class SettingsManager:
         self.default_params = {
             'line_sensitivity': 50,
             'line_min_height': 100,
-            'zone_min_width': 70,
+            'zone_min_width': 100,
             'saturation_threshold': 0.5,
             'min_zone_height_percent': 100,
             'sweet_spot_width_percent': 10,
@@ -21,7 +21,7 @@ class SettingsManager:
             'max_prediction_time': 50,
             'min_velocity_threshold': 300,
             'prediction_confidence_threshold': 0.8,
-            'zone_smoothing_factor': 1,
+            'zone_smoothing_factor': 0.8,
             'post_click_blindness': 50,
             'max_zone_width_percent': 80,
             'main_on_top': True,
