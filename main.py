@@ -305,9 +305,12 @@ class DigTool:
                     keyboard.add_hotkey(key_value, self.toggle_gui)
                 elif key_name == 'toggle_overlay':
                     keyboard.add_hotkey(key_value, self.toggle_overlay)
-                elif key_name == 'toggle_auto_walk': callback = self.toggle_auto_walk
-                elif key_name == 'toggle_auto_sell': callback = self.toggle_auto_sell
-                elif key_name == 'panic_key': callback = self.panic
+                elif key_name == 'toggle_auto_walk':
+                    keyboard.add_hotkey(key_value, self.toggle_auto_walk)
+                elif key_name == 'toggle_auto_sell':
+                    keyboard.add_hotkey(key_value, self.toggle_auto_sell)
+                elif key_name == 'panic_key':
+                    keyboard.add_hotkey(key_value, self.panic)
                 else:
                     print(f"Warning: Unknown keybind {key_name}")
                     continue
