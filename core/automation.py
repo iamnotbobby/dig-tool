@@ -1,6 +1,9 @@
 import time
 import threading
 import autoit
+import json
+import os
+from tkinter import filedialog
 from pynput.keyboard import Controller as KeyboardController
 
 
@@ -16,15 +19,242 @@ class AutomationManager:
             'forward_back': ['w', 'w', 's', 's'],
             'left_right': ['a', 'a', 'd', 'd']
         }
+
+        self.custom_patterns_file = None
+
         self.sell_button_position = None
         self.sell_count = 0
         self.is_selling = False
         self.is_walking = False
         self.current_status = "STOPPED"
 
+        self.is_recording = False
+        self.recorded_pattern = []
+        self.recording_start_time = None
+        self.recording_listener = None
+
+        self.last_dig_time = None
+        self.last_click_time = None
+        self.last_target_lock_time = None
+        self.shovel_re_equipped = False
+        self.walking_lock = threading.Lock()
+
+    def load_custom_patterns(self):
+        try:
+            filepath = filedialog.askopenfilename(
+                title="Load Custom Patterns",
+                filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+            )
+            if not filepath:
+                return
+
+            with open(filepath, 'r') as f:
+                custom_patterns = json.load(f)
+                self.walk_patterns.update(custom_patterns)
+                self.custom_patterns_file = filepath
+                print(f"Loaded {len(custom_patterns)} custom patterns")
+        except Exception as e:
+            print(f"Error loading custom patterns: {e}")
+
+    def save_custom_patterns(self):
+        try:
+            if not self.custom_patterns_file:
+                filepath = filedialog.asksaveasfilename(
+                    title="Save Custom Patterns",
+                    defaultextension=".json",
+                    filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+                )
+                if not filepath:
+                    return False
+                self.custom_patterns_file = filepath
+
+            built_in_patterns = {'circle', 'figure_8', 'random', 'forward_back', 'left_right'}
+            custom_patterns = {name: pattern for name, pattern in self.walk_patterns.items()
+                               if name not in built_in_patterns}
+
+            with open(self.custom_patterns_file, 'w') as f:
+                json.dump(custom_patterns, f, indent=2)
+            print(f"Saved {len(custom_patterns)} custom patterns")
+            return True
+        except Exception as e:
+            print(f"Error saving custom patterns: {e}")
+            return False
+
+    def add_custom_pattern(self, name, pattern):
+        if not name or not pattern:
+            return False, "Pattern name and moves cannot be empty"
+
+        valid_moves = {'w', 'a', 's', 'd'}
+        if not all(move.lower() in valid_moves for move in pattern):
+            return False, "Pattern can only contain W, A, S, D keys"
+
+        pattern = [move.lower() for move in pattern]
+
+        self.walk_patterns[name] = pattern
+        success = self.save_custom_patterns()
+
+        if success:
+            return True, f"Custom pattern '{name}' added successfully"
+        else:
+            return False, "Failed to save custom pattern"
+
+    def delete_custom_pattern(self, name):
+        built_in_patterns = {'circle', 'figure_8', 'random', 'forward_back', 'left_right'}
+
+        if name in built_in_patterns:
+            return False, "Cannot delete built-in patterns"
+
+        if name not in self.walk_patterns:
+            return False, "Pattern not found"
+
+        del self.walk_patterns[name]
+        success = self.save_custom_patterns()
+
+        if success:
+            return True, f"Custom pattern '{name}' deleted successfully"
+        else:
+            return False, "Failed to save changes"
+
+    def get_pattern_list(self):
+        built_in_patterns = {'circle', 'figure_8', 'random', 'forward_back', 'left_right'}
+        pattern_info = {}
+
+        for name, pattern in self.walk_patterns.items():
+            pattern_info[name] = {
+                'pattern': pattern,
+                'type': 'built-in' if name in built_in_patterns else 'custom',
+                'length': len(pattern)
+            }
+
+        return pattern_info
+
+    def start_recording_pattern(self):
+        self.is_recording = True
+        self.recorded_pattern = []
+        self.recording_start_time = time.time()
+        self.start_recording_keyboard_listener()
+        print("Started recording pattern")
+        return True
+
+    def start_recording_keyboard_listener(self):
+        try:
+            import keyboard
+
+            def on_key_press(event):
+                if self.is_recording and event.event_type == keyboard.KEY_DOWN:
+                    key = event.name.lower()
+                    if key in ['w', 'a', 's', 'd']:
+                        self.record_movement(key)
+                        print(f"Recorded key press: {key}")
+
+            try:
+                keyboard.unhook_all()
+            except:
+                pass
+
+            keyboard.hook(on_key_press)
+            print("Keyboard listener started for recording")
+
+        except Exception as e:
+            print(f"Error starting keyboard listener: {e}")
+
+    def stop_recording_pattern(self):
+        self.is_recording = False
+
+        try:
+            import keyboard
+            keyboard.unhook_all()
+            print("Keyboard listener stopped")
+        except:
+            pass
+
+        pattern = self.recorded_pattern.copy()
+        self.recorded_pattern = []
+        print(f"Recording stopped. Final pattern: {pattern}")
+        return pattern
+
+    def record_movement(self, direction):
+        if self.is_recording and direction.lower() in ['w', 'a', 's', 'd']:
+            self.recorded_pattern.append(direction.lower())
+            print(f"Added to pattern: {direction.lower()}, Total moves: {len(self.recorded_pattern)}")
+            return True
+        return False
+
+    def update_dig_activity(self):
+        self.last_dig_time = time.time()
+        self.shovel_re_equipped = False
+
+    def update_click_activity(self):
+        self.last_click_time = time.time()
+
+    def update_target_lock_activity(self):
+        self.last_target_lock_time = time.time()
+
+    def should_re_equip_shovel(self):
+        if not self.dig_tool.get_param('auto_walk_enabled'):
+            return False
+
+        if not self.dig_tool.get_param('auto_shovel_enabled'):
+            return False
+
+        if self.shovel_re_equipped:
+            return False
+
+        current_time = time.time()
+        shovel_timeout = self.dig_tool.get_param('shovel_timeout') * 60
+
+        time_since_dig = current_time - self.last_dig_time if self.last_dig_time else float('inf')
+        time_since_click = current_time - self.last_click_time if self.last_click_time else float('inf')
+        time_since_target = current_time - self.last_target_lock_time if self.last_target_lock_time else float('inf')
+
+        no_recent_activity = (time_since_dig > shovel_timeout and
+                              time_since_click > shovel_timeout and
+                              time_since_target > shovel_timeout)
+
+        return no_recent_activity
+
+    def re_equip_shovel(self):
+        try:
+            shovel_slot = self.dig_tool.get_param('shovel_slot')
+            if shovel_slot < 0 or shovel_slot > 9:
+                print(f"Invalid shovel slot: {shovel_slot}")
+                return False
+
+            slot_key = str(shovel_slot) if shovel_slot > 0 else '0'
+            equip_mode = self.dig_tool.get_param('shovel_equip_mode')
+
+            print(f"Re-equipping shovel from slot {shovel_slot} (key: {slot_key}) using {equip_mode} mode")
+
+            with self.walking_lock:
+                time.sleep(0.1)
+
+                self.keyboard_controller.press(slot_key)
+                time.sleep(0.05)
+                self.keyboard_controller.release(slot_key)
+
+                if equip_mode == "double":
+                    time.sleep(0.5)
+
+                    self.keyboard_controller.press(slot_key)
+                    time.sleep(0.05)
+                    self.keyboard_controller.release(slot_key)
+
+            self.shovel_re_equipped = True
+            self.last_dig_time = time.time()
+
+            mode_text = "double press" if equip_mode == "double" else "single press"
+            self.dig_tool.update_status(f"Auto-equipped shovel from slot {shovel_slot} ({mode_text})")
+            return True
+
+        except Exception as e:
+            print(f"Error re-equipping shovel: {e}")
+            return False
+
     def get_current_status(self):
         if not self.dig_tool.running:
             return "STOPPED"
+        elif self.is_recording:
+            return f"RECORDING ({len(self.recorded_pattern)} moves)"
         elif self.is_selling:
             return "AUTO SELLING"
         elif self.is_walking:
@@ -36,12 +266,20 @@ class AutomationManager:
 
     def perform_walk_step(self, direction):
         try:
-            self.is_walking = True
-            walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
-            self.keyboard_controller.press(direction)
-            time.sleep(walk_duration)
-            self.keyboard_controller.release(direction)
+            with self.walking_lock:
+                self.is_walking = True
+
+                if self.is_recording:
+                    self.record_movement(direction)
+                    print(f"Recorded movement during walk: {direction}")
+
+                walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+                self.keyboard_controller.press(direction)
+                time.sleep(walk_duration)
+                self.keyboard_controller.release(direction)
+
             self.is_walking = False
+
         except Exception as e:
             self.is_walking = False
             print(f"Error in walk step: {e}")
@@ -165,11 +403,37 @@ class AutomationManager:
         else:
             self.dig_tool.update_status("AutoIt test click failed!")
 
+    def test_shovel_equip(self):
+        if not self.dig_tool.get_param('auto_shovel_enabled'):
+            self.dig_tool.update_status("Auto-shovel is disabled!")
+            return
+
+        shovel_slot = self.dig_tool.get_param('shovel_slot')
+        equip_mode = self.dig_tool.get_param('shovel_equip_mode')
+        mode_text = "double press" if equip_mode == "double" else "single press"
+
+        self.dig_tool.update_status(f"Testing shovel equip from slot {shovel_slot} ({mode_text})...")
+
+        threading.Thread(target=self._test_shovel_equip_with_delay, daemon=True).start()
+
+    def _test_shovel_equip_with_delay(self):
+        for i in range(3, 0, -1):
+            self.dig_tool.update_status(f"Equipping shovel in {i} seconds...")
+            time.sleep(1.0)
+
+        success = self.re_equip_shovel()
+
+        if success:
+            self.dig_tool.update_status("Shovel equip test completed successfully!")
+        else:
+            self.dig_tool.update_status("Shovel equip test failed!")
+
     def send_key(self, key, duration=0.1):
         try:
-            self.keyboard_controller.press(key)
-            time.sleep(duration)
-            self.keyboard_controller.release(key)
+            with self.walking_lock:
+                self.keyboard_controller.press(key)
+                time.sleep(duration)
+                self.keyboard_controller.release(key)
             return True
         except Exception as e:
             print(f"Key press failed: {e}")

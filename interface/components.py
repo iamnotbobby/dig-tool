@@ -118,6 +118,10 @@ class GameOverlay:
         self.visible = False
         self.preview_label_overlay = None
 
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.is_dragging = False
+
     def create_overlay(self):
         if self.overlay: return
         self.overlay = tk.Toplevel()
@@ -139,11 +143,23 @@ class GameOverlay:
         except Exception:
             pass
 
-        Label(self.overlay, text="Dig Tool", fg='white', bg='black', font=('Consolas', 11, 'bold')).pack(pady=(5, 5))
+        self.title_frame = Frame(self.overlay, bg='#333333', cursor='fleur')
+        self.title_frame.pack(fill='x', padx=2, pady=(2, 0))
+
+        title_label = Label(self.title_frame, text="Dig Tool", fg='white', bg='#333333',
+                            font=('Consolas', 11, 'bold'), cursor='fleur')
+        title_label.pack(pady=3)
+
+        self.title_frame.bind('<Button-1>', self.start_drag)
+        self.title_frame.bind('<B1-Motion>', self.on_drag)
+        self.title_frame.bind('<ButtonRelease-1>', self.stop_drag)
+        title_label.bind('<Button-1>', self.start_drag)
+        title_label.bind('<B1-Motion>', self.on_drag)
+        title_label.bind('<ButtonRelease-1>', self.stop_drag)
 
         self.status_label = Label(self.overlay, text="STATUS: STOPPED", fg='red', bg='black',
                                   font=('Consolas', 10, 'bold'))
-        self.status_label.pack(pady=(0, 5), padx=5, fill='x')
+        self.status_label.pack(pady=(5, 5), padx=5, fill='x')
 
         self.target_label = Label(self.overlay, text="TARGET: ---", fg='red', bg='black', font=('Consolas', 10, 'bold'))
         self.target_label.pack(pady=(0, 5), padx=5, fill='x')
@@ -182,8 +198,30 @@ class GameOverlay:
 
         self.preview_label_overlay = Label(self.overlay, bg='black')
         self.preview_label_overlay.pack(pady=(5, 5), padx=5, fill='both', expand=True)
+
         self.position_overlay()
         self.visible = True
+
+    def start_drag(self, event):
+        self.is_dragging = True
+        self.drag_start_x = event.x_root
+        self.drag_start_y = event.y_root
+
+    def on_drag(self, event):
+        if self.is_dragging and self.overlay:
+            try:
+                x = self.overlay.winfo_x() + (event.x_root - self.drag_start_x)
+                y = self.overlay.winfo_y() + (event.y_root - self.drag_start_y)
+
+                self.overlay.geometry(f"+{x}+{y}")
+
+                self.drag_start_x = event.x_root
+                self.drag_start_y = event.y_root
+            except tk.TclError:
+                pass
+
+    def stop_drag(self, event):
+        self.is_dragging = False
 
     def position_overlay(self):
         if not self.overlay or not self.parent.game_area: return
@@ -206,9 +244,9 @@ class GameOverlay:
             else:
                 self.status_label.config(text="STATUS: STOPPED", fg='red')
 
-            target_locked = kwargs.get('sweet_spot_center') is not None
-            self.target_label.config(text=f"TARGET: {'LOCKED' if target_locked else '---'}",
-                                     fg='lime' if target_locked else 'red')
+            target_engaged = kwargs.get('target_engaged', False)
+            self.target_label.config(text=f"TARGET: {'LOCKED' if target_engaged else '---'}",
+                                     fg='lime' if target_engaged else 'red')
 
             locked_color = kwargs.get('locked_color_hex')
             self.color_swatch_overlay_label.config(bg=locked_color if locked_color else 'black')

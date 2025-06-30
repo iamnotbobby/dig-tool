@@ -1,8 +1,12 @@
 import json
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from PIL import Image, ImageTk
+import threading
+import time
+
+from interface.settings_feedback_window import SettingsFeedbackWindow
 
 
 class SettingsManager:
@@ -33,11 +37,16 @@ class SettingsManager:
             'sell_delay': 3000,
             'auto_walk_enabled': False,
             'walk_duration': 500,
+            'auto_shovel_enabled': False,
+            'shovel_slot': 1,
+            'shovel_timeout': 5,
             'user_id': '',
             'webhook_url': '',
             'milestone_interval': 100,
             'use_custom_cursor': False,
-            'include_discord_in_settings': False
+            'include_discord_in_settings': False,
+            'shovel_equip_mode': 'double',
+            'click_method': 'ahk',
         }
 
         self.param_descriptions = {
@@ -66,9 +75,14 @@ class SettingsManager:
             'walk_duration': "How long to hold movement keys (milliseconds).",
             'user_id': "Discord user ID for notifications (optional - leave blank for no ping).",
             'webhook_url': "Discord webhook URL for sending notifications.",
+            'auto_shovel_enabled': "Automatically re-equip shovel when no activity detected for specified time.",
+            'shovel_slot': "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
+            'shovel_timeout': "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
             'milestone_interval': "Send Discord notification every X digs (milestone notifications).",
             'use_custom_cursor': "Move cursor to set position before clicking when enabled. Cannot be used with Auto-Walk.",
-            'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security."
+            'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security.",
+            'shovel_equip_mode': "Whether to press the shovel slot key once ('single') or twice ('double') when re-equipping.",
+            'click_method': "Method used for sending clicks: 'win32api' or 'ahk'.",
         }
 
         self.default_keybinds = {
@@ -117,7 +131,6 @@ class SettingsManager:
         return None
 
     def get_conflict_tooltip(self, setting_key):
-        """Get conflict tooltip text for disabled settings"""
         if setting_key == 'use_custom_cursor':
             return "DISABLED: Cannot use Custom Cursor while Auto-Walk is enabled. Disable Auto-Walk first."
         elif setting_key == 'auto_walk_enabled':
@@ -125,7 +138,6 @@ class SettingsManager:
         return ""
 
     def is_setting_conflicted(self, setting_key):
-        """Check if a setting should be disabled due to conflicts"""
         if setting_key == 'use_custom_cursor':
             return self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         elif setting_key == 'auto_walk_enabled':
@@ -133,7 +145,6 @@ class SettingsManager:
         return False
 
     def update_setting_states(self):
-        """Update the enabled/disabled state of conflicting settings"""
         conflicting_settings = ['use_custom_cursor', 'auto_walk_enabled']
 
         for setting_key in conflicting_settings:
@@ -151,9 +162,6 @@ class SettingsManager:
             if key in self.dig_tool.param_vars:
                 value = self.dig_tool.param_vars[key].get()
                 self.dig_tool.last_known_good_params[key] = value
-
-                if key == 'milestone_interval':
-                    self.dig_tool.milestone_interval = max(1, value)
 
                 if key in ['use_custom_cursor', 'auto_walk_enabled']:
                     self.update_setting_states()
@@ -227,6 +235,15 @@ class SettingsManager:
             return False
         return key in self.default_keybinds
 
+    def refresh_pattern_dropdown(self):
+        if hasattr(self.dig_tool, 'update_walk_pattern_dropdown'):
+            self.dig_tool.update_walk_pattern_dropdown()
+            self.dig_tool.update_status("Pattern list refreshed!")
+
+    def open_custom_pattern_manager(self):
+        if hasattr(self.dig_tool, 'open_custom_pattern_manager'):
+            self.dig_tool.open_custom_pattern_manager()
+
     def save_settings(self):
         filepath = filedialog.asksaveasfilename(defaultextension=".json",
                                                 filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
@@ -234,56 +251,122 @@ class SettingsManager:
         if not filepath:
             return
 
-        settings = {
-            'params': {},
-            'keybinds': {},
-            'game_area': self.dig_tool.game_area,
-            'sell_button_position': getattr(self.dig_tool.automation_manager, 'sell_button_position', None),
-            'cursor_position': getattr(self.dig_tool, 'cursor_position', None),
-            'walk_pattern': getattr(self.dig_tool, 'walk_pattern_var', tk.StringVar()).get() if hasattr(self.dig_tool,
-                                                                                                        'walk_pattern_var') else 'circle'
-        }
+        feedback = SettingsFeedbackWindow(self.dig_tool.root, "Saving Settings")
+        feedback.show_window()
 
-        include_discord = self.get_param('include_discord_in_settings')
-
-        for key in self.default_params.keys():
+        def save_process():
             try:
-                if key in self.dig_tool.param_vars:
-                    value = self.dig_tool.param_vars[key].get()
+                feedback.update_progress(10, "Preparing settings data...")
+                time.sleep(0.1)
 
-                    if key in ['user_id', 'webhook_url'] and not include_discord:
-                        settings['params'][key] = ''
-                    else:
-                        settings['params'][key] = value
-                else:
-                    settings['params'][key] = self.default_params[key]
-            except Exception as e:
-                print(f"Error saving parameter {key}: {e}")
-                settings['params'][key] = self.default_params.get(key)
+                settings = {
+                    'params': {},
+                    'keybinds': {},
+                    'game_area': self.dig_tool.game_area,
+                    'sell_button_position': getattr(self.dig_tool.automation_manager, 'sell_button_position', None),
+                    'cursor_position': getattr(self.dig_tool, 'cursor_position', None),
+                    'walk_pattern': getattr(self.dig_tool, 'walk_pattern_var', tk.StringVar()).get() if hasattr(
+                        self.dig_tool, 'walk_pattern_var') else 'circle'
+                }
 
-        for key in self.default_keybinds.keys():
-            try:
-                if key in self.dig_tool.keybind_vars:
-                    value = self.dig_tool.keybind_vars[key].get()
-                    if self.validate_keybind(key, value):
-                        settings['keybinds'][key] = value
-                    else:
+                include_discord = self.get_param('include_discord_in_settings')
+
+                feedback.add_section("PARAMETERS")
+                feedback.update_progress(20, "Processing parameters...")
+
+                total_params = len(self.default_params)
+                for i, key in enumerate(self.default_params.keys()):
+                    try:
+                        if key in self.dig_tool.param_vars:
+                            value = self.dig_tool.param_vars[key].get()
+
+                            if key in ['user_id', 'webhook_url'] and not include_discord:
+                                settings['params'][key] = ''
+                                feedback.add_change_entry(key, str(value), '(excluded)', 'warning')
+                            else:
+                                settings['params'][key] = value
+                                feedback.add_change_entry(key, "", str(value), 'success')
+                        else:
+                            settings['params'][key] = self.default_params[key]
+                            feedback.add_change_entry(key, "", str(self.default_params[key]), 'info')
+                    except Exception as e:
+                        settings['params'][key] = self.default_params.get(key)
+                        feedback.add_change_entry(key, "", f"ERROR: {e}", 'error')
+
+                    progress = 20 + (i * 30 / total_params)
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
+
+                feedback.add_section("KEYBINDS")
+                feedback.update_progress(50, "Processing keybinds...")
+
+                total_keybinds = len(self.default_keybinds)
+                for i, key in enumerate(self.default_keybinds.keys()):
+                    try:
+                        if key in self.dig_tool.keybind_vars:
+                            value = self.dig_tool.keybind_vars[key].get()
+                            if self.validate_keybind(key, value):
+                                settings['keybinds'][key] = value
+                                feedback.add_change_entry(key, "", value, 'success')
+                            else:
+                                settings['keybinds'][key] = self.default_keybinds.get(key)
+                                feedback.add_change_entry(key, value, self.default_keybinds.get(key), 'warning')
+                        else:
+                            settings['keybinds'][key] = self.default_keybinds.get(key)
+                            feedback.add_change_entry(key, "", self.default_keybinds.get(key), 'info')
+                    except Exception as e:
                         settings['keybinds'][key] = self.default_keybinds.get(key)
+                        feedback.add_change_entry(key, "", f"ERROR: {e}", 'error')
+
+                    progress = 50 + (i * 20 / total_keybinds)
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
+
+                feedback.add_section("CONFIGURATION")
+                feedback.update_progress(70, "Processing configuration...")
+
+                if self.dig_tool.game_area:
+                    feedback.add_text(f"✓ Game Area: {self.dig_tool.game_area}", 'success')
                 else:
-                    settings['keybinds'][key] = self.default_keybinds.get(key)
+                    feedback.add_text("✗ Game Area: Not set", 'warning')
+
+                if hasattr(self.dig_tool.automation_manager,
+                           'sell_button_position') and self.dig_tool.automation_manager.sell_button_position:
+                    feedback.add_text(f"✓ Sell Button: {self.dig_tool.automation_manager.sell_button_position}",
+                                      'success')
+                else:
+                    feedback.add_text("✗ Sell Button: Not set", 'warning')
+
+                if hasattr(self.dig_tool, 'cursor_position') and self.dig_tool.cursor_position:
+                    feedback.add_text(f"✓ Cursor Position: {self.dig_tool.cursor_position}", 'success')
+                else:
+                    feedback.add_text("✗ Cursor Position: Not set", 'warning')
+
+                feedback.update_progress(85, "Writing file...")
+                time.sleep(0.1)
+
+                with open(filepath, 'w') as f:
+                    json.dump(settings, f, indent=4)
+
+                feedback.update_progress(95, "Finalizing...")
+                time.sleep(0.1)
+
+                discord_status = "included" if include_discord else "excluded"
+                filename = os.path.basename(filepath)
+
+                feedback.add_section("COMPLETION")
+                feedback.add_text(f"✓ Settings saved to: {filename}", 'success')
+                feedback.add_text(f"✓ Discord information: {discord_status}", 'info')
+
+                feedback.operation_complete(success=True)
+
+                self.dig_tool.update_status(f"Settings saved to {filename} (Discord info {discord_status})")
+
             except Exception as e:
-                print(f"Error saving keybind {key}: {e}")
-                settings['keybinds'][key] = self.default_keybinds.get(key)
+                feedback.show_error("Save Failed", str(e))
+                self.dig_tool.update_status(f"Error saving settings: {e}")
 
-        try:
-            with open(filepath, 'w') as f:
-                json.dump(settings, f, indent=4)
-
-            discord_status = "included" if include_discord else "excluded"
-            self.dig_tool.update_status(
-                f"Settings saved to {os.path.basename(filepath)} (Discord info {discord_status})")
-        except Exception as e:
-            self.dig_tool.update_status(f"Error saving settings: {e}")
+        threading.Thread(target=save_process, daemon=True).start()
 
     def load_settings(self):
         filepath = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
@@ -291,137 +374,257 @@ class SettingsManager:
         if not filepath:
             return
 
-        try:
-            with open(filepath, 'r') as f:
-                settings = json.load(f)
+        feedback = SettingsFeedbackWindow(self.dig_tool.root, "Loading Settings")
+        feedback.show_window()
 
-            if not isinstance(settings, dict):
-                self.dig_tool.update_status("Error: Invalid settings file format")
-                return
+        def load_process():
+            try:
+                feedback.update_progress(10, "Reading settings file...")
+                time.sleep(0.1)
 
-            params_loaded = 0
-            for key, value in settings.get('params', {}).items():
-                if key in self.dig_tool.param_vars:
-                    try:
-                        param_var = self.dig_tool.param_vars[key]
+                with open(filepath, 'r') as f:
+                    settings = json.load(f)
 
-                        if isinstance(param_var, tk.BooleanVar):
-                            if isinstance(value, str):
-                                converted_value = value.lower() in ('true', '1', 'yes', 'on')
+                if not isinstance(settings, dict):
+                    feedback.show_error("Invalid File", "Settings file format is invalid")
+                    return
+
+                feedback.update_progress(20, "Validating settings structure...")
+                time.sleep(0.1)
+
+                feedback.add_section("PARAMETERS")
+                params_loaded = 0
+                params_failed = []
+
+                total_params = len(settings.get('params', {}))
+                for i, (key, value) in enumerate(settings.get('params', {}).items()):
+                    if key in self.dig_tool.param_vars:
+                        try:
+                            param_var = self.dig_tool.param_vars[key]
+                            old_value = param_var.get()
+
+                            if isinstance(param_var, tk.BooleanVar):
+                                if isinstance(value, str):
+                                    converted_value = value.lower() in ('true', '1', 'yes', 'on')
+                                else:
+                                    converted_value = bool(value)
+                            elif isinstance(param_var, tk.DoubleVar):
+                                converted_value = float(value)
+                            elif isinstance(param_var, tk.IntVar):
+                                converted_value = int(float(str(value).replace('JS:', '')))
                             else:
-                                converted_value = bool(value)
-                        elif isinstance(param_var, tk.DoubleVar):
-                            converted_value = float(value)
-                        elif isinstance(param_var, tk.IntVar):
-                            converted_value = int(float(str(value).replace('JS:', '')))
-                        else:
-                            converted_value = str(value)
+                                converted_value = str(value)
 
-                        param_var.set(converted_value)
-                        params_loaded += 1
+                            param_var.set(converted_value)
+                            feedback.add_change_entry(key, str(old_value), str(converted_value), 'success')
+                            params_loaded += 1
 
-                    except Exception as e:
-                        print(f"Warning: Could not set parameter {key}: {e}")
-                        self.dig_tool.update_status(f"Warning: Could not set parameter {key}")
+                        except Exception as e:
+                            feedback.add_change_entry(key, "", f"ERROR: {str(e)}", 'error')
+                            params_failed.append(key)
+                    else:
+                        feedback.add_change_entry(key, "", "Unknown parameter", 'warning')
+                        params_failed.append(key)
 
-            self.update_setting_states()
+                    progress = 20 + (i * 30 / max(total_params, 1))
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
 
-            keybinds_loaded = 0
-            for key, value in settings.get('keybinds', {}).items():
-                if key in self.dig_tool.keybind_vars and self.validate_keybind(key, value):
+                self.update_setting_states()
+
+                feedback.add_section("KEYBINDS")
+                keybinds_loaded = 0
+                keybinds_failed = []
+
+                total_keybinds = len(settings.get('keybinds', {}))
+                for i, (key, value) in enumerate(settings.get('keybinds', {}).items()):
+                    if key in self.dig_tool.keybind_vars and self.validate_keybind(key, value):
+                        try:
+                            old_value = self.dig_tool.keybind_vars[key].get()
+                            self.dig_tool.keybind_vars[key].set(value)
+                            feedback.add_change_entry(key, old_value, value, 'success')
+                            keybinds_loaded += 1
+                        except Exception as e:
+                            feedback.add_change_entry(key, "", f"ERROR: {str(e)}", 'error')
+                            keybinds_failed.append(key)
+                    else:
+                        feedback.add_change_entry(key, "", "Invalid keybind", 'warning')
+                        keybinds_failed.append(key)
+
+                    progress = 50 + (i * 20 / max(total_keybinds, 1))
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
+
+                feedback.add_section("CONFIGURATION")
+                feedback.update_progress(70, "Loading configuration settings...")
+
+                area_loaded = False
+                if 'game_area' in settings and self.validate_game_area(settings['game_area']):
+                    old_area = self.dig_tool.game_area
+                    self.dig_tool.game_area = tuple(settings['game_area']) if isinstance(settings['game_area'],
+                                                                                         list) else settings[
+                        'game_area']
+
+                    feedback.add_change_entry("Game Area", str(old_area) if old_area else "None",
+                                              str(self.dig_tool.game_area), 'success')
+
+                    self.dig_tool.update_area_info()
+                    if hasattr(self.dig_tool, 'preview_btn'):
+                        self.dig_tool.preview_btn.config(state=tk.NORMAL)
+                    if hasattr(self.dig_tool, 'debug_btn'):
+                        self.dig_tool.debug_btn.config(state=tk.NORMAL)
+                    if not self.dig_tool.main_loop_thread or not self.dig_tool.main_loop_thread.is_alive():
+                        self.dig_tool.start_threads()
+                    area_loaded = True
+                else:
+                    feedback.add_text("✗ Game Area: Not found or invalid", 'warning')
+
+                sell_button_loaded = False
+                if 'sell_button_position' in settings and self.validate_position(settings['sell_button_position']):
                     try:
-                        self.dig_tool.keybind_vars[key].set(value)
-                        keybinds_loaded += 1
-                    except Exception as e:
-                        print(f"Warning: Could not set keybind {key}: {e}")
+                        pos = settings['sell_button_position']
+                        old_pos = getattr(self.dig_tool.automation_manager, 'sell_button_position', None)
+                        self.dig_tool.automation_manager.sell_button_position = tuple(pos)
 
-            area_loaded = False
-            if 'game_area' in settings and self.validate_game_area(settings['game_area']):
-                self.dig_tool.game_area = tuple(settings['game_area']) if isinstance(settings['game_area'], list) else \
-                settings['game_area']
-                self.dig_tool.update_area_info()
-                if hasattr(self.dig_tool, 'preview_btn'):
-                    self.dig_tool.preview_btn.config(state=tk.NORMAL)
-                if hasattr(self.dig_tool, 'debug_btn'):
-                    self.dig_tool.debug_btn.config(state=tk.NORMAL)
-                if not self.dig_tool.main_loop_thread or not self.dig_tool.main_loop_thread.is_alive():
-                    self.dig_tool.start_threads()
-                area_loaded = True
+                        feedback.add_change_entry("Sell Button", str(old_pos) if old_pos else "None", str(tuple(pos)),
+                                                  'success')
 
-            sell_button_loaded = False
-            if 'sell_button_position' in settings and self.validate_position(settings['sell_button_position']):
-                try:
-                    pos = settings['sell_button_position']
-                    self.dig_tool.automation_manager.sell_button_position = tuple(pos)
-                    self.dig_tool.update_sell_info()
-                    sell_button_loaded = True
-                except Exception as e:
-                    print(f"Error loading sell button position: {e}")
+                        self.dig_tool.update_sell_info()
+                        sell_button_loaded = True
+                    except Exception:
+                        feedback.add_text("✗ Sell Button: Invalid position data", 'warning')
+                else:
+                    feedback.add_text("✗ Sell Button: Not found", 'warning')
 
-            cursor_loaded = False
-            if 'cursor_position' in settings and self.validate_position(settings['cursor_position']):
-                try:
-                    pos = settings['cursor_position']
-                    self.dig_tool.cursor_position = tuple(pos)
-                    self.dig_tool.update_cursor_info()
-                    cursor_loaded = True
-                except Exception as e:
-                    print(f"Error loading cursor position: {e}")
+                cursor_loaded = False
+                if 'cursor_position' in settings and self.validate_position(settings['cursor_position']):
+                    try:
+                        pos = settings['cursor_position']
+                        old_pos = getattr(self.dig_tool, 'cursor_position', None)
+                        self.dig_tool.cursor_position = tuple(pos)
 
-            pattern_loaded = False
-            if 'walk_pattern' in settings and hasattr(self.dig_tool, 'walk_pattern_var'):
-                try:
-                    pattern = settings['walk_pattern']
-                    if hasattr(self.dig_tool.automation_manager,
-                               'walk_patterns') and pattern in self.dig_tool.automation_manager.walk_patterns:
-                        self.dig_tool.walk_pattern_var.set(pattern)
-                        pattern_loaded = True
-                except Exception as e:
-                    print(f"Error loading walk pattern: {e}")
+                        feedback.add_change_entry("Cursor Position", str(old_pos) if old_pos else "None",
+                                                  str(tuple(pos)), 'success')
 
-            self.dig_tool.apply_keybinds()
+                        self.dig_tool.update_cursor_info()
+                        cursor_loaded = True
+                    except Exception:
+                        feedback.add_text("✗ Cursor Position: Invalid position data", 'warning')
+                else:
+                    feedback.add_text("✗ Cursor Position: Not found", 'warning')
 
-            status_parts = [f"Settings loaded from {os.path.basename(filepath)}"]
-            if params_loaded > 0:
-                status_parts.append(f"{params_loaded} parameters")
-            if keybinds_loaded > 0:
-                status_parts.append(f"{keybinds_loaded} keybinds")
-            if area_loaded:
-                status_parts.append("game area")
-            if sell_button_loaded:
-                status_parts.append("sell button")
-            if cursor_loaded:
-                status_parts.append("cursor position")
-            if pattern_loaded:
-                status_parts.append("walk pattern")
+                pattern_loaded = False
+                if 'walk_pattern' in settings and hasattr(self.dig_tool, 'walk_pattern_var'):
+                    try:
+                        pattern = settings['walk_pattern']
+                        old_pattern = self.dig_tool.walk_pattern_var.get()
+                        if hasattr(self.dig_tool.automation_manager,
+                                   'walk_patterns') and pattern in self.dig_tool.automation_manager.walk_patterns:
+                            self.dig_tool.walk_pattern_var.set(pattern)
+                            feedback.add_change_entry("Walk Pattern", old_pattern, pattern, 'success')
+                            pattern_loaded = True
+                        else:
+                            feedback.add_text(f"✗ Walk Pattern: Unknown pattern '{pattern}'", 'warning')
+                    except Exception:
+                        feedback.add_text("✗ Walk Pattern: Invalid data", 'warning')
+                else:
+                    feedback.add_text("✗ Walk Pattern: Not found", 'warning')
 
-            self.dig_tool.update_status(f"{status_parts[0]} - {', '.join(status_parts[1:])}")
+                feedback.update_progress(90, "Finalizing...")
 
-        except json.JSONDecodeError:
-            self.dig_tool.update_status("Error: Invalid JSON file")
-        except Exception as e:
-            self.dig_tool.update_status(f"Error loading settings: {e}")
+                self.dig_tool.apply_keybinds()
+
+                if hasattr(self.dig_tool, 'update_walk_pattern_dropdown'):
+                    self.dig_tool.update_walk_pattern_dropdown()
+
+                total_failed = len(params_failed + keybinds_failed)
+                total_success = params_loaded + keybinds_loaded
+                total_items = total_success + total_failed
+
+                feedback.add_summary_stats(total_success, total_failed, total_items)
+                feedback.operation_complete(success=total_failed == 0)
+
+                filename = os.path.basename(filepath)
+                self.dig_tool.update_status(f"Settings loaded from {filename} - See details window")
+
+            except json.JSONDecodeError:
+                feedback.show_error("Invalid JSON", "The selected file contains invalid JSON data")
+            except Exception as e:
+                feedback.show_error("Load Failed", str(e))
+
+        threading.Thread(target=load_process, daemon=True).start()
 
     def reset_to_defaults(self):
-        for key, default_value in self.default_params.items():
-            if key in self.dig_tool.param_vars:
-                try:
-                    self.dig_tool.param_vars[key].set(default_value)
-                except Exception:
-                    pass
+        feedback = SettingsFeedbackWindow(self.dig_tool.root, "Resetting to Defaults")
+        feedback.show_window()
 
-        for key, default_value in self.default_keybinds.items():
-            if key in self.dig_tool.keybind_vars:
-                try:
-                    self.dig_tool.keybind_vars[key].set(default_value)
-                except Exception:
-                    pass
-
-        if hasattr(self.dig_tool, 'walk_pattern_var'):
+        def reset_process():
             try:
-                self.dig_tool.walk_pattern_var.set('circle')
-            except Exception:
-                pass
+                feedback.update_progress(10, "Resetting parameters...")
+                time.sleep(0.1)
 
-        self.dig_tool.apply_keybinds()
-        self.dig_tool.update_status("Settings reset to defaults")
+                feedback.add_section("PARAMETERS")
+                params_reset = 0
+                total_params = len(self.default_params)
+
+                for i, (key, default_value) in enumerate(self.default_params.items()):
+                    if key in self.dig_tool.param_vars:
+                        try:
+                            old_value = self.dig_tool.param_vars[key].get()
+                            self.dig_tool.param_vars[key].set(default_value)
+                            feedback.add_change_entry(key, str(old_value), str(default_value), 'success')
+                            params_reset += 1
+                        except Exception as e:
+                            feedback.add_change_entry(key, "", f"ERROR: {e}", 'error')
+
+                    progress = 10 + (i * 40 / total_params)
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
+
+                feedback.add_section("KEYBINDS")
+                feedback.update_progress(50, "Resetting keybinds...")
+
+                keybinds_reset = 0
+                total_keybinds = len(self.default_keybinds)
+
+                for i, (key, default_value) in enumerate(self.default_keybinds.items()):
+                    if key in self.dig_tool.keybind_vars:
+                        try:
+                            old_value = self.dig_tool.keybind_vars[key].get()
+                            self.dig_tool.keybind_vars[key].set(default_value)
+                            feedback.add_change_entry(key, old_value, default_value, 'success')
+                            keybinds_reset += 1
+                        except Exception as e:
+                            feedback.add_change_entry(key, "", f"ERROR: {e}", 'error')
+
+                    progress = 50 + (i * 30 / total_keybinds)
+                    feedback.update_progress(progress)
+                    time.sleep(0.02)
+
+                feedback.add_section("CONFIGURATION")
+                feedback.update_progress(80, "Resetting configuration...")
+
+                if hasattr(self.dig_tool, 'walk_pattern_var'):
+                    try:
+                        old_pattern = self.dig_tool.walk_pattern_var.get()
+                        self.dig_tool.walk_pattern_var.set('circle')
+                        feedback.add_change_entry("Walk Pattern", old_pattern, "circle", 'success')
+                    except Exception:
+                        feedback.add_text("✗ Walk Pattern: Reset failed", 'error')
+
+                feedback.update_progress(90, "Finalizing...")
+
+                if hasattr(self.dig_tool, 'update_walk_pattern_dropdown'):
+                    self.dig_tool.update_walk_pattern_dropdown()
+
+                self.dig_tool.apply_keybinds()
+
+                feedback.add_summary_stats(params_reset + keybinds_reset, 0, params_reset + keybinds_reset)
+                feedback.operation_complete(success=True)
+
+                self.dig_tool.update_status("Settings reset to defaults - See details window")
+
+            except Exception as e:
+                feedback.show_error("Reset Failed", str(e))
+
+        threading.Thread(target=reset_process, daemon=True).start()

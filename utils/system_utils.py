@@ -8,6 +8,9 @@ import sys
 import ctypes
 import tkinter as tk
 from tkinter import messagebox
+from ahk import AHK
+
+ahk = AHK()
 
 
 def check_dependencies():
@@ -35,10 +38,11 @@ def check_dependencies():
         print("\nPlease install the missing packages and try again.")
         sys.exit(1)
 
+
 def check_display_scale():
     try:
         user32 = ctypes.windll.user32
-        user32.SetProcessDPIAware()
+        user32.SetProcessDpiAware()
 
         hdc = user32.GetDC(0)
         dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)
@@ -50,7 +54,7 @@ def check_display_scale():
             root = tk.Tk()
             root.withdraw()
 
-            messagebox.showerror(
+            messagebox.showwarning(
                 "Display Scale Error",
                 f"ERROR: Display scale is set to {scale_percent}%. This tool requires 100% display scaling to work correctly."
             )
@@ -62,7 +66,15 @@ def check_display_scale():
         pass
 
 
-def send_click():
+_dig_tool_instance = None
+
+
+def set_dig_tool_instance(instance):
+    global _dig_tool_instance
+    _dig_tool_instance = instance
+
+
+def send_click_win32api():
     try:
         user32 = ctypes.windll.user32
 
@@ -106,13 +118,49 @@ def send_click():
 
         inputs = (INPUT * 2)(input_down, input_up)
         user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
+        return True
 
     except Exception as e:
         try:
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            return True
         except Exception as e2:
-            print(f"Click failed: {e}, {e2}")
+            print(f"Win32API click failed: {e}, {e2}")
+            return False
+
+
+def send_click_ahk():
+    try:
+        ahk.send_input('{Click}')
+        return True
+    except ImportError:
+        print("AHK library not installed. Install with: pip install ahk")
+        return False
+    except Exception as e:
+        print(f"AHK click failed: {e}")
+        return False
+
+
+def send_click():
+    global _dig_tool_instance
+
+    if _dig_tool_instance:
+        try:
+            click_method = _dig_tool_instance.get_param('click_method')
+        except:
+            click_method = 'win32api'
+    else:
+        click_method = 'win32api'
+
+    if click_method == 'ahk':
+        success = send_click_ahk()
+        if not success:
+            print("AHK click failed, falling back to Win32API")
+            success = send_click_win32api()
+        return success
+    else:
+        return send_click_win32api()
 
 
 class ScreenCapture:
