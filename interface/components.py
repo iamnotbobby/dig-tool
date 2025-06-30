@@ -168,6 +168,11 @@ class GameOverlay:
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
 
+        self.auto_walk_label = Label(stats_frame, text="WALK: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_walk_label.grid(row=2, column=0, sticky='w')
+        self.auto_sell_label = Label(stats_frame, text="SELL: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_sell_label.grid(row=2, column=1, sticky='w', padx=10)
+
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
         self.toggle_bot_label = Label(key_frame, text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get()}", fg='gray',
@@ -182,13 +187,36 @@ class GameOverlay:
 
         self.preview_label_overlay = Label(self.overlay, bg='black')
         self.preview_label_overlay.pack(pady=(5, 5), padx=5, fill='both', expand=True)
+
+        self.overlay.bind("<ButtonPress-1>", self.on_press)
+        self.overlay.bind("<ButtonRelease-1>", self.on_release)
+        self.overlay.bind("<B1-Motion>", self.on_motion)
+
         self.position_overlay()
         self.visible = True
 
+    def on_press(self, event):
+        self._drag_start_x = event.x
+        self._drag_start_y = event.y
+
+    def on_release(self, event):
+        self._drag_start_x = None
+        self._drag_start_y = None
+
+    def on_motion(self, event):
+        if hasattr(self, '_drag_start_x') and self._drag_start_x is not None:
+            x = self.overlay.winfo_x() - self._drag_start_x + event.x
+            y = self.overlay.winfo_y() - self._drag_start_y + event.y
+            self.overlay.geometry(f"+{x}+{y}")
+            self.parent.overlay_position = (x, y)
+
     def position_overlay(self):
-        if not self.overlay or not self.parent.game_area: return
-        x1, y1, x2, y2 = self.parent.game_area
-        self.overlay.geometry(f"+{x2 + 10}+{min(y1, self.parent.root.winfo_screenheight() - 400)}")
+        if not self.overlay: return
+        if self.parent.overlay_position:
+            self.overlay.geometry(f"+{self.parent.overlay_position[0]}+{self.parent.overlay_position[1]}")
+        elif self.parent.game_area:
+            x1, y1, x2, y2 = self.parent.game_area
+            self.overlay.geometry(f"+{x2 + 10}+{min(y1, self.parent.root.winfo_screenheight() - 400)}")
 
     def update_info(self, **kwargs):
         if not self.visible or not self.overlay: return
@@ -219,6 +247,12 @@ class GameOverlay:
             is_pred = self.parent.get_param('prediction_enabled')
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')
             self.latency_label.config(text=f"LAT: {self.parent.get_param('system_latency')}ms")
+
+            is_auto_walk = self.parent.get_param('auto_walk_enabled')
+            self.auto_walk_label.config(text=f"WALK: {'ON' if is_auto_walk else 'OFF'}", fg='lime' if is_auto_walk else 'red')
+
+            is_auto_sell = self.parent.get_param('auto_sell_enabled')
+            self.auto_sell_label.config(text=f"SELL: {'ON' if is_auto_sell else 'OFF'}", fg='lime' if is_auto_sell else 'red')
 
             self.toggle_bot_label.config(text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get().upper()}")
             self.toggle_gui_label.config(text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get().upper()}")

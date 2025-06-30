@@ -74,13 +74,19 @@ class SettingsManager:
         self.default_keybinds = {
             'toggle_bot': 'f1',
             'toggle_gui': 'f2',
-            'toggle_overlay': 'f3'
+            'toggle_overlay': 'f3',
+            'toggle_auto_walk': 'f4',
+            'toggle_auto_sell': 'f5',
+            'panic_key': 'f12'
         }
 
         self.keybind_descriptions = {
             'toggle_bot': "Start/stop the clicking detection and automation.",
             'toggle_gui': "Show/hide the main control window.",
-            'toggle_overlay': "Toggle the game overlay display on/off."
+            'toggle_overlay': "Toggle the game overlay display on/off.",
+            'toggle_auto_walk': "Toggle the auto-walk feature on/off.",
+            'toggle_auto_sell': "Toggle the auto-sell feature on/off.",
+            'panic_key': "Immediately stop all bot activities and shut down."
         }
 
     def get_default_value(self, key):
@@ -240,6 +246,7 @@ class SettingsManager:
             'game_area': self.dig_tool.game_area,
             'sell_button_position': getattr(self.dig_tool.automation_manager, 'sell_button_position', None),
             'cursor_position': getattr(self.dig_tool, 'cursor_position', None),
+            'overlay_position': getattr(self.dig_tool, 'overlay_position', None),
             'walk_pattern': getattr(self.dig_tool, 'walk_pattern_var', tk.StringVar()).get() if hasattr(self.dig_tool,
                                                                                                         'walk_pattern_var') else 'circle'
         }
@@ -368,6 +375,15 @@ class SettingsManager:
                 except Exception as e:
                     print(f"Error loading cursor position: {e}")
 
+            overlay_loaded = False
+            if 'overlay_position' in settings and self.validate_position(settings['overlay_position']):
+                try:
+                    pos = settings['overlay_position']
+                    self.dig_tool.overlay_position = tuple(pos)
+                    overlay_loaded = True
+                except Exception as e:
+                    print(f"Error loading overlay position: {e}")
+
             pattern_loaded = False
             if 'walk_pattern' in settings and hasattr(self.dig_tool, 'walk_pattern_var'):
                 try:
@@ -392,6 +408,8 @@ class SettingsManager:
                 status_parts.append("sell button")
             if cursor_loaded:
                 status_parts.append("cursor position")
+            if overlay_loaded:
+                status_parts.append("overlay position")
             if pattern_loaded:
                 status_parts.append("walk pattern")
 

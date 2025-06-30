@@ -353,6 +353,9 @@ class MainWindow:
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Bot:", 'toggle_bot')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle GUI:", 'toggle_gui')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto-Walk:", 'toggle_auto_walk')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto-Sell:", 'toggle_auto_sell')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Panic Key:", 'panic_key')
 
         # Settings pane - Light green background (#e8f8f0)
         create_checkbox_param(panes['settings'].sub_frame, "Include Discord Info in Settings",

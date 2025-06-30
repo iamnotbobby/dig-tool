@@ -67,6 +67,7 @@ class DigTool:
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
+        self.overlay_position = None
         self.screen_grabber = ScreenCapture()
         self.click_count = 0
         self.dig_count = 0
@@ -152,6 +153,9 @@ class DigTool:
             keyboard.add_hotkey(self.keybind_vars['toggle_bot'].get(), self.toggle_detection)
             keyboard.add_hotkey(self.keybind_vars['toggle_gui'].get(), self.toggle_gui)
             keyboard.add_hotkey(self.keybind_vars['toggle_overlay'].get(), self.toggle_overlay)
+            keyboard.add_hotkey(self.keybind_vars['toggle_auto_walk'].get(), self.toggle_auto_walk)
+            keyboard.add_hotkey(self.keybind_vars['toggle_auto_sell'].get(), self.toggle_auto_sell)
+            keyboard.add_hotkey(self.keybind_vars['panic_key'].get(), self.panic)
             self.update_main_button_text()
             self.update_status("Keybinds applied successfully.")
         except (ValueError, TclError, Exception) as e:
@@ -184,6 +188,25 @@ class DigTool:
             self.overlay = None
             self.overlay_enabled = False
         self.update_main_button_text()
+
+    def toggle_auto_walk(self):
+        self.root.after(0, self._toggle_auto_walk_thread_safe)
+
+    def _toggle_auto_walk_thread_safe(self):
+        current_state = self.param_vars['auto_walk_enabled'].get()
+        self.param_vars['auto_walk_enabled'].set(not current_state)
+        self.update_status(f"Auto-walk {'enabled' if not current_state else 'disabled'}")
+
+    def toggle_auto_sell(self):
+        self.root.after(0, self._toggle_auto_sell_thread_safe)
+
+    def _toggle_auto_sell_thread_safe(self):
+        current_state = self.param_vars['auto_sell_enabled'].get()
+        self.param_vars['auto_sell_enabled'].set(not current_state)
+        self.update_status(f"Auto-sell {'enabled' if not current_state else 'disabled'}")
+
+    def panic(self):
+        self.root.after(0, self.on_closing)
 
     def get_param(self, key):
         return self.settings_manager.get_param(key)
