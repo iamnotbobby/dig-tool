@@ -46,7 +46,7 @@ class SettingsManager:
             'use_custom_cursor': False,
             'include_discord_in_settings': False,
             'shovel_equip_mode': 'double',
-            'click_method': 'ahk',
+            'click_method': 'win32api',
         }
 
         self.param_descriptions = {

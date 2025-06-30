@@ -60,7 +60,7 @@ class DigTool:
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         
-        # Initialize keybinds before main window
+        # Initialize keybinds before main window - bug where it wasn't before in v1.4
         self.initialize_keybinds()
         
         self.main_window = MainWindow(self)
@@ -251,10 +251,8 @@ class DigTool:
             self.main_loop_thread.start()
 
     def hotkey_listener(self):
-        """Background thread to manage hotkeys"""
         print("Hotkey listener thread started")
 
-        # Initial keybind application with retry
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -266,31 +264,26 @@ class DigTool:
                 if attempt < max_retries - 1:
                     time.sleep(1)
 
-        # Keep thread alive while preview is active
         while self.preview_active:
             time.sleep(0.5)
 
         print("Hotkey listener thread ended")
 
     def apply_keybinds(self):
-        """Apply keybinds with proper error handling and validation"""
         print("Applying keybinds...")
 
-        # Unhook all existing hotkeys
         try:
             keyboard.unhook_all()
             print("Previous hotkeys unhooked")
         except Exception as e:
             print(f"Warning: Could not unhook previous hotkeys: {e}")
 
-        # Check if keybind_vars are initialized
         if not self.keybind_vars:
             print("Error: Keybind variables not initialized")
             self.update_status("Error: Keybind variables not initialized")
             return False
 
         try:
-            # Validate and apply each keybind
             keybinds_applied = 0
 
             for key_name, var in self.keybind_vars.items():
@@ -299,7 +292,6 @@ class DigTool:
                     print(f"Warning: Empty keybind for {key_name}")
                     continue
 
-                # Validate keybind
                 is_valid, msg = self.validate_keybind(key_name, key_value)
                 if not is_valid:
                     print(f"Error: Invalid keybind for {key_name}: {key_value} - {msg}")
@@ -307,7 +299,6 @@ class DigTool:
 
                 print(f"  Applying {key_name}: {key_value}")
 
-                # Map keybind names to functions
                 if key_name == 'toggle_bot':
                     keyboard.add_hotkey(key_value, self.toggle_detection)
                 elif key_name == 'toggle_gui':
@@ -320,7 +311,6 @@ class DigTool:
 
                 keybinds_applied += 1
 
-            # Update UI
             self.update_main_button_text()
             success_msg = f"Successfully applied {keybinds_applied} keybinds"
             self.update_status(success_msg)
@@ -362,7 +352,14 @@ class DigTool:
         self.update_main_button_text()
 
     def get_param(self, key):
-        return self.settings_manager.get_param(key)
+        if key in self.param_vars:
+            return self.param_vars[key].get()
+        return getattr(self, key, None)
+
+    def set_param(self, key, value):
+        if key in self.param_vars:
+            self.param_vars[key].set(value)
+        setattr(self, key, value)
 
     def update_main_button_text(self):
         if not self.root.winfo_exists(): return
@@ -806,20 +803,6 @@ class DigTool:
         max_wait_time = 3000
         post_dig_delay = 2000
 
-        saturation_threshold_cache = None
-        zone_min_width_cache = None
-        max_zone_width_cache = None
-        min_zone_height_cache = None
-        line_sensitivity_cache = None
-        line_min_height_cache = None
-        sweet_spot_width_percent_cache = None
-        zone_smoothing_factor_cache = None
-        system_latency_cache = None
-        max_prediction_time_cache = None
-        min_velocity_threshold_cache = None
-        prediction_confidence_threshold_cache = None
-        post_click_blindness_cache = None
-
         while self.preview_active:
             start_time = time.perf_counter()
             self._update_time_cache()
@@ -838,19 +821,17 @@ class DigTool:
                 continue
 
             height, width = screenshot.shape[:2]
-            if height_80_cached is None or height_80_cached != int(height * 0.80):
-                height_80_cached = int(height * 0.80)
-                zone_y2_cached = height_80_cached
+            height_80 = int(height * 0.80)
+            zone_y2 = height_80
 
-            zone_detection_area = screenshot[:height_80_cached, :]
+            zone_detection_area = screenshot[:height_80, :]
             hsv = cv2.cvtColor(zone_detection_area, cv2.COLOR_BGR2HSV)
 
-            if saturation_threshold_cache is None:
-                saturation_threshold_cache = self.get_param('saturation_threshold')
+            saturation_threshold = self.get_param('saturation_threshold')
 
             if not self.is_color_locked:
                 saturation = hsv[:, :, 1]
-                _, final_mask = cv2.threshold(saturation, saturation_threshold_cache, 255, cv2.THRESH_BINARY)
+                _, final_mask = cv2.threshold(saturation, saturation_threshold, 255, cv2.THRESH_BINARY)
             else:
                 lower_bound, upper_bound = self._get_hsv_bounds_cached(self.locked_color_hsv, self.is_low_sat_lock)
                 final_mask = cv2.inRange(hsv, lower_bound, upper_bound)
@@ -863,12 +844,11 @@ class DigTool:
                 main_contour = max(contours, key=cv2.contourArea)
                 x_temp, y_temp, w_temp, h_temp = cv2.boundingRect(main_contour)
 
-                if zone_min_width_cache is None:
-                    zone_min_width_cache = self.get_param('zone_min_width')
-                    max_zone_width_cache = width * (self.get_param('max_zone_width_percent') / 100.0)
-                    min_zone_height_cache = height_80_cached * (self.get_param('min_zone_height_percent') / 100.0)
+                zone_min_width = self.get_param('zone_min_width')
+                max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
+                min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
 
-                if w_temp > zone_min_width_cache and w_temp < max_zone_width_cache and h_temp >= min_zone_height_cache:
+                if w_temp > zone_min_width and w_temp < max_zone_width and h_temp >= min_zone_height:
                     raw_zone_x, raw_zone_w = x_temp, w_temp
                     if not self.is_color_locked:
                         mask = np.zeros(hsv.shape[:2], dtype="uint8")
@@ -884,16 +864,15 @@ class DigTool:
                 self.automation_manager.update_target_lock_activity()
                 self.frames_since_last_zone_detection = 0
 
-                if zone_smoothing_factor_cache is None:
-                    zone_smoothing_factor_cache = self.get_param('zone_smoothing_factor')
+                zone_smoothing_factor = self.get_param('zone_smoothing_factor')
 
                 if self.smoothed_zone_x is None:
                     self.smoothed_zone_x, self.smoothed_zone_w = raw_zone_x, raw_zone_w
                 else:
-                    self.smoothed_zone_x = zone_smoothing_factor_cache * raw_zone_x + (
-                                1 - zone_smoothing_factor_cache) * self.smoothed_zone_x
-                    self.smoothed_zone_w = zone_smoothing_factor_cache * raw_zone_w + (
-                                1 - zone_smoothing_factor_cache) * self.smoothed_zone_w
+                    self.smoothed_zone_x = zone_smoothing_factor * raw_zone_x + (
+                                1 - zone_smoothing_factor) * self.smoothed_zone_x
+                    self.smoothed_zone_w = zone_smoothing_factor * raw_zone_w + (
+                                1 - zone_smoothing_factor) * self.smoothed_zone_w
             else:
                 self.frames_since_last_zone_detection += 1
 
@@ -905,11 +884,10 @@ class DigTool:
 
             gray_line_area = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
-            if line_sensitivity_cache is None:
-                line_sensitivity_cache = self.get_param('line_sensitivity')
-                line_min_height_cache = self.get_param('line_min_height') / 100.0
+            line_sensitivity = self.get_param('line_sensitivity')
+            line_min_height = self.get_param('line_min_height') / 100.0
 
-            line_pos = find_line_position(gray_line_area, line_sensitivity_cache, line_min_height_cache)
+            line_pos = find_line_position(gray_line_area, line_sensitivity, line_min_height)
 
             velocity = self.velocity_calculator.add_position(line_pos, self._current_time_cache)
             acceleration = self.velocity_calculator.get_acceleration()
@@ -920,15 +898,12 @@ class DigTool:
             if self.smoothed_zone_x is not None:
                 sweet_spot_center = self.smoothed_zone_x + self.smoothed_zone_w / 2
 
-                if sweet_spot_width_percent_cache is None:
-                    sweet_spot_width_percent_cache = self.get_param('sweet_spot_width_percent') / 100.0
-
-                sweet_spot_width = self.smoothed_zone_w * sweet_spot_width_percent_cache
+                sweet_spot_width_percent = self.get_param('sweet_spot_width_percent') / 100.0
+                sweet_spot_width = self.smoothed_zone_w * sweet_spot_width_percent
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
 
             if self.running and self.get_param('auto_walk_enabled') and not self.automation_manager.is_selling:
-
                 if auto_walk_state == "move":
                     if (self.get_param('auto_sell_enabled') and self.automation_manager.sell_button_position and
                             self.dig_count > 0 and self.dig_count % self.get_param('sell_every_x_digs') == 0 and
@@ -968,8 +943,7 @@ class DigTool:
             else:
                 should_allow_clicking = self.target_engaged
 
-            if post_click_blindness_cache is None:
-                post_click_blindness_cache = self.get_param('post_click_blindness')
+            post_click_blindness = self.get_param('post_click_blindness')
 
             if (self.running and should_allow_clicking and current_time_ms >= self.blind_until and
                     sweet_spot_center is not None and not self.click_lock.locked()):
@@ -979,20 +953,19 @@ class DigTool:
                 line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
 
                 if self.get_param('prediction_enabled') and line_pos != -1:
-                    if min_velocity_threshold_cache is None:
-                        min_velocity_threshold_cache = self.get_param('min_velocity_threshold')
-                        prediction_confidence_threshold_cache = self.get_param('prediction_confidence_threshold')
-                        max_prediction_time_cache = self.get_param('max_prediction_time') / 1000.0
-                        system_latency_cache = self.get_param('system_latency') / 1000.0
+                    min_velocity_threshold = self.get_param('min_velocity_threshold')
+                    prediction_confidence_threshold = self.get_param('prediction_confidence_threshold')
+                    max_prediction_time = self.get_param('max_prediction_time') / 1000.0
+                    system_latency = self.get_param('system_latency') / 1000.0
 
-                    if abs(velocity) >= min_velocity_threshold_cache:
+                    if abs(velocity) >= min_velocity_threshold:
                         is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
                                 line_pos > sweet_spot_center and velocity < 0)
 
                         if is_moving_towards:
                             predicted_pos = self.velocity_calculator.predict_position(line_pos, sweet_spot_center,
                                                                                       self._current_time_cache,
-                                                                                      max_prediction_time_cache)
+                                                                                      max_prediction_time)
 
                             distance_to_center = abs(predicted_pos - sweet_spot_center)
                             sweet_spot_radius = (sweet_spot_end - sweet_spot_start) / 2
@@ -1000,12 +973,12 @@ class DigTool:
                             if distance_to_center <= sweet_spot_radius:
                                 confidence = max(0.0, 1.0 - (distance_to_center / sweet_spot_radius))
 
-                                if confidence >= prediction_confidence_threshold_cache:
+                                if confidence >= prediction_confidence_threshold:
                                     dist = sweet_spot_center - line_pos
                                     time_to_arrival = dist / velocity
 
-                                    if 0 < time_to_arrival <= max_prediction_time_cache:
-                                        sleep_duration = time_to_arrival - system_latency_cache
+                                    if 0 < time_to_arrival <= max_prediction_time:
+                                        sleep_duration = time_to_arrival - system_latency
                                         if sleep_duration > 0:
                                             should_click, click_delay, prediction_used = True, sleep_duration, True
 
@@ -1016,9 +989,9 @@ class DigTool:
                 if should_click:
                     self.automation_manager.update_click_activity()
                     self.save_debug_screenshot(screenshot, line_pos, sweet_spot_start, sweet_spot_end,
-                                               zone_y2_cached,
+                                               zone_y2,
                                                velocity, acceleration, prediction_used, confidence)
-                    self.blind_until = current_time_ms + post_click_blindness_cache
+                    self.blind_until = current_time_ms + post_click_blindness
 
                     if click_delay == 0:
                         self.perform_instant_click()
@@ -1038,8 +1011,8 @@ class DigTool:
                 preview_img = screenshot.copy()
                 if sweet_spot_center is not None:
                     cv2.rectangle(preview_img, (int(self.smoothed_zone_x), 0),
-                                  (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2_cached), (0, 255, 0), 2)
-                    cv2.rectangle(preview_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2_cached),
+                                  (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2), (0, 255, 0), 2)
+                    cv2.rectangle(preview_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2),
                                   (0, 255, 255), 2)
                 if line_pos != -1:
                     cv2.line(preview_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 3)

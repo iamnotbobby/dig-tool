@@ -8,9 +8,6 @@ import sys
 import ctypes
 import tkinter as tk
 from tkinter import messagebox
-from ahk import AHK
-
-ahk = AHK()
 
 
 def check_dependencies():
@@ -22,8 +19,7 @@ def check_dependencies():
         'win32gui': 'pywin32',
         'pynput': 'pynput',
         'requests': 'requests',
-        'autoit': 'pyautoit',
-        'ahk': 'ahk'
+        'autoit': 'pyautoit'
     }
     missing_packages = []
     for module, package in required_packages.items():
@@ -131,16 +127,8 @@ def send_click_win32api():
             return False
 
 
-def send_click_ahk():
-    try:
-        ahk.send_input('{Click}')
-        return True
-    except ImportError:
-        print("AHK library not installed. Install with: pip install ahk")
-        return False
-    except Exception as e:
-        print(f"AHK click failed: {e}")
-        return False
+def send_click_ahk(): # NON-FUNC FOR NOW
+    return send_click_win32api()
 
 
 def send_click():
