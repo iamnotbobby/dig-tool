@@ -330,7 +330,7 @@ class DigTool:
     def toggle_gui(self):
         self.root.after(0, self._toggle_gui_thread_safe)
         
-     def toggle_auto_walk(self):
+    def toggle_auto_walk(self):
         self.root.after(0, self._toggle_auto_walk_thread_safe)
 
     def _toggle_auto_walk_thread_safe(self):
