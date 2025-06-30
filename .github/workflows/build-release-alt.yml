@@ -24,7 +24,7 @@ jobs:
       - name: Check-out repository
         uses: actions/checkout@v4
         with:
-          ref: '1.5'
+          ref: beta
 
       - name: Setup Python
         uses: actions/setup-python@v5

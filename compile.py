@@ -16,5 +16,6 @@ PyInstaller.__main__.run([
     '--collect-all=autoit',
     '--add-binary=assets/AutoHotkey64.exe;.',
     '--clean',
+    '--hidden-import=ahk'
 
 ])
