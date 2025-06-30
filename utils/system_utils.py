@@ -22,7 +22,8 @@ def check_dependencies():
         'win32gui': 'pywin32',
         'pynput': 'pynput',
         'requests': 'requests',
-        'autoit': 'pyautoit'
+        'autoit': 'pyautoit',
+        'ahk': 'ahk'
     }
     missing_packages = []
     for module, package in required_packages.items():
