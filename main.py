@@ -305,6 +305,9 @@ class DigTool:
                     keyboard.add_hotkey(key_value, self.toggle_gui)
                 elif key_name == 'toggle_overlay':
                     keyboard.add_hotkey(key_value, self.toggle_overlay)
+                elif key_name == 'toggle_auto_walk': callback = self.toggle_auto_walk
+                elif key_name == 'toggle_auto_sell': callback = self.toggle_auto_sell
+                elif key_name == 'panic_key': callback = self.panic
                 else:
                     print(f"Warning: Unknown keybind {key_name}")
                     continue
@@ -326,6 +329,25 @@ class DigTool:
 
     def toggle_gui(self):
         self.root.after(0, self._toggle_gui_thread_safe)
+        
+     def toggle_auto_walk(self):
+        self.root.after(0, self._toggle_auto_walk_thread_safe)
+
+    def _toggle_auto_walk_thread_safe(self):
+        current_state = self.param_vars['auto_walk_enabled'].get()
+        self.param_vars['auto_walk_enabled'].set(not current_state)
+        self.update_status(f"Auto-walk {'enabled' if not current_state else 'disabled'}")
+
+    def toggle_auto_sell(self):
+        self.root.after(0, self._toggle_auto_sell_thread_safe)
+
+    def _toggle_auto_sell_thread_safe(self):
+        current_state = self.param_vars['auto_sell_enabled'].get()
+        self.param_vars['auto_sell_enabled'].set(not current_state)
+        self.update_status(f"Auto-sell {'enabled' if not current_state else 'disabled'}")
+    
+    def panic(self):
+        self.root.after(0, self.on_closing)
 
     def _toggle_gui_thread_safe(self):
         if self.root.winfo_exists():
