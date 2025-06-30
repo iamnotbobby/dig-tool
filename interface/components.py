@@ -184,6 +184,12 @@ class GameOverlay:
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
 
+        self.auto_walk_label = Label(stats_frame, text="WALK: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_walk_label.grid(row=2, column=0, sticky='w')
+        self.auto_sell_label = Label(stats_frame, text="SELL: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_sell_label.grid(row=2, column=1, sticky='w', padx=10)
+
+
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
         self.toggle_bot_label = Label(key_frame, text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get()}", fg='gray',
@@ -258,6 +264,11 @@ class GameOverlay:
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')
             self.latency_label.config(text=f"LAT: {self.parent.get_param('system_latency')}ms")
 
+            is_auto_walk = self.parent.get_param('auto_walk_enabled')
+            self.auto_walk_label.config(text=f"WALK: {'ON' if is_auto_walk else 'OFF'}", fg='lime' if is_auto_walk else 'red')
+
+            is_auto_sell = self.parent.get_param('auto_sell_enabled')
+            self.auto_sell_label.config(text=f"SELL: {'ON' if is_auto_sell else 'OFF'}", fg='lime' if is_auto_sell else 'red')
             self.toggle_bot_label.config(text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get().upper()}")
             self.toggle_gui_label.config(text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get().upper()}")
             self.toggle_overlay_label.config(text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get().upper()}")
