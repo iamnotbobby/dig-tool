@@ -839,9 +839,12 @@ class DigTool:
         digging_start_time = 0
         target_disengaged_time = 0
         pending_auto_sell = False
+        consecutive_no_zone_frames = 0
+        walk_thread = None
         max_wait_time = 3000
         post_dig_delay = 2000
         min_digging_time = 1000
+        dig_completion_threshold = 30
 
         while self.preview_active:
             start_time = time.perf_counter()
@@ -954,12 +957,19 @@ class DigTool:
                             time.sleep(0.1)
 
                     if not self.automation_manager.is_selling:
-                        direction = self.automation_manager.get_next_walk_direction()
-                        threading.Thread(target=self.automation_manager.perform_walk_step, args=(direction,),
-                                         daemon=True).start()
+                        if walk_thread is None or not walk_thread.is_alive():
+                            direction = self.automation_manager.get_next_walk_direction()
+                            
+                            def perform_walk_with_callback():
+                                success = self.automation_manager.perform_walk_step(direction)
+                                if success:
+                                    self.automation_manager.advance_walk_pattern()
+                            
+                            walk_thread = threading.Thread(target=perform_walk_with_callback, daemon=True)
+                            walk_thread.start()
 
-                        auto_walk_state = "click_to_start"
-                        move_completed_time = current_time_ms + self.get_param('walk_duration') + 300
+                            auto_walk_state = "click_to_start"
+                            move_completed_time = current_time_ms + self.get_param('walk_duration') + 300
 
                 elif auto_walk_state == "click_to_start" and current_time_ms >= move_completed_time and not self.automation_manager.is_selling:
                     if not self.click_lock.locked():
@@ -973,6 +983,7 @@ class DigTool:
                         auto_walk_state = "digging"
                         digging_start_time = current_time_ms
                         target_disengaged_time = 0
+                        consecutive_no_zone_frames = 0
                     elif current_time_ms - wait_for_target_start > max_wait_time:
                         auto_walk_state = "move"
 
@@ -982,6 +993,11 @@ class DigTool:
                             target_disengaged_time = current_time_ms
                     else:
                         target_disengaged_time = 0
+                    
+                    if raw_zone_x is None:
+                        consecutive_no_zone_frames += 1
+                    else:
+                        consecutive_no_zone_frames = 0
 
             should_allow_clicking = True
             if self.get_param('auto_walk_enabled'):
@@ -1047,8 +1063,9 @@ class DigTool:
 
             if (self.get_param('auto_walk_enabled') and auto_walk_state == "digging" and
                     target_disengaged_time > 0 and 
-                    current_time_ms - target_disengaged_time > 500 and
-                    current_time_ms - digging_start_time > min_digging_time):
+                    current_time_ms - target_disengaged_time > 1500 and
+                    current_time_ms - digging_start_time > min_digging_time and
+                    consecutive_no_zone_frames > dig_completion_threshold):
                 self.dig_count += 1
                 self.automation_manager.update_dig_activity()
                 dig_completed_time = current_time_ms
@@ -1058,6 +1075,7 @@ class DigTool:
                     pending_auto_sell = True
                 
                 auto_walk_state = "move"
+                consecutive_no_zone_frames = 0
                 self.check_milestone_notifications()
 
             if self.results_queue.empty():

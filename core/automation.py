@@ -12,6 +12,7 @@ class AutomationManager:
         self.dig_tool = dig_tool_instance
         self.keyboard_controller = KeyboardController()
         self.walk_pattern_index = 0
+        self.last_successful_direction = None
         self.walk_patterns = {
             'circle': ['d', 'd', 'd', 'w', 'w', 'w', 'a', 'a', 'a', 's', 's', 's'],
             'figure_8': ['d', 'w', 'd', 'w', 'a', 's', 'a', 's'],
@@ -274,16 +275,26 @@ class AutomationManager:
                     self.record_movement(direction)
                     print(f"Recorded movement during walk: {direction}")
 
+                self.keyboard_controller.release('w')
+                self.keyboard_controller.release('a')
+                self.keyboard_controller.release('s')
+                self.keyboard_controller.release('d')
+                time.sleep(0.05)
+
                 walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
                 self.keyboard_controller.press(direction)
                 time.sleep(walk_duration)
                 self.keyboard_controller.release(direction)
+                
+                time.sleep(0.05)
 
             self.is_walking = False
+            return True
 
         except Exception as e:
             self.is_walking = False
             print(f"Error in walk step: {e}")
+            return False
 
     def get_next_walk_direction(self):
         current_pattern = getattr(self.dig_tool, 'walk_pattern_var', None)
@@ -299,8 +310,19 @@ class AutomationManager:
             return random.choice(pattern)
         else:
             direction = pattern[self.walk_pattern_index]
-            self.walk_pattern_index = (self.walk_pattern_index + 1) % len(pattern)
             return direction
+    
+    def advance_walk_pattern(self):
+        current_pattern = getattr(self.dig_tool, 'walk_pattern_var', None)
+        if not current_pattern:
+            pattern_name = 'circle'
+        else:
+            pattern_name = current_pattern.get() if hasattr(current_pattern, 'get') else 'circle'
+
+        pattern = self.walk_patterns.get(pattern_name, self.walk_patterns['circle'])
+        
+        if pattern_name != 'random':
+            self.walk_pattern_index = (self.walk_pattern_index + 1) % len(pattern)
 
     def can_auto_sell(self):
         auto_walk_enabled = self.dig_tool.get_param('auto_walk_enabled')
