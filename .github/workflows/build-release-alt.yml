@@ -138,24 +138,19 @@ jobs:
           $notes = ""
          
           if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
-            $notes += "**BETA-RELEASE**`n`n"
+            $notes += "**BETA RELEASE** - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
           }
          
           $customNotes = "${{ github.event.inputs.custom_notes }}"
           if ($customNotes -and $customNotes.Trim() -ne "") {
-            $notes += "**Additional Notes:**`n$customNotes`n`n"
+            $notes += "$customNotes`n`n"
           }
           
-          $notes += "**Integrity Verification:**`n"
-          $notes += "This executable was built automatically by GitHub Actions.`n"
-          $notes += "- **SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
-          $notes += "- **Workflow Run:** [View Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
-          $notes += "- **Source Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})`n"
-          $notes += "- **Verification Files:** ``CHECKSUMS.txt`` and ``build-attestation.json`` included`n`n"
-         
-          if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
-            $notes += "This is a beta release - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf)."
-          }
+          $notes += "<details>`n<summary>Integrity Verification</summary>`n`n"
+          $notes += "**SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) | "
+          $notes += "[Source Commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})`n"
+          $notes += "</details>"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
           echo "$notes" >> $env:GITHUB_OUTPUT
