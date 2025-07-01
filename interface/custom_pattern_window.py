@@ -196,13 +196,10 @@ class CustomPatternWindow:
         if not self._check_button_cooldown():
             return
 
-        threading.Thread(target=self._export_pattern, args=(pattern_name,), daemon=True).start()
-
-    def _export_pattern(self, pattern_name):
         try:
             pattern_info = self.automation_manager.get_pattern_list()
             if pattern_name not in pattern_info:
-                self.window.after(0, lambda: messagebox.showerror("Error", "Pattern not found."))
+                messagebox.showerror("Error", "Pattern not found.")
                 return
 
             pattern_data = {
@@ -220,13 +217,21 @@ class CustomPatternWindow:
             )
 
             if filepath:
-                if not filepath.lower().endswith('.json'):
-                    filepath += '.json'
+                threading.Thread(target=self._export_pattern, args=(pattern_name, pattern_data, filepath), daemon=True).start()
 
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump(pattern_data, f, indent=2, ensure_ascii=False)
-                success_msg = f"Pattern '{pattern_name}' exported successfully!"
-                self.window.after(0, lambda msg=success_msg: messagebox.showinfo("Success", msg))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export pattern: {str(e)}")
+
+    def _export_pattern(self, pattern_name, pattern_data, filepath):
+        try:
+            if not filepath.lower().endswith('.json'):
+                filepath += '.json'
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(pattern_data, f, indent=2, ensure_ascii=False)
+            
+            success_msg = f"Pattern '{pattern_name}' exported successfully!"
+            self.window.after(0, lambda msg=success_msg: messagebox.showinfo("Success", msg))
 
         except Exception as e:
             error_msg = f"Failed to export pattern: {str(e)}"
