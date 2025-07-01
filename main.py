@@ -101,6 +101,8 @@ class DigTool:
         self.last_milestone_notification = 0
 
         self.target_engaged = False
+        self.target_engaged_history = []
+        self.target_engagement_frames = 60
         self.line_moving_history = []
         self.line_movement_check_frames = 30
         self.min_movement_threshold = 50
@@ -168,7 +170,22 @@ class DigTool:
         line_detected = line_pos != -1
         line_moving = self.check_line_movement(line_pos)
         
-        return line_detected and line_moving and zone_detected
+        current_engagement = line_detected and line_moving and zone_detected
+        
+        self.target_engaged_history.append(current_engagement)
+        
+        if len(self.target_engaged_history) > self.target_engagement_frames:
+            self.target_engaged_history.pop(0)
+        
+        if len(self.target_engaged_history) < 10:
+            return current_engagement
+        
+        engaged_count = sum(self.target_engaged_history)
+        total_count = len(self.target_engaged_history)
+        
+        engagement_ratio = engaged_count / total_count
+        
+        return engagement_ratio >= 0.3
 
     def ensure_debug_dir(self):
         if self.get_param('debug_clicks_enabled') and not os.path.exists(self.debug_dir):
@@ -658,6 +675,7 @@ class DigTool:
             self.update_status("Bot Started...")
             self.click_count = 0
             self.dig_count = 0
+            self.target_engaged_history = []
             self.velocity_calculator = VelocityCalculator()
             self.automation_manager.walk_pattern_index = 0
             if self.get_param('debug_clicks_enabled'):
@@ -678,6 +696,8 @@ class DigTool:
 
         else:
             self.running = False
+            self.target_engaged = False
+            self.target_engaged_history = []
             self.update_status("Stopped")
 
             try:
@@ -907,7 +927,7 @@ class DigTool:
                 try:
                     zone_smoothing_factor = self.get_param_debounced('zone_smoothing_factor')
                 except:
-                    zone_smoothing_factor = 0.8
+                    zone_smoothing_factor = self.settings_manager.default_params['zone_smoothing_factor']
 
                 if self.smoothed_zone_x is None:
                     self.smoothed_zone_x, self.smoothed_zone_w = raw_zone_x, raw_zone_w
@@ -948,7 +968,7 @@ class DigTool:
                 try:
                     sweet_spot_width_percent = self.get_param('sweet_spot_width_percent') / 100.0
                 except:
-                    sweet_spot_width_percent = 0.1
+                    sweet_spot_width_percent = self.settings_manager.default_params['sweet_spot_width_percent'] / 100.0
                 sweet_spot_width = self.smoothed_zone_w * sweet_spot_width_percent
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
@@ -996,7 +1016,7 @@ class DigTool:
             try:
                 post_click_blindness = self.get_param('post_click_blindness')
             except:
-                post_click_blindness = 50
+                post_click_blindness = self.settings_manager.default_params['post_click_blindness']
 
             if (self.running and should_allow_clicking and current_time_ms >= self.blind_until and
                     sweet_spot_center is not None and not self.click_lock.locked()):
@@ -1012,10 +1032,10 @@ class DigTool:
                         max_prediction_time = self.get_param('max_prediction_time') / 1000.0
                         system_latency = self.get_param('system_latency') / 1000.0
                     except:
-                        min_velocity_threshold = 300
-                        prediction_confidence_threshold = 0.8
-                        max_prediction_time = 0.05
-                        system_latency = 0.0
+                        min_velocity_threshold = self.settings_manager.default_params['min_velocity_threshold']
+                        prediction_confidence_threshold = self.settings_manager.default_params['prediction_confidence_threshold']
+                        max_prediction_time = self.settings_manager.default_params['max_prediction_time'] / 1000.0
+                        system_latency = self.settings_manager.default_params['system_latency'] / 1000.0
 
                     if abs(velocity) >= min_velocity_threshold:
                         is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
