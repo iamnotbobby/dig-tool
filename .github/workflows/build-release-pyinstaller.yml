@@ -1,4 +1,5 @@
 name: Build and Release with PyInstaller
+
 on:
   workflow_dispatch:
     inputs:
