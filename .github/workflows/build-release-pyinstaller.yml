@@ -51,23 +51,6 @@ jobs:
           echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
           echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
         shell: powershell
-      - name: Get latest release for comparison
-        id: get_latest_release
-        run: |
-          try {
-            $latestRelease = gh release list --limit 1 --json tagName,createdAt | ConvertFrom-Json
-            if ($latestRelease) {
-              echo "latest_tag=$($latestRelease[0].tagName)" >> $env:GITHUB_OUTPUT
-              echo "has_previous_release=true" >> $env:GITHUB_OUTPUT
-            } else {
-              echo "has_previous_release=false" >> $env:GITHUB_OUTPUT
-            }
-          } catch {
-            echo "has_previous_release=false" >> $env:GITHUB_OUTPUT
-          }
-        shell: powershell
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate automated release notes
         id: generate_notes
         run: |
@@ -75,18 +58,6 @@ jobs:
          
           if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
             $notes += "**BETA-RELEASE**`n`n"
-          }
-         
-          if ("${{ steps.get_latest_release.outputs.has_previous_release }}" -eq "true") {
-            $latestTag = "${{ steps.get_latest_release.outputs.latest_tag }}"
-            try {
-              $commitLog = git log --pretty=format:"- %s (%an)" "$latestTag..HEAD" --no-merges
-              if ($commitLog) {
-                $notes += "**Recent Changes:**`n$commitLog`n`n"
-              }
-            } catch {
-              Write-Host "Could not generate commit log"
-            }
           }
          
           $customNotes = "${{ github.event.inputs.custom_notes }}"
