@@ -148,8 +148,7 @@ jobs:
           
           $notes += "<details>`n<summary>Integrity Verification</summary>`n`n"
           $notes += "**SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
-          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) | "
-          $notes += "[Source Commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})`n"
+          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
           $notes += "</details>"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
