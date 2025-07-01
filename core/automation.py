@@ -145,18 +145,11 @@ class AutomationManager:
                     key = event.name.lower()
                     if key in ['w', 'a', 's', 'd']:
                         self.record_movement(key)
-                        print(f"Recorded key press: {key}")
-
-            try:
-                keyboard.unhook_all()
-            except:
-                pass
 
             keyboard.hook(on_key_press)
-            print("Keyboard listener started for recording")
 
         except Exception as e:
-            print(f"Error starting keyboard listener: {e}")
+            pass
 
     def stop_recording_pattern(self):
         self.is_recording = False
@@ -164,19 +157,19 @@ class AutomationManager:
         try:
             import keyboard
             keyboard.unhook_all()
-            print("Keyboard listener stopped")
         except:
             pass
 
+        if hasattr(self.dig_tool, 'apply_keybinds'):
+            self.dig_tool.root.after(100, self.dig_tool.apply_keybinds)
+
         pattern = self.recorded_pattern.copy()
         self.recorded_pattern = []
-        print(f"Recording stopped. Final pattern: {pattern}")
         return pattern
 
     def record_movement(self, direction):
         if self.is_recording and direction.lower() in ['w', 'a', 's', 'd']:
             self.recorded_pattern.append(direction.lower())
-            print(f"Added to pattern: {direction.lower()}, Total moves: {len(self.recorded_pattern)}")
             return True
         return False
 

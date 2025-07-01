@@ -118,6 +118,10 @@ class DigTool:
         self._click_thread_pool = []
         self._max_click_threads = 3
 
+        self._param_update_lock = threading.Lock()
+        self._last_param_update = {}
+        self._param_debounce_delay = 0.1
+
         self.main_window.create_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, self.update_gui_from_queue)
@@ -160,11 +164,11 @@ class DigTool:
 
         return movement_range >= self.min_movement_threshold
 
-    def check_target_engagement(self, line_pos):
+    def check_target_engagement(self, line_pos, zone_detected):
         line_detected = line_pos != -1
         line_moving = self.check_line_movement(line_pos)
-
-        return line_detected and line_moving
+        
+        return line_detected and line_moving and zone_detected
 
     def ensure_debug_dir(self):
         if self.get_param('debug_clicks_enabled') and not os.path.exists(self.debug_dir):
@@ -353,13 +357,41 @@ class DigTool:
 
     def get_param(self, key):
         if key in self.param_vars:
-            return self.param_vars[key].get()
+            try:
+                value = self.param_vars[key].get()
+                if value == "" or value is None:
+                    return self.settings_manager.get_default_value(key)
+                return value
+            except (tk.TclError, ValueError):
+                return self.settings_manager.get_default_value(key)
         return getattr(self, key, None)
 
     def set_param(self, key, value):
         if key in self.param_vars:
-            self.param_vars[key].set(value)
+            try:
+                self.param_vars[key].set(value)
+            except (tk.TclError, ValueError):
+                pass
         setattr(self, key, value)
+
+    def get_param_debounced(self, key):
+        current_time = time.time()
+        
+        with self._param_update_lock:
+            if key in self._last_param_update:
+                if current_time - self._last_param_update[key] < self._param_debounce_delay:
+                    return self.last_known_good_params.get(key, self.settings_manager.get_default_value(key))
+            
+            try:
+                value = self.get_param(key)
+                if value is not None and value != "":
+                    self.last_known_good_params[key] = value
+                    self._last_param_update[key] = current_time
+                    return value
+                else:
+                    return self.last_known_good_params.get(key, self.settings_manager.get_default_value(key))
+            except:
+                return self.last_known_good_params.get(key, self.settings_manager.get_default_value(key))
 
     def update_main_button_text(self):
         if not self.root.winfo_exists(): return
@@ -827,7 +859,10 @@ class DigTool:
             zone_detection_area = screenshot[:height_80, :]
             hsv = cv2.cvtColor(zone_detection_area, cv2.COLOR_BGR2HSV)
 
-            saturation_threshold = self.get_param('saturation_threshold')
+            try:
+                saturation_threshold = self.get_param_debounced('saturation_threshold')
+            except:
+                saturation_threshold = 0.5
 
             if not self.is_color_locked:
                 saturation = hsv[:, :, 1]
@@ -844,9 +879,14 @@ class DigTool:
                 main_contour = max(contours, key=cv2.contourArea)
                 x_temp, y_temp, w_temp, h_temp = cv2.boundingRect(main_contour)
 
-                zone_min_width = self.get_param('zone_min_width')
-                max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
-                min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
+                try:
+                    zone_min_width = self.get_param('zone_min_width')
+                    max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
+                    min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
+                except:
+                    zone_min_width = 100
+                    max_zone_width = width * 0.8
+                    min_zone_height = height_80
 
                 if w_temp > zone_min_width and w_temp < max_zone_width and h_temp >= min_zone_height:
                     raw_zone_x, raw_zone_w = x_temp, w_temp
@@ -864,7 +904,10 @@ class DigTool:
                 self.automation_manager.update_target_lock_activity()
                 self.frames_since_last_zone_detection = 0
 
-                zone_smoothing_factor = self.get_param('zone_smoothing_factor')
+                try:
+                    zone_smoothing_factor = self.get_param_debounced('zone_smoothing_factor')
+                except:
+                    zone_smoothing_factor = 0.8
 
                 if self.smoothed_zone_x is None:
                     self.smoothed_zone_x, self.smoothed_zone_w = raw_zone_x, raw_zone_w
@@ -884,21 +927,28 @@ class DigTool:
 
             gray_line_area = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
-            line_sensitivity = self.get_param('line_sensitivity')
-            line_min_height = self.get_param('line_min_height') / 100.0
+            try:
+                line_sensitivity = self.get_param('line_sensitivity')
+                line_min_height = self.get_param('line_min_height') / 100.0
+            except:
+                line_sensitivity = 50
+                line_min_height = 1.0
 
             line_pos = find_line_position(gray_line_area, line_sensitivity, line_min_height)
 
             velocity = self.velocity_calculator.add_position(line_pos, self._current_time_cache)
             acceleration = self.velocity_calculator.get_acceleration()
 
-            self.target_engaged = self.check_target_engagement(line_pos)
+            self.target_engaged = self.check_target_engagement(line_pos, raw_zone_x is not None)
 
             sweet_spot_center, sweet_spot_start, sweet_spot_end = None, None, None
             if self.smoothed_zone_x is not None:
                 sweet_spot_center = self.smoothed_zone_x + self.smoothed_zone_w / 2
 
-                sweet_spot_width_percent = self.get_param('sweet_spot_width_percent') / 100.0
+                try:
+                    sweet_spot_width_percent = self.get_param('sweet_spot_width_percent') / 100.0
+                except:
+                    sweet_spot_width_percent = 0.1
                 sweet_spot_width = self.smoothed_zone_w * sweet_spot_width_percent
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
@@ -929,9 +979,9 @@ class DigTool:
                         wait_for_target_start = current_time_ms
 
                 elif auto_walk_state == "wait_for_target" and not self.automation_manager.is_selling:
-                    if raw_zone_x is not None and sweet_spot_center is not None and self.target_engaged:
+                    if self.target_engaged:
                         auto_walk_state = "digging"
-                    elif current_time_ms - wait_for_target_start > max_wait_time:
+                    elif current_time_ms - wait_for_target_start > max_wait_time or not self.target_engaged:
                         auto_walk_state = "move"
 
                 elif auto_walk_state == "digging":
@@ -943,7 +993,10 @@ class DigTool:
             else:
                 should_allow_clicking = self.target_engaged
 
-            post_click_blindness = self.get_param('post_click_blindness')
+            try:
+                post_click_blindness = self.get_param('post_click_blindness')
+            except:
+                post_click_blindness = 50
 
             if (self.running and should_allow_clicking and current_time_ms >= self.blind_until and
                     sweet_spot_center is not None and not self.click_lock.locked()):
@@ -953,10 +1006,16 @@ class DigTool:
                 line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
 
                 if self.get_param('prediction_enabled') and line_pos != -1:
-                    min_velocity_threshold = self.get_param('min_velocity_threshold')
-                    prediction_confidence_threshold = self.get_param('prediction_confidence_threshold')
-                    max_prediction_time = self.get_param('max_prediction_time') / 1000.0
-                    system_latency = self.get_param('system_latency') / 1000.0
+                    try:
+                        min_velocity_threshold = self.get_param('min_velocity_threshold')
+                        prediction_confidence_threshold = self.get_param('prediction_confidence_threshold')
+                        max_prediction_time = self.get_param('max_prediction_time') / 1000.0
+                        system_latency = self.get_param('system_latency') / 1000.0
+                    except:
+                        min_velocity_threshold = 300
+                        prediction_confidence_threshold = 0.8
+                        max_prediction_time = 0.05
+                        system_latency = 0.0
 
                     if abs(velocity) >= min_velocity_threshold:
                         is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
@@ -1000,7 +1059,7 @@ class DigTool:
                         threading.Thread(target=self.perform_click, args=(click_delay,)).start()
 
             if (self.get_param('auto_walk_enabled') and auto_walk_state == "digging" and
-                    raw_zone_x is None and self.frames_since_last_zone_detection > 30):
+                    not self.target_engaged and self.frames_since_last_zone_detection > 30):
                 self.dig_count += 1
                 self.automation_manager.update_dig_activity()
                 dig_completed_time = current_time_ms
