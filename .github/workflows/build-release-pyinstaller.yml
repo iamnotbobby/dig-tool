@@ -1,0 +1,130 @@
+name: Build and Release with PyInstaller
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0-beta)'
+        required: true
+        default: 'v1.0-beta'
+      release_name:
+        description: 'Release name'
+        required: true
+        default: 'Beta Release v1.0'
+      is_beta_release:
+        description: 'Mark as beta release'
+        required: false
+        default: true
+        type: boolean
+      custom_notes:
+        description: 'Additional release notes (optional)'
+        required: false
+        default: ''
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          fetch-depth: 0  
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+          cache: 'pip'
+      - name: Install Dependencies
+        run: |
+          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller ahk
+      - name: Build Executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name=DigTool-1.5beta --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --add-binary="assets/AutoHotkey64.exe;."  --collect-all=ahk --hidden-import=ahk --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+      - name: Get executable info
+        id: get_exe_info
+        run: |
+          $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
+          $exePath = "dist/$exeName"
+          $fileSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+         
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
+        shell: powershell
+      - name: Get latest release for comparison
+        id: get_latest_release
+        run: |
+          try {
+            $latestRelease = gh release list --limit 1 --json tagName,createdAt | ConvertFrom-Json
+            if ($latestRelease) {
+              echo "latest_tag=$($latestRelease[0].tagName)" >> $env:GITHUB_OUTPUT
+              echo "has_previous_release=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "has_previous_release=false" >> $env:GITHUB_OUTPUT
+            }
+          } catch {
+            echo "has_previous_release=false" >> $env:GITHUB_OUTPUT
+          }
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate automated release notes
+        id: generate_notes
+        run: |
+          $notes = ""
+         
+          if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
+            $notes += "**BETA-RELEASE**`n`n"
+          }
+         
+          if ("${{ steps.get_latest_release.outputs.has_previous_release }}" -eq "true") {
+            $latestTag = "${{ steps.get_latest_release.outputs.latest_tag }}"
+            try {
+              $commitLog = git log --pretty=format:"- %s (%an)" "$latestTag..HEAD" --no-merges
+              if ($commitLog) {
+                $notes += "**Recent Changes:**`n$commitLog`n`n"
+              }
+            } catch {
+              Write-Host "Could not generate commit log"
+            }
+          }
+         
+          $customNotes = "${{ github.event.inputs.custom_notes }}"
+          if ($customNotes -and $customNotes.Trim() -ne "") {
+            $notes += "**Additional Notes:**`n$customNotes`n`n"
+          }
+         
+          if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
+            $notes += "This is a beta release - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf)."
+          }
+         
+          $notes = $notes -replace "`r`n", "`n" -replace "`n", "%0A" -replace '"', '\"'
+          echo "release_notes=$notes" >> $env:GITHUB_OUTPUT
+        shell: powershell
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          release_name: ${{ github.event.inputs.release_name }}
+          body: ${{ steps.generate_notes.outputs.release_notes }}
+          draft: false
+          prerelease: ${{ github.event.inputs.is_beta_release }}
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.get_exe_info.outputs.exe_path }}
+          asset_name: ${{ steps.get_exe_info.outputs.exe_name }}
+          asset_content_type: application/octet-stream
+      - name: Output release info
+        run: |
+          echo "Release created successfully!"
+          echo "Tag: ${{ github.event.inputs.release_tag }}"
+          echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
+          echo "Release URL: ${{ steps.create_release.outputs.html_url }}"
+        shell: powershell
