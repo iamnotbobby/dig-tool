@@ -947,13 +947,14 @@ class DigTool:
                 if auto_walk_state == "move":
                     if (pending_auto_sell and dig_completed_time > 0 and 
                             current_time_ms - dig_completed_time >= post_dig_delay):
+                        print(f"Initiating auto-sell: dig_count={self.dig_count}, sell_every_x_digs={self.get_param('sell_every_x_digs')}")
                         threading.Thread(target=self.automation_manager.perform_auto_sell, daemon=True).start()
                         pending_auto_sell = False
                         dig_completed_time = 0
                         while self.automation_manager.is_selling and self.running:
                             time.sleep(0.1)
-
-                    if not self.automation_manager.is_selling:
+     
+                    if not self.automation_manager.is_selling and not pending_auto_sell:
                         if walk_thread is None or not walk_thread.is_alive():
                             direction = self.automation_manager.get_next_walk_direction()
                             
@@ -1059,9 +1060,16 @@ class DigTool:
                 self.automation_manager.update_dig_activity()
                 dig_completed_time = current_time_ms
                 
-                if (self.get_param('auto_sell_enabled') and self.automation_manager.sell_button_position and
-                        self.dig_count > 0 and self.dig_count % self.get_param('sell_every_x_digs') == 0):
+                auto_sell_enabled = self.get_param('auto_sell_enabled')
+                sell_every_x_digs = self.get_param('sell_every_x_digs')
+                has_sell_button = self.automation_manager.sell_button_position is not None
+                
+                print(f"Dig completed #{self.dig_count}: auto_sell_enabled={auto_sell_enabled}, sell_button_set={has_sell_button}, sell_every_x_digs={sell_every_x_digs}")
+                
+                if (auto_sell_enabled and has_sell_button and
+                        self.dig_count > 0 and self.dig_count % sell_every_x_digs == 0):
                     pending_auto_sell = True
+                    print(f"Auto-sell triggered! Will sell after {post_dig_delay}ms delay")
                 
                 auto_walk_state = "move"
                 self.check_milestone_notifications()

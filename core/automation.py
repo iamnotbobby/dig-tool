@@ -367,16 +367,24 @@ class AutomationManager:
 
     def perform_auto_sell(self):
         try:
-            if not self.can_auto_sell():
+            if not self.dig_tool.get_param('auto_sell_enabled'):
+                print("Auto-sell aborted: Auto-sell is disabled")
+                return
+                
+            if not self.sell_button_position:
+                print("Auto-sell aborted: No sell button position set")
                 return
 
+            print(f"Starting auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling...")
 
+            print("Opening inventory with 'G' key")
             autoit.send("g")
             time.sleep(0.3)
 
             sell_delay = max(self.dig_tool.get_param('sell_delay') / 1000.0, 2.5)
+            print(f"Waiting {sell_delay}s for inventory to open")
             time.sleep(sell_delay)
 
             x, y = self.sell_button_position
@@ -387,18 +395,22 @@ class AutomationManager:
             if success:
                 print("Sell click successful")
                 time.sleep(2.5)
+                print("Closing inventory with 'G' key")
                 autoit.send("g")
                 time.sleep(1.0)
                 self.sell_count += 1
                 self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed")
+                print(f"Auto-sell #{self.sell_count} completed successfully")
             else:
+                print("Auto-sell failed: AutoIt click error")
                 self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
 
             self.is_selling = False
 
         except Exception as e:
             self.is_selling = False
-            print(f"Error in auto-sell: {e}")
+            error_msg = f"Error in auto-sell: {e}"
+            print(error_msg)
             self.dig_tool.update_status(f"Auto-sell failed: {e}")
 
     def test_sell_button_click(self):
