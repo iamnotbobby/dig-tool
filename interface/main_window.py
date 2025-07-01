@@ -154,7 +154,46 @@ class MainWindow:
         self.disabled_tooltips = []
         self.status_tooltips = []
 
+    def validate_param_entry(self, var_key, value):
+        if not hasattr(self, '_validation_throttle'):
+            self._validation_throttle = {}
+        
+        import time
+        current_time = time.time()
+        
+        if var_key in self._validation_throttle:
+            if current_time - self._validation_throttle[var_key] < 0.1:
+                return True
+        
+        self._validation_throttle[var_key] = current_time
+        
+        if not value or value.strip() == "":
+            self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
+            return False
+        
+        try:
+            if not self.dig_tool.settings_manager.validate_param_value(var_key, value):
+                self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
+                return False
+        except:
+            self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
+            return False
+        
+        return True
+    
+    def _restore_default_value(self, var_key):
+        try:
+            default_value = self.dig_tool.settings_manager.get_default_value(var_key)
+            if var_key in self.dig_tool.param_vars:
+                self.dig_tool.param_vars[var_key].set(default_value)
+        except:
+            pass
+
     def validate_cursor_position_toggle(self, *args):
+        if not hasattr(self.dig_tool, 'cursor_position') or not self.dig_tool.cursor_position:
+            if self.dig_tool.param_vars['use_custom_cursor'].get():
+                self.dig_tool.param_vars['use_custom_cursor'].set(False)
+                self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
         if not hasattr(self.dig_tool, 'cursor_position') or not self.dig_tool.cursor_position:
             if self.dig_tool.param_vars['use_custom_cursor'].get():
                 self.dig_tool.param_vars['use_custom_cursor'].set(False)
@@ -369,8 +408,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key] = default_value
 
             if var_type != tk.BooleanVar:
+                vcmd = (self.dig_tool.root.register(lambda value, key=var_key: self.validate_param_entry(key, value)), '%P')
                 entry = tk.Entry(frame, textvariable=self.dig_tool.param_vars[var_key], font=(FONT_FAMILY, 9),
-                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1)
+                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1,
+                                 validate='focusout', validatecommand=vcmd)
                 entry.pack(side='right', ipady=3)
 
                 if dependent_list is not None: dependent_list.append(entry)
@@ -401,8 +442,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key1] = default_value1
 
             if var_type1 != tk.BooleanVar:
+                vcmd1 = (self.dig_tool.root.register(lambda value, key=var_key1: self.validate_param_entry(key, value)), '%P')
                 entry1 = tk.Entry(left_frame, textvariable=self.dig_tool.param_vars[var_key1], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
+                                  validate='focusout', validatecommand=vcmd1)
                 entry1.pack(side='right', ipady=3, padx=(4, 8))
                 if dependent_list is not None: dependent_list.append(entry1)
                 if widget_type:
@@ -428,8 +471,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key2] = default_value2
 
             if var_type2 != tk.BooleanVar:
+                vcmd2 = (self.dig_tool.root.register(lambda value, key=var_key2: self.validate_param_entry(key, value)), '%P')
                 entry2 = tk.Entry(right_frame, textvariable=self.dig_tool.param_vars[var_key2], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
+                                  validate='focusout', validatecommand=vcmd2)
                 entry2.pack(side='right', ipady=3)
                 if dependent_list is not None: dependent_list.append(entry2)
                 if widget_type:
@@ -633,10 +678,19 @@ class MainWindow:
                 try:
                     import keyboard
                     event = keyboard.read_event(suppress=True)
-                    if event.event_type == keyboard.KEY_DOWN: key_var.set(event.name)
+                    if event.event_type == keyboard.KEY_DOWN: 
+                        new_key = event.name
+                        if new_key and new_key.strip():
+                            key_var.set(new_key)
+                        else:
+                            key_var.set(default_value)
                 except Exception as e:
                     self.dig_tool.update_status(f"Hotkey capture failed: {e}")
+                    key_var.set(default_value)
                 finally:
+                    current_key = key_var.get()
+                    if not current_key or current_key.strip() == "":
+                        key_var.set(default_value)
                     button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
                     self.dig_tool.apply_keybinds()
 

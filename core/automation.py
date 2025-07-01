@@ -32,6 +32,7 @@ class AutomationManager:
         self.recorded_pattern = []
         self.recording_start_time = None
         self.recording_listener = None
+        self.recording_hook = None
 
         self.last_dig_time = None
         self.last_click_time = None
@@ -146,9 +147,10 @@ class AutomationManager:
                     if key in ['w', 'a', 's', 'd']:
                         self.record_movement(key)
 
-            keyboard.hook(on_key_press)
+            self.recording_hook = keyboard.hook(on_key_press)
 
         except Exception as e:
+            self.recording_hook = None
             pass
 
     def stop_recording_pattern(self):
@@ -156,15 +158,21 @@ class AutomationManager:
 
         try:
             import keyboard
-            keyboard.unhook_all()
-        except:
-            pass
-
-        if hasattr(self.dig_tool, 'apply_keybinds'):
-            self.dig_tool.root.after(100, self.dig_tool.apply_keybinds)
+            if hasattr(self, 'recording_hook') and self.recording_hook:
+                keyboard.unhook(self.recording_hook)
+                self.recording_hook = None
+        except Exception as e:
+            print(f"Warning: Could not unhook specific recording listener: {e}")
+            try:
+                import keyboard
+                if hasattr(self.dig_tool, 'apply_keybinds'):
+                    self.dig_tool.root.after(100, self.dig_tool.apply_keybinds)
+            except:
+                pass
 
         pattern = self.recorded_pattern.copy()
         self.recorded_pattern = []
+        print(f"Stopped recording pattern")
         return pattern
 
     def record_movement(self, direction):
