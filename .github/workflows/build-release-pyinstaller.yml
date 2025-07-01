@@ -20,27 +20,33 @@ on:
         description: 'Additional release notes (optional)'
         required: false
         default: ''
+
 jobs:
   build-and-release:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
         with:
-          ref: beta
           fetch-depth: 0  
+          
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           architecture: 'x64'
           cache: 'pip'
+          
       - name: Install Dependencies
         run: |
           pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller ahk
+          
       - name: Build Executable with PyInstaller
         run: |
           pyinstaller --onefile --windowed --name=DigTool-1.5beta --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --add-binary="assets/AutoHotkey64.exe;."  --collect-all=ahk --hidden-import=ahk --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+          
       - name: Get executable info
         id: get_exe_info
         run: |
@@ -52,6 +58,7 @@ jobs:
           echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
           echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
         shell: powershell
+        
       - name: Generate automated release notes
         id: generate_notes
         run: |
@@ -70,33 +77,24 @@ jobs:
             $notes += "This is a beta release - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf)."
           }
          
-          $notes = $notes -replace "`r`n", "`n" -replace "`n", "%0A" -replace '"', '\"'
-          echo "release_notes=$notes" >> $env:GITHUB_OUTPUT
+          echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
+          echo "$notes" >> $env:GITHUB_OUTPUT
+          echo "EOF" >> $env:GITHUB_OUTPUT
         shell: powershell
+        
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          release_name: ${{ github.event.inputs.release_name }}
+          name: ${{ github.event.inputs.release_name }}
           body: ${{ steps.generate_notes.outputs.release_notes }}
           draft: false
           prerelease: ${{ github.event.inputs.is_beta_release }}
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.get_exe_info.outputs.exe_path }}
-          asset_name: ${{ steps.get_exe_info.outputs.exe_name }}
-          asset_content_type: application/octet-stream
+          files: ${{ steps.get_exe_info.outputs.exe_path }}
+          
       - name: Output release info
         run: |
           echo "Release created successfully!"
           echo "Tag: ${{ github.event.inputs.release_tag }}"
           echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
-          echo "Release URL: ${{ steps.create_release.outputs.html_url }}"
         shell: powershell
