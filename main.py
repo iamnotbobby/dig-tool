@@ -884,9 +884,9 @@ class DigTool:
                     max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
                     min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
                 except:
-                    zone_min_width = 100
-                    max_zone_width = width * 0.8
-                    min_zone_height = height_80
+                    zone_min_width = self.settings_manager.default_params['zone_min_width']
+                    max_zone_width = width * (self.settings_manager.default_params['max_zone_width_percent'] / 100.0)
+                    min_zone_height = height_80 * (self.settings_manager.default_params['min_zone_height_percent'] / 100.0)
 
                 if w_temp > zone_min_width and w_temp < max_zone_width and h_temp >= min_zone_height:
                     raw_zone_x, raw_zone_w = x_temp, w_temp
