@@ -15,11 +15,12 @@
   - [Steps to Import Walk Patterns](#steps-to-import-walk-patterns)
 - [Basic Controls](#basic-controls)
 - [Troubleshooting](#troubleshooting)
-  - [Macro stops walking or digging suddenly](#macro-stops-walking-or-digging-suddenly)
-  - [Walk patterns failed to import](#walk-patterns-failed-to-import)
-  - [Windows Defender blocked or deleted the executable](#windows-defender-blocked-or-deleted-the-executable)
-  - [Hotkeys don’t do anything](#hotkeys-dont-do-anything)
-  - [Settings reverted after restart](#settings-reverted-after-restart)
+  - [❌ Macro stops walking or digging suddenly](#-macro-stops-walking-or-digging-suddenly)
+  - [❌ Macro fails to hit strong hits consistently](#-macro-fails-to-hit-strong-hits-consistently)
+  - [❌ Walk patterns failed to import](#-walk-patterns-failed-to-import)
+  - [❌ Windows Defender blocked or deleted the executable](#-windows-defender-blocked-or-deleted-the-executable)
+  - [❌ Hotkeys don’t do anything](#-hotkeys-dont-do-anything)
+  - [❌ Settings reverted after restart](#-settings-reverted-after-restart)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -117,7 +118,7 @@ You can import `.json` pattern files to define how your character walks during m
 
 ## Troubleshooting
 
-### Macro stops walking or digging suddenly
+### ❌ Macro stops walking or digging suddenly
 
 This usually happens because the macro has mistakenly **locked onto the ground as a valid target**.
 
@@ -131,7 +132,46 @@ This usually happens because the macro has mistakenly **locked onto the ground a
 * Zoom your **in-game camera into your character’s head**, but **do not go into first-person view**.
 * This is usually enough to prevent the macro from detecting the ground as a valid target.
 
-### Walk patterns failed to import
+### ❌ Macro fails to hit strong hits consistently
+
+If your macro walks correctly but **fails to get strong hits**, or **only gets them randomly**, this is usually due to a **visual detection issue** or **hardware performance limitation**.
+
+#### How to troubleshoot:
+
+1. Open the macro’s main GUI and click the `Show Preview` button.
+2. This displays what the macro sees during gameplay.
+
+#### What to check:
+
+* **First**, make sure **Notifications Viewport** is **disabled** in the game’s settings:
+
+  * Open the **in-game settings menu**.  
+    ![Game Settings Button](/assets/game_settings_button.png)
+
+  * Find the **"Notifications Viewport"** setting.  
+    ![Notifications Viewport Slider](/assets/notifications_viewport_slider.png)
+
+  * The slider should be to the **left** and appear **grey**.  
+    ![Notifications Viewport Example](/assets/notifications_viewport_disabled.png)
+
+* If Notifications Viewport is disabled but the preview still shows the **entire black area as the bounding box** (instead of the dig zone):
+
+  * This is a **known bug** with no current fix.
+  * The macro cannot accurately locate the sweet spot in this case.
+
+* If the bounding box **does follow the dig zone and sweet spot**, but strong hits are still rare or inconsistent:
+
+  * Make sure your **FPS is uncapped** in Roblox.
+  * In **Roblox settings**, set **`Maximum Frame Rate` to 240**.
+  * Try to reach **at least 150 FPS**, and ideally **200+ FPS**.
+
+#### Final step:
+
+* If your FPS is already high but strong hits still fail, your **CPU may be too slow** to keep up with the visual processing.
+
+  * Consider upgrading to a **faster CPU** if possible.
+
+### ❌ Walk patterns failed to import
 
 When importing walk patterns, it may **look like the import failed**, but this is actually due to a known bug.
 
@@ -147,7 +187,7 @@ When importing walk patterns, it may **look like the import failed**, but this i
 3. Press the `Refresh List` button.
 4. The imported walk patterns should now appear as expected.
 
-### Windows Defender blocked or deleted the executable
+### ❌ Windows Defender blocked or deleted the executable
 
 Windows Defender may **incorrectly flag the macro as harmful** and block or delete the `.exe` file immediately after download.
 
@@ -165,7 +205,7 @@ Windows Defender may **incorrectly flag the macro as harmful** and block or dele
 > [!IMPORTANT]
 > This issue is a **false positive**. The macro does not contain any malicious code.
 
-### Hotkeys don’t do anything
+### ❌ Hotkeys don’t do anything
 
 Sometimes the macro’s hotkeys (e.g., <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>F3</kbd>) may stop responding or appear to do nothing.
 
@@ -174,7 +214,7 @@ Sometimes the macro’s hotkeys (e.g., <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>F3</kb
 * Simply **close and restart the program**.
   This usually restores full hotkey functionality.
 
-### Settings reverted after restart
+### ❌ Settings reverted after restart
 
 Settings **do not persist automatically** between sessions.
 
