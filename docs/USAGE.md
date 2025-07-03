@@ -158,7 +158,7 @@ Windows Defender may **incorrectly flag the macro as harmful** and block or dele
 
 ### ❌ Hotkeys don’t do anything
 
-Sometimes the macro’s hotkeys (e.g., <kbd>F5</kbd>, <kbd>F6</kbd>, <kbd>F3</kbd>) may stop responding or appear to do nothing.
+Sometimes the macro’s hotkeys (e.g., <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>F3</kbd>) may stop responding or appear to do nothing.
 
 #### ✅ How to fix:
 
