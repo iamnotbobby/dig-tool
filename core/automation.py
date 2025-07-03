@@ -130,8 +130,9 @@ class AutomationManager:
 
         return pattern_info
 
-    def start_recording_pattern(self):
+    def start_recording_pattern(self, azerty_mode):
         self.is_recording = True
+        self.azerty_mode = azerty_mode
         self.recorded_pattern = []
         self.recording_start_time = time.time()
         self.start_recording_keyboard_listener()
@@ -145,6 +146,14 @@ class AutomationManager:
             def on_key_press(event):
                 if self.is_recording and event.event_type == keyboard.KEY_DOWN:
                     key = event.name.lower()
+                    print(f"Key pressed: {key}")
+                    if self.azerty_mode:
+                        azerty_map = {
+                            'z': 'w',
+                            'q': 'a'
+                        }
+                        key = azerty_map.get(key, key)
+                        
                     if key in ['w', 'a', 's', 'd']:
                         self.record_movement(key)
 
@@ -274,13 +283,18 @@ class AutomationManager:
                 if self.is_recording:
                     self.record_movement(direction)
                     print(f"Recorded movement during walk: {direction}")
+                front_key = 'w' if not self.dig_tool.get_param('azerty_keyboard_layout') else 'z'
+                left_key = 'a' if not self.dig_tool.get_param('azerty_keyboard_layout') else 'q'
 
-                self.keyboard_controller.release('w')
-                self.keyboard_controller.release('a')
+
+                self.keyboard_controller.release(front_key)
+                self.keyboard_controller.release(left_key)
                 self.keyboard_controller.release('s')
                 self.keyboard_controller.release('d')
                 time.sleep(0.05)
-
+                if self.dig_tool.get_param('azerty_keyboard_layout'):
+                    azerty_map = { 'w': 'z', 'a': 'q' }
+                    direction = azerty_map.get(direction, direction)
                 walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
                 self.keyboard_controller.press(direction)
                 time.sleep(walk_duration)
