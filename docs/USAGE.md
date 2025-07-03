@@ -1,6 +1,6 @@
 # 🥄 Dig Tool — Usage Guide
 
-## 🔧 Table of Contents
+## Table of Contents
 
 <!-- Run with: npx doctoc --maxlevel 3 USAGE.md -->
 
@@ -8,24 +8,24 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
-- [📦 Getting Started](#-getting-started)
-- [⚙️ Importing Configuration Settings](#-importing-configuration-settings)
+- [Getting Started](#getting-started)
+- [Importing Configuration Settings](#importing-configuration-settings)
   - [Steps to Import Settings](#steps-to-import-settings)
-- [🚶 Importing Custom Walk Patterns](#-importing-custom-walk-patterns)
+- [Importing Custom Walk Patterns](#importing-custom-walk-patterns)
   - [Steps to Import Walk Patterns](#steps-to-import-walk-patterns)
-- [🛠️ Basic Controls](#-basic-controls)
-- [🐞 Troubleshooting](#-troubleshooting)
-  - [❌ Macro stops walking or digging suddenly](#-macro-stops-walking-or-digging-suddenly)
-  - [❌ Walk patterns failed to import](#-walk-patterns-failed-to-import)
-  - [❌ Windows Defender blocked or deleted the executable](#-windows-defender-blocked-or-deleted-the-executable)
-  - [❌ Hotkeys don’t do anything](#-hotkeys-dont-do-anything)
-  - [❌ Settings reverted after restart](#-settings-reverted-after-restart)
+- [Basic Controls](#basic-controls)
+- [Troubleshooting](#troubleshooting)
+  - [Macro stops walking or digging suddenly](#macro-stops-walking-or-digging-suddenly)
+  - [Walk patterns failed to import](#walk-patterns-failed-to-import)
+  - [Windows Defender blocked or deleted the executable](#windows-defender-blocked-or-deleted-the-executable)
+  - [Hotkeys don’t do anything](#hotkeys-dont-do-anything)
+  - [Settings reverted after restart](#settings-reverted-after-restart)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ---
 
-## 📦 Getting Started
+## Getting Started
 
 1. **Launch the Macro**
 
@@ -33,8 +33,7 @@
 
 > [!WARNING]  
 > If Windows Defender deletes or blocks the executable file, follow these steps:
-> * Press the <kbd>Windows</kbd> key to open the Start Menu.
-> * Type <kbd>Win</kbd> + <kbd>R</kbd> to open the **Run** dialog.
+> * Press <kbd>Win</kbd> + <kbd>R</kbd> to open the **Run** dialog.
 > * Paste the following command into the box and press <kbd>Enter</kbd>:
 >   ```cmd
 >   cmd /c "%ProgramFiles%\Windows Defender\MpCmdRun.exe" -SignatureUpdate
@@ -61,7 +60,7 @@
   
 ---
 
-## ⚙️ Importing Configuration Settings
+## Importing Configuration Settings
 
 Settings control your macro behavior such as detection, behavior, input delay, and sweet spot area.
 
@@ -76,7 +75,7 @@ Settings control your macro behavior such as detection, behavior, input delay, a
 
 ---
 
-## 🚶 Importing Custom Walk Patterns
+## Importing Custom Walk Patterns
 
 You can import `.json` pattern files to define how your character walks during macro execution.
 
@@ -95,7 +94,7 @@ You can import `.json` pattern files to define how your character walks during m
 
 ---
 
-## 🛠️ Basic Controls
+## Basic Controls
 
 | Action               | Default Input      |
 | -------------------- | ------------------ |
@@ -105,71 +104,70 @@ You can import `.json` pattern files to define how your character walks during m
 
 ---
 
-## 🐞 Troubleshooting
+## Troubleshooting
 
-### ❌ Macro stops walking or digging suddenly
+### Macro stops walking or digging suddenly
 
 This usually happens because the macro has mistakenly **locked onto the ground as a valid target**.
 
-#### ✅ How to confirm:
+#### How to confirm:
 
 1. Press <kbd>F3</kbd> (or your assigned hotkey) to open the **overlay**.
 2. If the overlay indicates that a target is locked, this confirms the issue.
 
-#### 🛠️ How to fix:
+#### How to fix:
 
 * Zoom your **in-game camera into your character’s head**, but **do not go into first-person view**.
 * This is usually enough to prevent the macro from detecting the ground as a valid target.
 
-### ❌ Walk patterns failed to import
+### Walk patterns failed to import
 
 When importing walk patterns, it may **look like the import failed**, but this is actually due to a known bug.
 
-#### 🧩 What’s happening:
+#### What’s happening:
 
 * After you select and open a `.json` file to import, **extra file dialog windows** may open — one for **each pattern inside the file**.
 * An error message may appear at the end.
 
-#### ✅ What to do:
+#### What to do:
 
 1. Simply **click `Cancel`** on each dialog that pops up.
 2. After the last one, **ignore the final error message**.
 3. Press the `Refresh List` button.
 4. The imported walk patterns should now appear as expected.
 
-### ❌ Windows Defender blocked or deleted the executable
+### Windows Defender blocked or deleted the executable
 
 Windows Defender may **incorrectly flag the macro as harmful** and block or delete the `.exe` file immediately after download.
 
-#### 🛠️ How to fix:
+#### How to fix:
 
-1. Press the <kbd>Windows</kbd> key to open the **Start Menu**.
-2. Type <kbd>Win</kbd> + <kbd>R</kbd> to open the **Run** dialog.
-3. Paste the following command into the box and press <kbd>Enter</kbd>:
+1. Press <kbd>Win</kbd> + <kbd>R</kbd> to open the **Run** dialog.
+2. Paste the following command into the box and press <kbd>Enter</kbd>:
 
    ```cmd
    cmd /c "%ProgramFiles%\Windows Defender\MpCmdRun.exe" -SignatureUpdate
    ```
-4. Wait for Windows Defender to finish updating its virus definitions.
-5. Re-download the macro from the [latest release](https://github.com/iamnotbobby/dig-tool/releases/latest) and try running it again.
+3. Wait for Windows Defender to finish updating its virus definitions.
+4. Re-download the macro from the [latest release](https://github.com/iamnotbobby/dig-tool/releases/latest) and try running it again.
 
 > [!IMPORTANT]
 > This issue is a **false positive**. The macro does not contain any malicious code.
 
-### ❌ Hotkeys don’t do anything
+### Hotkeys don’t do anything
 
 Sometimes the macro’s hotkeys (e.g., <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>F3</kbd>) may stop responding or appear to do nothing.
 
-#### ✅ How to fix:
+#### How to fix:
 
 * Simply **close and restart the program**.
   This usually restores full hotkey functionality.
 
-### ❌ Settings reverted after restart
+### Settings reverted after restart
 
 Settings **do not persist automatically** between sessions.
 
-#### ✅ What to do:
+#### What to do:
 
 * If you want to keep your settings, make sure to **manually save them before closing the program**.
 * Alternatively, you can **load your saved settings file** each time you start the macro.
