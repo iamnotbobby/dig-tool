@@ -270,6 +270,8 @@ class MainWindow:
         # Auto-walk subsection - Light blue background (#e8f0ff)
         walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings", "#e8f0ff")
         create_checkbox_param(walk_subsection.content, "Enable Auto-Walk", 'auto_walk_enabled')
+        create_checkbox_param(walk_subsection.content, "Switch to Azerty Keyboard Layout",
+                              'azerty_keyboard_layout')
         create_param_entry(walk_subsection.content, "Walk Duration (ms):", 'walk_duration')
 
         # Walk pattern selector
@@ -358,8 +360,6 @@ class MainWindow:
         create_checkbox_param(panes['settings'].sub_frame, "Include Discord Info in Settings",
                               'include_discord_in_settings')
         
-        create_checkbox_param(panes['settings'].sub_frame, "Switch to Azerty Keyboard Layout",
-                              'azerty_keyboard_layout')
 
         # Save/Load buttons
         save_load_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
