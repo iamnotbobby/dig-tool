@@ -53,7 +53,18 @@
 > You must select the bottom half of the minigame bar.
 > Selecting the wrong region may cause the macro to miss hits or fail to detect movement properly.
 
-3. **Start Automation**
+3. **Disable Notifications Viewport in Game Settings**
+
+Before starting the macro, you'll need to make sure `Notifications Viewport` is disabled in the in-game settings menu.
+
+   - Open your in-game settings menu.  
+   ![Game Settings Button](/assets/game_settings_button.png)
+   - Look for the **"Notifications Viewport"** setting.  
+   ![Notifications Viewport Slider](/assets/notifications_viewport_slider.png)
+   - Make sure it is **disabled** (the slider should be to the **left** and appear **grey**).  
+   ![Notifications Viewport Example](/assets/notifications_viewport_disabled.png)
+
+4. **Start Automation**
 
    - Press <kbd>F1</kbd> or your assigned hotkey to start the macro.
    - You can pause or stop at any time by pressing the hotkey again.
