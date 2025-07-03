@@ -45,10 +45,10 @@
 2. **Select an area**
 
    - Click the `Select Area` button on the main GUI.  
-   ![Select Area Button](assets/select_area_button.png)
+   ![Select Area Button](/assets/select_area_button.png)
 
    - Your screen will darken — click and drag to highlight your target dig area.  
-   ![Select Area Example](assets/selection_area.png)
+   ![Select Area Example](/assets/selection_area.png)
 
 > [!IMPORTANT]
 > You must select the bottom half of the minigame bar.
@@ -68,11 +68,11 @@ Settings control your macro behavior such as detection, behavior, input delay, a
 ### Steps to Import Settings
 
 1. Open the `Settings` dropdown menu at the bottom of the main GUI.  
-![Settings Dropdown](assets/settings_dropdown.png)
+![Settings Dropdown](/assets/settings_dropdown.png)
 2. Click `Load Settings`.  
-![Load Settings Button](assets/load_settings_button.png)
+![Load Settings Button](/assets/load_settings_button.png)
 3. Choose a `.json` configuration file.  
-![Load File Dialog](assets/load_filedialog.png)
+![Load File Dialog](/assets/load_filedialog.png)
 
 ---
 
@@ -83,15 +83,15 @@ You can import `.json` pattern files to define how your character walks during m
 ### Steps to Import Walk Patterns
 
 1. Open the `Behavior` dropdown menu on the main GUI.  
-![Behavior Dropdown](assets/behavior_dropdown.png)
+![Behavior Dropdown](/assets/behavior_dropdown.png)
 2. Open the `Auto-Walk Settings` dropdown menu under that.  
-![Auto-Walk Settings Dropdown](assets/autowalk_dropdown.png)
+![Auto-Walk Settings Dropdown](/assets/autowalk_dropdown.png)
 3. Click `Manage Custom Patterns`.  
-![Manage Custom Patterns Button](assets/manage_patterns_button.png)
+![Manage Custom Patterns Button](/assets/manage_patterns_button.png)
 4. In the window that appears, click `Import Pattern`.  
-![Import Pattern](assets/import_pattern_button.png)
+![Import Pattern](/assets/import_pattern_button.png)
 5. Choose a `.json` configuration file.  
-![Load File Dialog](assets/load_filedialog.png)
+![Load File Dialog](/assets/load_filedialog.png)
 
 ---
 
