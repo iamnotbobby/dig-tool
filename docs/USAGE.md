@@ -187,6 +187,31 @@ When importing walk patterns, it may **look like the import failed**, but this i
 3. Press the `Refresh List` button.
 4. The imported walk patterns should now appear as expected.
 
+#### AZERTY keyboard users — read this!
+
+The macro supports AZERTY keyboards, but you can’t import AZERTY walk pattern files directly — only patterns using W, A, S, D can be imported.
+
+If you try to import a `.json` file and see an error like:
+
+> `Invalid moves (only W, A, S, D allowed)`
+
+This means the file was created using **AZERTY-style movement keys** (`ZQSD`).
+
+To fix this:
+
+1. Open the `.json` file in any text editor (like Notepad).
+2. Find the line that looks like:
+
+   ```json
+   {
+     "Pattern_Name": [
+       "z",
+       "q",
+       ...
+   ```
+3. Manually copy each letter of the pattern into the macro’s walk pattern key recorder.
+
+
 ### ❌ Windows Defender blocked or deleted the executable
 
 Windows Defender may **incorrectly flag the macro as harmful** and block or delete the `.exe` file immediately after download.
