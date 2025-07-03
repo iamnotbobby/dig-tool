@@ -37,7 +37,8 @@ class SettingsManager:
             'webhook_url': '',
             'milestone_interval': 100,
             'use_custom_cursor': False,
-            'include_discord_in_settings': False
+            'include_discord_in_settings': False,
+            'azerty_keyboard_layout': False
         }
 
         self.param_descriptions = {
@@ -68,7 +69,8 @@ class SettingsManager:
             'webhook_url': "Discord webhook URL for sending notifications.",
             'milestone_interval': "Send Discord notification every X digs (milestone notifications).",
             'use_custom_cursor': "Move cursor to set position before clicking when enabled. Cannot be used with Auto-Walk.",
-            'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security."
+            'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security.",
+            'azerty_keyboard_layout': "Use Azerty keyboard layout for keybinds. This is useful for French users or those who prefer Azerty layout."
         }
 
         self.default_keybinds = {
@@ -214,7 +216,7 @@ class SettingsManager:
                 return True
             elif key in ['prediction_enabled', 'main_on_top', 'preview_on_top', 'debug_on_top',
                          'debug_clicks_enabled', 'auto_sell_enabled', 'auto_walk_enabled', 'use_custom_cursor',
-                         'include_discord_in_settings']:
+                         'include_discord_in_settings', 'azerty_keyboard_layout']:
                 return isinstance(value, bool)
             elif key in ['user_id', 'webhook_url']:
                 return isinstance(value, str)

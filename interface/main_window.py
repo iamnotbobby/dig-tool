@@ -357,6 +357,9 @@ class MainWindow:
         # Settings pane - Light green background (#e8f8f0)
         create_checkbox_param(panes['settings'].sub_frame, "Include Discord Info in Settings",
                               'include_discord_in_settings')
+        
+        create_checkbox_param(panes['settings'].sub_frame, "Switch to Azerty Keyboard Layout",
+                              'azerty_keyboard_layout')
 
         # Save/Load buttons
         save_load_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))

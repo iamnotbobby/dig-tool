@@ -38,6 +38,9 @@ class AutomationManager:
         try:
             self.is_walking = True
             walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+            if self.dig_tool.get_param('azerty_keyboard_layout'):
+                azerty_map = { 'w': 'z', 'a': 'q' }
+                direction = azerty_map.get(direction, direction)
             self.keyboard_controller.press(direction)
             time.sleep(walk_duration)
             self.keyboard_controller.release(direction)
