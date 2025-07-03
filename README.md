@@ -37,6 +37,8 @@ You just need to select an area where it is not being interfered by text or othe
 ![example](assets/example.png)
 This is different for other resolutions as the UI elements in-game will be scaled differently! That also means you may have to change detection parameters like Zone Min. Width since it measures by pixels.
 
+For a comprehensive usage guide, read [USAGE.md](docs/USAGE.md)
+
 ## Technical Overview
 
 
