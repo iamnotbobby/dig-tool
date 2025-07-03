@@ -55,7 +55,7 @@
 
 3. **Disable Notifications Viewport in Game Settings**
 
-Before starting the macro, you'll need to make sure `Notifications Viewport` is disabled in the in-game settings menu.
+   Before starting the macro, you'll need to make sure `Notifications Viewport` is disabled in the in-game settings menu.
 
    - Open your in-game settings menu.  
    ![Game Settings Button](/assets/game_settings_button.png)
