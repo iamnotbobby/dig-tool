@@ -17,11 +17,12 @@ class CustomPatternWindow:
         self.preview_text = None
         self.recording_frame = None
         self.record_button = None
+        self.azerty_record = None
+        self.azerty_var = tk.BooleanVar(value=False)
         self.record_status = None
         self.recorded_display = None
         self.recorded_name_entry = None
         self.save_recorded_button = None
-
         self._update_running = False
         self._last_button_click = 0
         self._button_cooldown = 0.5
@@ -132,7 +133,7 @@ class CustomPatternWindow:
         instructions_text.config(state=tk.NORMAL)
         instructions_text.insert(tk.END, "Recording Instructions:\n\n")
         instructions_text.insert(tk.END, "1. Click 'Start Recording'\n")
-        instructions_text.insert(tk.END, "2. Use WASD keys to move your character\n")
+        instructions_text.insert(tk.END, "2. Use WASD keys to move your character (ZQSD keys if Azerty Mode is checked)\n")
         instructions_text.insert(tk.END, "3. Click 'Stop Recording' and save the pattern")
         instructions_text.config(state=tk.DISABLED)
 
@@ -142,7 +143,11 @@ class CustomPatternWindow:
         self.record_button = ttk.Button(controls_frame, text="Start Recording",
                                         command=self._safe_toggle_recording)
         self.record_button.pack(side=tk.LEFT, padx=(0, 15))
+        
 
+        self.azerty_record = ttk.Checkbutton(controls_frame, variable=self.azerty_var, text="Azerty Mode")
+        self.azerty_record.pack(side=tk.LEFT, padx=(0, 15))
+        
         self.record_status = ttk.Label(controls_frame, text="Ready to record",
                                        font=("Segoe UI", 10))
         self.record_status.pack(side=tk.LEFT)
@@ -493,9 +498,11 @@ class CustomPatternWindow:
             messagebox.showerror("Error", f"Recording error: {str(e)}")
 
     def _start_recording(self):
-        self.automation_manager.start_recording_pattern()
+
+        self.automation_manager.start_recording_pattern(azerty_mode=self.azerty_var.get())
         self.record_button.config(text="Stop Recording")
-        self.record_status.config(text="Recording... Use WASD to move")
+        keys = "WASD" if not self.azerty_var.get() else "ZQSD"            
+        self.record_status.config(text=f"Recording... Use {keys} to move")
         self._update_running = True
         self._update_recorded_display()
 
