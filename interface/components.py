@@ -3,6 +3,7 @@ from tkinter import Label, Frame, ttk
 import win32gui, win32con
 from PIL import Image, ImageTk
 import cv2
+from utils.debug_logger import logger
 
 
 class Tooltip:
@@ -124,25 +125,60 @@ class GameOverlay:
 
     def create_overlay(self):
         if self.overlay: return
-        self.overlay = tk.Toplevel()
-        self.overlay.title("Dig Info")
-        self.overlay.wm_overrideredirect(True)
-        self.overlay.attributes('-topmost', True)
-        self.overlay.attributes('-alpha', 0.9)
-        self.overlay.configure(bg='black', bd=2, relief='solid')
+        
+        try:
+            self.overlay = tk.Toplevel()
+            self.overlay.withdraw()
+            self.overlay.title("Dig Info")
+            self.overlay.wm_overrideredirect(True)
+            self.overlay.attributes('-topmost', True)
+            self.overlay.attributes('-alpha', 0.9)
+            self.overlay.configure(bg='black', bd=2, relief='solid')
 
-        icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-        if icon:
-            self.overlay.iconphoto(False, icon)
+            self.overlay.after_idle(self._setup_overlay_content)
+        except Exception as e:
+            logger.error(f"Error creating overlay: {e}")
 
+    def _setup_overlay_content(self):
+        try:
+            icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
+            if icon:
+                self.overlay.iconphoto(False, icon)
+
+            self._create_overlay_widgets()
+            self.position_overlay()
+            
+            # Delay applying window style to ensure window is ready
+            self.overlay.after(50, self._apply_window_style)
+            self.overlay.after(200, self._show_overlay)
+        except Exception as e:
+            logger.error(f"Error setting up overlay content: {e}")
+    
+    def _show_overlay(self):
+        try:
+            self.overlay.deiconify()
+            self.visible = True
+            logger.debug("Overlay shown successfully")
+        except Exception as e:
+            logger.error(f"Error showing overlay: {e}")
+    
+    def _apply_window_style(self):
         try:
             hwnd = self.overlay.winfo_id()
-            style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-            style |= win32con.WS_EX_TOOLWINDOW
-            win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style)
-        except Exception:
-            pass
-
+            
+            ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            ex_style |= win32con.WS_EX_TOOLWINDOW | win32con.WS_EX_NOACTIVATE
+            win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
+            
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            style &= ~win32con.WS_MINIMIZEBOX
+            style &= ~win32con.WS_MAXIMIZEBOX
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+            
+        except Exception as e:
+            logger.debug(f"Could not apply window style: {e}")
+    
+    def _create_overlay_widgets(self):
         self.title_frame = Frame(self.overlay, bg='#333333', cursor='fleur')
         self.title_frame.pack(fill='x', padx=2, pady=(2, 0))
 
@@ -165,7 +201,9 @@ class GameOverlay:
         self.target_label.pack(pady=(0, 5), padx=5, fill='x')
 
         self.swatch_frame = Frame(self.overlay, bg='black')
-        Label(self.swatch_frame, text="LOCK:", fg='white', bg='black', font=('Consolas', 9)).pack(side=tk.LEFT)
+        swatch_label = Label(self.swatch_frame, text="LOCK:", fg='white', bg='black', font=('Consolas', 9))
+        swatch_label.pack(side=tk.LEFT)
+        
         self.color_swatch_overlay_label = Label(self.swatch_frame, text=" " * 10, bg='black', relief='solid', bd=1)
         self.color_swatch_overlay_label.pack(side=tk.LEFT, fill='x', expand=True, padx=5)
         self.swatch_frame.pack(pady=(0, 5), padx=5, fill='x')
@@ -175,23 +213,28 @@ class GameOverlay:
 
         self.spd_label = Label(stats_frame, text="SPD: 0", fg='cyan', bg='black', font=('Consolas', 9))
         self.spd_label.grid(row=0, column=0, sticky='w')
+        
         self.clicks_label = Label(stats_frame, text="CLICKS: 0", fg='orange', bg='black', font=('Consolas', 9))
         self.clicks_label.grid(row=0, column=1, sticky='w', padx=10)
 
         self.pred_label = Label(stats_frame, text="PRED: ON", fg='cyan', bg='black', font=('Consolas', 9))
         self.pred_label.grid(row=1, column=0, sticky='w')
-        self.latency_label = Label(stats_frame, text=f"LAT: {self.parent.get_param('system_latency')}ms", fg='cyan',
+        
+        self.latency_label = Label(stats_frame, text=f"LAT: {self.parent.get_cached_system_latency()}ms", fg='cyan',
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
 
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
+        
         self.toggle_bot_label = Label(key_frame, text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get()}", fg='gray',
                                       bg='black', font=('Consolas', 8))
         self.toggle_bot_label.pack(side=tk.LEFT, expand=True)
+        
         self.toggle_gui_label = Label(key_frame, text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get()}", fg='gray',
                                       bg='black', font=('Consolas', 8))
         self.toggle_gui_label.pack(side=tk.LEFT, expand=True)
+        
         self.toggle_overlay_label = Label(key_frame, text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get()}",
                                           fg='gray', bg='black', font=('Consolas', 8))
         self.toggle_overlay_label.pack(side=tk.LEFT, expand=True)
@@ -200,25 +243,34 @@ class GameOverlay:
         self.preview_label_overlay.pack(pady=(5, 5), padx=5, fill='both', expand=True)
 
         self.position_overlay()
-        self.visible = True
 
     def start_drag(self, event):
+        if not self.overlay:
+            return
         self.is_dragging = True
         self.drag_start_x = event.x_root
         self.drag_start_y = event.y_root
 
     def on_drag(self, event):
-        if self.is_dragging and self.overlay:
-            try:
-                x = self.overlay.winfo_x() + (event.x_root - self.drag_start_x)
-                y = self.overlay.winfo_y() + (event.y_root - self.drag_start_y)
+        if not self.is_dragging or not self.overlay:
+            return
+        try:
+            dx = event.x_root - self.drag_start_x
+            dy = event.y_root - self.drag_start_y
+            
+            # Reduce threshold for better responsiveness
+            if abs(dx) < 1 and abs(dy) < 1:
+                return
+                
+            x = self.overlay.winfo_x() + dx
+            y = self.overlay.winfo_y() + dy
 
-                self.overlay.geometry(f"+{x}+{y}")
+            self.overlay.geometry(f"+{x}+{y}")
 
-                self.drag_start_x = event.x_root
-                self.drag_start_y = event.y_root
-            except tk.TclError:
-                pass
+            self.drag_start_x = event.x_root
+            self.drag_start_y = event.y_root
+        except tk.TclError:
+            pass
 
     def stop_drag(self, event):
         self.is_dragging = False
@@ -229,9 +281,9 @@ class GameOverlay:
         self.overlay.geometry(f"+{x2 + 10}+{min(y1, self.parent.root.winfo_screenheight() - 400)}")
 
     def update_info(self, **kwargs):
-        if not self.visible or not self.overlay: return
+        if not self.visible or not self.overlay: 
+            return
         try:
-            # Update status with automation mode
             automation_status = kwargs.get('automation_status', 'STOPPED')
             if automation_status == "AUTO SELLING":
                 self.status_label.config(text="STATUS: AUTO SELLING", fg='orange')
@@ -249,26 +301,36 @@ class GameOverlay:
                                      fg='lime' if target_engaged else 'red')
 
             locked_color = kwargs.get('locked_color_hex')
-            self.color_swatch_overlay_label.config(bg=locked_color if locked_color else 'black')
+            if locked_color:
+                self.color_swatch_overlay_label.config(bg=locked_color)
 
-            self.spd_label.config(text=f"SPD: {kwargs.get('velocity', 0):>5.0f}")
-            self.clicks_label.config(text=f"CLICKS: {kwargs.get('click_count', 0):<5}")
+            velocity = kwargs.get('velocity', 0)
+            click_count = kwargs.get('click_count', 0)
+            self.spd_label.config(text=f"SPD: {velocity:>5.0f}")
+            self.clicks_label.config(text=f"CLICKS: {click_count:<5}")
 
             is_pred = self.parent.get_param('prediction_enabled')
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')
-            self.latency_label.config(text=f"LAT: {self.parent.get_param('system_latency')}ms")
+            self.latency_label.config(text=f"LAT: {self.parent.get_cached_system_latency()}ms")
 
-            self.toggle_bot_label.config(text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get().upper()}")
-            self.toggle_gui_label.config(text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get().upper()}")
-            self.toggle_overlay_label.config(text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get().upper()}")
+            bot_key = self.parent.keybind_vars['toggle_bot'].get().upper()
+            gui_key = self.parent.keybind_vars['toggle_gui'].get().upper()
+            ovl_key = self.parent.keybind_vars['toggle_overlay'].get().upper()
+            
+            self.toggle_bot_label.config(text=f"Bot: {bot_key}")
+            self.toggle_gui_label.config(text=f"GUI: {gui_key}")
+            self.toggle_overlay_label.config(text=f"Ovl: {ovl_key}")
 
             preview_thumbnail = kwargs.get('preview_thumbnail')
             if preview_thumbnail is not None and self.preview_label_overlay:
-                img = Image.fromarray(cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB))
-                photo = ImageTk.PhotoImage(image=img)
-                self.preview_label_overlay.configure(image=photo)
-                self.preview_label_overlay.image = photo
-        except Exception:
+                try:
+                    img = Image.fromarray(cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB))
+                    photo = ImageTk.PhotoImage(image=img)
+                    self.preview_label_overlay.configure(image=photo)
+                    self.preview_label_overlay.image = photo
+                except:
+                    pass
+        except:
             pass
 
     def destroy_overlay(self):

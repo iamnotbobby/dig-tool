@@ -5,6 +5,27 @@ import json
 import os
 from tkinter import filedialog
 from pynput.keyboard import Controller as KeyboardController
+from utils.debug_logger import logger
+import ctypes
+from utils.system_utils import send_click
+
+
+def perform_click_action(delay, running, use_custom_cursor, cursor_position, click_lock):
+    if delay > 0:
+        time.sleep(delay)
+    
+    if not running:
+        return
+    
+    if use_custom_cursor and cursor_position:
+        try:
+            ctypes.windll.user32.SetCursorPos(*cursor_position)
+        except:
+            pass
+    
+    send_click()
+    if click_lock.locked():
+        click_lock.release()
 
 
 class AutomationManager:
@@ -54,9 +75,9 @@ class AutomationManager:
                 custom_patterns = json.load(f)
                 self.walk_patterns.update(custom_patterns)
                 self.custom_patterns_file = filepath
-                print(f"Loaded {len(custom_patterns)} custom patterns")
+                logger.info(f"Loaded {len(custom_patterns)} custom patterns")
         except Exception as e:
-            print(f"Error loading custom patterns: {e}")
+            logger.error(f"Error loading custom patterns: {e}")
 
     def save_custom_patterns(self):
         try:
@@ -76,10 +97,10 @@ class AutomationManager:
 
             with open(self.custom_patterns_file, 'w') as f:
                 json.dump(custom_patterns, f, indent=2)
-            print(f"Saved {len(custom_patterns)} custom patterns")
+            logger.info(f"Saved {len(custom_patterns)} custom patterns")
             return True
         except Exception as e:
-            print(f"Error saving custom patterns: {e}")
+            logger.error(f"Error saving custom patterns: {e}")
             return False
 
     def add_custom_pattern(self, name, pattern):
@@ -135,7 +156,7 @@ class AutomationManager:
         self.recorded_pattern = []
         self.recording_start_time = time.time()
         self.start_recording_keyboard_listener()
-        print("Started recording pattern")
+        logger.info("Started recording pattern")
         return True
 
     def start_recording_keyboard_listener(self):
@@ -163,7 +184,7 @@ class AutomationManager:
                 keyboard.unhook(self.recording_hook)
                 self.recording_hook = None
         except Exception as e:
-            print(f"Warning: Could not unhook specific recording listener: {e}")
+            logger.warning(f"Warning: Could not unhook specific recording listener: {e}")
             try:
                 import keyboard
                 if hasattr(self.dig_tool, 'apply_keybinds'):
@@ -173,7 +194,7 @@ class AutomationManager:
 
         pattern = self.recorded_pattern.copy()
         self.recorded_pattern = []
-        print(f"Stopped recording pattern")
+        logger.info(f"Stopped recording pattern")
         return pattern
 
     def record_movement(self, direction):
@@ -219,13 +240,13 @@ class AutomationManager:
         try:
             shovel_slot = self.dig_tool.get_param('shovel_slot')
             if shovel_slot < 0 or shovel_slot > 9:
-                print(f"Invalid shovel slot: {shovel_slot}")
+                logger.warning(f"Invalid shovel slot: {shovel_slot}")
                 return False
 
             slot_key = str(shovel_slot) if shovel_slot > 0 else '0'
             equip_mode = self.dig_tool.get_param('shovel_equip_mode')
 
-            print(f"Re-equipping shovel from slot {shovel_slot} (key: {slot_key}) using {equip_mode} mode")
+            logger.info(f"Re-equipping shovel from slot {shovel_slot} (key: {slot_key}) using {equip_mode} mode")
 
             with self.walking_lock:
                 time.sleep(0.1)
@@ -249,7 +270,7 @@ class AutomationManager:
             return True
 
         except Exception as e:
-            print(f"Error re-equipping shovel: {e}")
+            logger.error(f"Error re-equipping shovel: {e}")
             return False
 
     def get_current_status(self):
@@ -273,7 +294,7 @@ class AutomationManager:
 
                 if self.is_recording:
                     self.record_movement(direction)
-                    print(f"Recorded movement during walk: {direction}")
+                    logger.debug(f"Recorded movement during walk: {direction}")
 
                 self.keyboard_controller.release('w')
                 self.keyboard_controller.release('a')
@@ -293,7 +314,7 @@ class AutomationManager:
 
         except Exception as e:
             self.is_walking = False
-            print(f"Error in walk step: {e}")
+            logger.error(f"Error in walk step: {e}")
             return False
 
     def get_next_walk_direction(self):
@@ -337,7 +358,7 @@ class AutomationManager:
     def autoit_click(self, x, y, retries=3):
         for attempt in range(retries):
             try:
-                print(f"AutoIt click attempt {attempt + 1}: Target: ({x}, {y})")
+                logger.debug(f"AutoIt click attempt {attempt + 1}: Target: ({x}, {y})")
 
                 autoit.mouse_move(x, y, speed=2)
                 time.sleep(0.1)
@@ -348,61 +369,61 @@ class AutomationManager:
                 if abs(current_pos[0] - x) <= tolerance and abs(current_pos[1] - y) <= tolerance:
                     autoit.mouse_click("left", x, y, speed=2)
                     time.sleep(0.1)
-                    print(f"AutoIt click successful at {current_pos}")
+                    logger.debug(f"AutoIt click successful at {current_pos}")
                     return True
                 else:
-                    print(f"AutoIt position verification: Expected ({x}, {y}), Got {current_pos}")
+                    logger.warning(f"AutoIt position verification: Expected ({x}, {y}), Got {current_pos}")
                     if attempt < retries - 1:
                         time.sleep(0.2)
                         continue
 
             except Exception as e:
-                print(f"AutoIt click attempt {attempt + 1} failed: {e}")
+                logger.error(f"AutoIt click attempt {attempt + 1} failed: {e}")
                 if attempt < retries - 1:
                     time.sleep(0.2)
                     continue
 
-        print("All AutoIt click attempts failed")
+        logger.error("All AutoIt click attempts failed")
         return False
 
     def perform_auto_sell(self):
         try:
             if not self.dig_tool.get_param('auto_sell_enabled'):
-                print("Auto-sell aborted: Auto-sell is disabled")
+                logger.warning("Auto-sell aborted: Auto-sell is disabled")
                 return
                 
             if not self.sell_button_position:
-                print("Auto-sell aborted: No sell button position set")
+                logger.warning("Auto-sell aborted: No sell button position set")
                 return
 
-            print(f"Starting auto-sell sequence #{self.sell_count + 1}")
+            logger.info(f"Starting auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling...")
 
-            print("Opening inventory with 'G' key")
+            logger.debug("Opening inventory with 'G' key")
             autoit.send("g")
             time.sleep(0.3)
 
             sell_delay = max(self.dig_tool.get_param('sell_delay') / 1000.0, 2.5)
-            print(f"Waiting {sell_delay}s for inventory to open")
+            logger.debug(f"Waiting {sell_delay}s for inventory to open")
             time.sleep(sell_delay)
 
             x, y = self.sell_button_position
 
-            print(f"Performing AutoIt click at sell button: {x}, {y}")
+            logger.debug(f"Performing AutoIt click at sell button: {x}, {y}")
             success = self.autoit_click(x, y)
 
             if success:
-                print("Sell click successful")
+                logger.info("Sell click successful")
                 time.sleep(2.5)
-                print("Closing inventory with 'G' key")
+                logger.debug("Closing inventory with 'G' key")
                 autoit.send("g")
                 time.sleep(1.0)
                 self.sell_count += 1
                 self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed")
-                print(f"Auto-sell #{self.sell_count} completed successfully")
+                logger.info(f"Auto-sell #{self.sell_count} completed successfully")
             else:
-                print("Auto-sell failed: AutoIt click error")
+                logger.error("Auto-sell failed: AutoIt click error")
                 self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
 
             self.is_selling = False
@@ -410,7 +431,7 @@ class AutomationManager:
         except Exception as e:
             self.is_selling = False
             error_msg = f"Error in auto-sell: {e}"
-            print(error_msg)
+            logger.error(error_msg)
             self.dig_tool.update_status(f"Auto-sell failed: {e}")
 
     def test_sell_button_click(self):
@@ -422,14 +443,14 @@ class AutomationManager:
 
     def _test_sell_click_with_delay(self):
         x, y = self.sell_button_position
-        print(f"Testing AutoIt click at position: {x}, {y}")
+        logger.info(f"Testing AutoIt click at position: {x}, {y}")
 
         for i in range(5, 0, -1):
             self.dig_tool.update_status(f"Test click in {i} seconds... Position: ({x}, {y})")
             time.sleep(1.0)
 
         self.dig_tool.update_status("Performing AutoIt test click...")
-        print(f"Executing AutoIt test click at: {x}, {y}")
+        logger.info(f"Executing AutoIt test click at: {x}, {y}")
 
         success = self.autoit_click(x, y)
 
@@ -471,12 +492,12 @@ class AutomationManager:
                 self.keyboard_controller.release(key)
             return True
         except Exception as e:
-            print(f"Key press failed: {e}")
+            logger.error(f"Key press failed: {e}")
             return False
 
     def get_mouse_position(self):
         try:
             return self.mouse_controller.position
         except Exception as e:
-            print(f"Get mouse position failed: {e}")
+            logger.error(f"Get mouse position failed: {e}")
             return (0, 0)

@@ -31,9 +31,10 @@ from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from interface.custom_pattern_window import CustomPatternWindow
 from utils.screen_capture import ScreenCapture
-from utils.system_utils import send_click, check_display_scale
-from core.detection import find_line_position, VelocityCalculator
-from core.automation import AutomationManager
+from utils.system_utils import send_click, check_display_scale, measure_system_latency
+from utils.debug_logger import logger, save_debug_screenshot, log_click_debug
+from core.detection import find_line_position, VelocityCalculator, get_hsv_bounds
+from core.automation import AutomationManager, perform_click_action
 from core.notifications import DiscordNotifier
 
 warnings.filterwarnings("ignore")
@@ -67,6 +68,8 @@ class DigTool:
         self.custom_pattern_window = None
 
         set_dig_tool_instance(self)
+        
+        self.root.after(500, self.perform_initial_latency_measurement)
 
         self.game_area = None
         self.cursor_position = None
@@ -97,12 +100,16 @@ class DigTool:
         self.results_queue = queue.Queue(maxsize=1)
         self.debug_dir = "debug_clicks"
         self.debug_log_path = os.path.join(self.debug_dir, "click_log.txt")
+        
+        self._memory_cleanup_counter = 0
+        self._cached_kernel = None
+        self._cached_kernel_size = 0
 
         self.last_milestone_notification = 0
 
         self.target_engaged = False
         self.line_moving_history = []
-        self.line_movement_check_frames = 30
+        self.base_line_movement_check_frames = 30
         self.min_movement_threshold = 50
 
         self._kernel = np.ones((5, 15), np.uint8)
@@ -119,6 +126,11 @@ class DigTool:
         self._max_click_threads = 3
 
         self.main_window.create_ui()
+        
+        # Update screen grabber with loaded settings
+        if hasattr(self, 'screen_grabber'):
+            pass
+        
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, self.update_gui_from_queue)
 
@@ -140,10 +152,12 @@ class DigTool:
             elif pattern_names:
                 self.main_window.walk_pattern_combo.set(pattern_names[0])
 
-    def check_line_movement(self, line_pos):
+    def check_line_movement(self, line_pos, target_fps):
+        line_movement_check_frames = max(int(self.base_line_movement_check_frames * (target_fps / 120.0)), 10)
+        
         self.line_moving_history.append(line_pos)
 
-        if len(self.line_moving_history) > self.line_movement_check_frames:
+        if len(self.line_moving_history) > line_movement_check_frames:
             self.line_moving_history.pop(0)
 
         if len(self.line_moving_history) < 10:
@@ -160,11 +174,34 @@ class DigTool:
 
         return movement_range >= self.min_movement_threshold
 
-    def check_target_engagement(self, line_pos):
+    def check_target_engagement(self, line_pos, target_fps):
         line_detected = line_pos != -1
-        line_moving = self.check_line_movement(line_pos)
+        line_moving = self.check_line_movement(line_pos, target_fps)
 
         return line_detected and line_moving
+
+    def measure_system_latency(self):
+        if hasattr(self, '_measured_latency') and hasattr(self, '_latency_measurement_time'):
+            if time.time() - self._latency_measurement_time < 30:
+                return self._measured_latency
+        
+        game_area = getattr(self, 'game_area', None)
+        self._measured_latency = measure_system_latency(game_area)
+        self._latency_measurement_time = time.time()
+        return self._measured_latency
+
+    def force_latency_remeasurement(self):
+        if hasattr(self, '_latency_measurement_time'):
+            self._latency_measurement_time = 0
+        
+        new_latency = self.measure_system_latency()
+        
+        self._cached_latency = new_latency
+        
+        if 'system_latency' in self.param_vars:
+            self.param_vars['system_latency'].set(new_latency)
+        
+        return new_latency
 
     def ensure_debug_dir(self):
         if self.get_param('debug_clicks_enabled') and not os.path.exists(self.debug_dir):
@@ -197,12 +234,11 @@ class DigTool:
                 keyboard.unhook_all()
                 self.screen_grabber.close()
             except Exception as e:
-                print(f"Error during final cleanup: {e}")
+                logger.error(f"Error during final cleanup: {e}")
             finally:
                 self.root.destroy()
 
     def validate_keybind(self, key_name, key_value):
-        """Validate a keybind value"""
         if not key_value or key_value.strip() == "":
             return False, "Keybind cannot be empty"
         
@@ -211,7 +247,6 @@ class DigTool:
             return False, "Keybind cannot contain spaces or whitespace"
         
         try:
-            import keyboard
             keyboard.normalize_name(key_value)
             return True, "Valid keybind"
         except Exception as e:
@@ -251,37 +286,37 @@ class DigTool:
             self.main_loop_thread.start()
 
     def hotkey_listener(self):
-        print("Hotkey listener thread started")
+        logger.info("Hotkey listener thread started")
 
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 self.root.after(0, self.apply_keybinds)
-                print(f"Keybind application scheduled (attempt {attempt + 1})")
+                logger.debug(f"Keybind application scheduled (attempt {attempt + 1})")
                 break
             except Exception as e:
-                print(f"Failed to schedule keybind application (attempt {attempt + 1}): {e}")
+                logger.error(f"Failed to schedule keybind application (attempt {attempt + 1}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(1)
 
         while self.preview_active:
             time.sleep(0.5)
 
-        print("Hotkey listener thread ended")
+        logger.info("Hotkey listener thread ended")
 
     def apply_keybinds(self):
-        print("Applying keybinds...")
+        logger.info("Applying keybinds...")
 
         time.sleep(0.1)
 
         try:
             keyboard.unhook_all()
-            print("Previous hotkeys unhooked")
+            logger.debug("Previous hotkeys unhooked")
         except Exception as e:
-            print(f"Warning: Could not unhook previous hotkeys: {e}")
+            logger.warning(f"Warning: Could not unhook previous hotkeys: {e}")
 
         if not self.keybind_vars:
-            print("Error: Keybind variables not initialized")
+            logger.error("Error: Keybind variables not initialized")
             self.update_status("Error: Keybind variables not initialized")
             return False
 
@@ -291,15 +326,15 @@ class DigTool:
             for key_name, var in self.keybind_vars.items():
                 key_value = var.get()
                 if not key_value:
-                    print(f"Warning: Empty keybind for {key_name}")
+                    logger.warning(f"Warning: Empty keybind for {key_name}")
                     continue
 
                 is_valid, msg = self.validate_keybind(key_name, key_value)
                 if not is_valid:
-                    print(f"Error: Invalid keybind for {key_name}: {key_value} - {msg}")
+                    logger.error(f"Error: Invalid keybind for {key_name}: {key_value} - {msg}")
                     continue
 
-                print(f"  Applying {key_name}: {key_value}")
+                logger.debug(f"  Applying {key_name}: {key_value}")
 
                 if key_name == 'toggle_bot':
                     keyboard.add_hotkey(key_value, self.toggle_detection)
@@ -308,7 +343,7 @@ class DigTool:
                 elif key_name == 'toggle_overlay':
                     keyboard.add_hotkey(key_value, self.toggle_overlay)
                 else:
-                    print(f"Warning: Unknown keybind {key_name}")
+                    logger.warning(f"Warning: Unknown keybind {key_name}")
                     continue
 
                 keybinds_applied += 1
@@ -316,13 +351,13 @@ class DigTool:
             self.update_main_button_text()
             success_msg = f"Successfully applied {keybinds_applied} keybinds"
             self.update_status(success_msg)
-            print(success_msg)
+            logger.info(success_msg)
             return True
 
         except Exception as e:
             error_msg = f"Error applying keybinds: {e}"
             self.update_status(error_msg)
-            print(error_msg)
+            logger.error(error_msg)
             self.update_main_button_text()
             return False
 
@@ -338,22 +373,59 @@ class DigTool:
                 self.root.lift()
 
     def toggle_overlay(self):
-        self.root.after(0, self._toggle_overlay_thread_safe)
+        if not self.root.winfo_exists():
+            return
+        self.root.after_idle(self._toggle_overlay_thread_safe)
 
     def _toggle_overlay_thread_safe(self):
-        if not self.overlay_enabled:
-            if not self.game_area: self.update_status("Select game area first"); return
-            self.overlay = GameOverlay(self)
-            self.overlay.create_overlay()
-            self.overlay_enabled = True
-        else:
-            if self.overlay:
-                self.overlay.destroy_overlay()
-            self.overlay = None
+        try:
+            if not self.overlay_enabled:
+                if not self.game_area: 
+                    self.update_status("Select game area first")
+                    return
+                self.overlay = GameOverlay(self)
+                self.overlay.create_overlay()
+                self.overlay_enabled = True
+                logger.debug("Overlay enabled")
+            else:
+                if self.overlay:
+                    self.overlay.destroy_overlay()
+                self.overlay = None
+                self.overlay_enabled = False
+                logger.debug("Overlay disabled")
+            self.update_main_button_text()
+        except Exception as e:
+            logger.error(f"Error toggling overlay: {e}")
             self.overlay_enabled = False
-        self.update_main_button_text()
+            self.overlay = None
 
     def get_param(self, key):
+        if key == 'system_latency':
+            if key in self.param_vars:
+                value = self.param_vars[key].get()
+                # Don't auto-measure during runtime, use cached value
+                if value == 'auto' or (isinstance(value, str) and value.strip().lower() == 'auto'):
+                    # If we have a cached value, use it instead of measuring again
+                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
+                        return self._cached_latency
+                    # Otherwise return a default to avoid blocking the operation
+                    return 50
+                elif isinstance(value, str) and value.strip() == "":
+                    # If we have a cached value, use it
+                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
+                        return self._cached_latency
+                    return 50
+                try:
+                    return int(value)
+                except:
+                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
+                        return self._cached_latency
+                    return 50
+            else:
+                if hasattr(self, '_cached_latency') and self._cached_latency is not None:
+                    return self._cached_latency
+                return 50
+        
         if key in self.param_vars:
             try:
                 value = self.param_vars[key].get()
@@ -560,7 +632,7 @@ class DigTool:
                 self.last_milestone_notification = self.dig_count
 
         except Exception as e:
-            print(f"Error sending milestone notification: {e}")
+            logger.error(f"Error sending milestone notification: {e}")
 
     def toggle_main_on_top(self, *args):
         self.root.attributes('-topmost', self.param_vars['main_on_top'].get())
@@ -620,6 +692,9 @@ class DigTool:
             self.debug_window = None
             self.debug_label = None
             self.color_swatch_label = None
+
+    def show_debug_console(self):
+        logger.show_console()
 
     def update_gui_from_queue(self):
         try:
@@ -706,26 +781,7 @@ class DigTool:
                     "Format: Click# | Timestamp | Line_Pos | Velocity | Acceleration | Sweet_Spot_Range | Click_Type | Confidence | Screenshot_File\n")
                 f.write("-" * 120 + "\n")
         except Exception as e:
-            print(f"Error creating debug log: {e}")
-
-    def log_click_debug(self, click_num, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
-                        prediction_used, confidence, screenshot_filename):
-        if not self.get_param('debug_clicks_enabled'):
-            return
-        try:
-            timestamp = int(time.time())
-            click_type = "PREDICTION" if prediction_used else "DIRECT"
-            if sweet_spot_start is not None and sweet_spot_end is not None:
-                sweet_spot_range = f"{int(sweet_spot_start)}-{int(sweet_spot_end)}"
-            else:
-                sweet_spot_range = "N/A"
-
-            log_entry = f"{click_num:03d} | {timestamp} | {line_pos:4d} | {velocity:6.1f} | {acceleration:6.1f} | {sweet_spot_range:>10} | {click_type:>10} | {confidence:4.2f} | {screenshot_filename}\n"
-
-            with open(self.debug_log_path, 'a') as f:
-                f.write(log_entry)
-        except Exception as e:
-            print(f"Error logging click debug: {e}")
+            logger.error(f"Error creating debug log: {e}")
 
     def update_status(self, text):
         if self.root.winfo_exists():
@@ -734,66 +790,43 @@ class DigTool:
     def _cleanup_click_threads(self):
         self._click_thread_pool = [t for t in self._click_thread_pool if t.is_alive()]
 
+    def perform_click(self, delay=0):
+        perform_click_action(delay, self.running, self.get_param('use_custom_cursor'), 
+                           self.cursor_position, self.click_lock)
+        self.click_count += 1
+
+    def perform_instant_click(self):
+        self._cleanup_click_threads()
+        if len(self._click_thread_pool) < self._max_click_threads:
+            click_thread = threading.Thread(target=self._instant_click, daemon=True)
+            self._click_thread_pool.append(click_thread)
+            click_thread.start()
+
     def _instant_click(self):
         if not self.running:
             return
-
+    def _instant_click(self):
+        if not self.running:
+            return
         if self.get_param('use_custom_cursor') and self.cursor_position:
             try:
                 ctypes.windll.user32.SetCursorPos(*self.cursor_position)
             except:
                 pass
-
         send_click()
         self.click_count += 1
-
-    def perform_click(self, delay=0):
-        if delay > 0:
-            time.sleep(delay)
-
-        self._instant_click()
-        self.click_lock.release()
-
-    def perform_instant_click(self):
-        self._cleanup_click_threads()
-
-        if len(self._click_thread_pool) < self._max_click_threads:
-            click_thread = threading.Thread(target=self._instant_click, daemon=True)
-            self._click_thread_pool.append(click_thread)
-            click_thread.start()
-        else:
-            self._instant_click()
 
     def save_debug_screenshot(self, screenshot, line_pos, sweet_spot_start, sweet_spot_end, zone_y2_cached, velocity,
                               acceleration, prediction_used=False, confidence=0.0):
         if not self.get_param('debug_clicks_enabled'):
             return
-
-        try:
-            self.ensure_debug_dir()
-            debug_img = screenshot.copy()
-            height = debug_img.shape[0]
-
-            if self.smoothed_zone_x is not None:
-                cv2.rectangle(debug_img, (int(self.smoothed_zone_x), 0),
-                              (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2_cached), (0, 255, 0), 3)
-
-            if sweet_spot_start is not None and sweet_spot_end is not None:
-                cv2.rectangle(debug_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2_cached),
-                              (0, 255, 255), 3)
-
-            if line_pos != -1:
-                cv2.line(debug_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 4)
-
-            filename = f"click_{self.click_count + 1:03d}_{int(time.time())}.jpg"
-            filepath = os.path.join(self.debug_dir, filename)
-            cv2.imwrite(filepath, debug_img)
-
-            self.log_click_debug(self.click_count + 1, line_pos, velocity, acceleration, sweet_spot_start,
-                                 sweet_spot_end,
-                                 prediction_used, confidence, filename)
-        except Exception as e:
-            print(f"Error saving debug screenshot: {e}")
+        self.ensure_debug_dir()
+        filename = save_debug_screenshot(screenshot, line_pos, sweet_spot_start, sweet_spot_end, zone_y2_cached, 
+                                       velocity, acceleration, prediction_used, confidence, self.click_count, 
+                                       self.debug_dir, self.smoothed_zone_x, self.smoothed_zone_w)
+        if filename:
+            log_click_debug(self.click_count + 1, line_pos, velocity, acceleration, sweet_spot_start,
+                          sweet_spot_end, prediction_used, confidence, filename, self.debug_log_path)
 
     def _update_time_cache(self):
         now = time.time()
@@ -802,36 +835,15 @@ class DigTool:
             self._current_time_ms_cache = now * 1000
             self._last_time_update = now
 
-    def _get_hsv_bounds_cached(self, hsv_color, is_low_sat):
-        if (self._last_hsv_color is None or
-                not np.array_equal(hsv_color, self._last_hsv_color) or
-                self._last_is_low_sat != is_low_sat):
-
-            if is_low_sat:
-                v_range = 40
-                self._hsv_lower_bound_cache = np.array([0, 0, max(0, hsv_color[2] - v_range)], dtype=np.uint8)
-                self._hsv_upper_bound_cache = np.array([179, 50, min(255, hsv_color[2] + v_range)], dtype=np.uint8)
-            else:
-                h_range, s_range, v_range = 10, 70, 70
-                self._hsv_lower_bound_cache = np.array(
-                    [max(0, hsv_color[0] - h_range), max(0, hsv_color[1] - s_range), max(0, hsv_color[2] - v_range)],
-                    dtype=np.uint8)
-                self._hsv_upper_bound_cache = np.array(
-                    [min(179, hsv_color[0] + h_range), min(255, hsv_color[1] + s_range),
-                     min(255, hsv_color[2] + v_range)], dtype=np.uint8)
-
-            self._last_hsv_color = hsv_color.copy()
-            self._last_is_low_sat = is_low_sat
-
-        return self._hsv_lower_bound_cache, self._hsv_upper_bound_cache
-
     def run_main_loop(self):
-        target_fps = 120
-        target_delay = 1.0 / target_fps
+        high_performance_mode = True
+        
+        screenshot_fps = self.get_param('screenshot_fps') or 240
+        process_every_nth_frame = 1
+            
+        screenshot_delay = 1.0 / screenshot_fps
         final_mask = None
-        height_80_cached = None
-        zone_y2_cached = None
-
+        
         auto_walk_state = "move"
         move_completed_time = 0
         wait_for_target_start = 0
@@ -843,96 +855,174 @@ class DigTool:
         max_wait_time = 3000
         post_dig_delay = 2000
 
+        cached_height_80 = None
+        cached_zone_y2 = None
+        cached_line_area = None
+        cached_hsv_area = None
+        frame_skip_counter = 0
+        
         while self.preview_active:
             start_time = time.perf_counter()
             self._update_time_cache()
             current_time_ms = self._current_time_ms_cache
 
+            self._memory_cleanup_counter += 1
+            if self._memory_cleanup_counter % 300 == 0:
+                import gc
+                gc.collect()
+
+            game_fps = max(self.get_param('target_fps'), 1)
+            self.velocity_calculator.update_fps(game_fps)
+
             if self.game_area is None:
-                time.sleep(target_delay)
+                time.sleep(screenshot_delay)
                 continue
 
             if self.automation_manager.should_re_equip_shovel():
                 self.automation_manager.re_equip_shovel()
 
-            screenshot = self.screen_grabber.capture(bbox=self.game_area)
+            frame_skip_counter += 1
+            should_process_zones = frame_skip_counter % process_every_nth_frame == 0
+
+            capture_start = time.perf_counter()
+            screenshot = self.screen_grabber.capture(bbox=self.game_area, region_key="main_game")
+            capture_time = time.perf_counter() - capture_start
+            
             if screenshot is None:
-                time.sleep(target_delay)
+                time.sleep(screenshot_delay)
                 continue
 
             height, width = screenshot.shape[:2]
-            height_80 = int(height * 0.80)
-            zone_y2 = height_80
+            
+            if cached_height_80 is None or cached_height_80 != int(height * 0.80):
+                cached_height_80 = int(height * 0.80)
+                cached_zone_y2 = cached_height_80
 
-            zone_detection_area = screenshot[:height_80, :]
-            hsv = cv2.cvtColor(zone_detection_area, cv2.COLOR_BGR2HSV)
+            height_80 = cached_height_80
+            zone_y2 = cached_zone_y2
 
-            saturation_threshold = self.get_param('saturation_threshold')
+            if cached_line_area is None or cached_line_area.shape != (height, width):
+                cached_line_area = np.empty((height, width), dtype=np.uint8)
+            
+            cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY, dst=cached_line_area)
+            line_sensitivity = self.get_param('line_sensitivity')
+            line_min_height = 1.0
+            line_offset = self.get_param('line_detection_offset') or 5.0
+            if isinstance(line_offset, str):
+                line_offset = float(line_offset)
 
-            if not self.is_color_locked:
-                saturation = hsv[:, :, 1]
-                _, final_mask = cv2.threshold(saturation, saturation_threshold, 255, cv2.THRESH_BINARY)
+            line_pos = find_line_position(cached_line_area, line_sensitivity, line_min_height, line_offset)
+
+            if should_process_zones:
+                if cached_hsv_area is None or cached_hsv_area.shape != (height_80, width, 3):
+                    cached_hsv_area = np.empty((height_80, width, 3), dtype=np.uint8)
+                
+                zone_detection_area = screenshot[:height_80, :]
+                cv2.cvtColor(zone_detection_area, cv2.COLOR_BGR2HSV, dst=cached_hsv_area)
+                hsv = cached_hsv_area
+
+                saturation_threshold = self.get_param('saturation_threshold')
+
+                if not self.is_color_locked:
+                    if final_mask is None or final_mask.shape != (height_80, width):
+                        final_mask = np.empty((height_80, width), dtype=np.uint8)
+                    
+                    saturation = hsv[:, :, 1]
+                    cv2.threshold(saturation, saturation_threshold, 255, cv2.THRESH_BINARY, dst=final_mask)
+                    
+                    line_exclusion_radius = self.get_param('line_exclusion_radius') or 0
+                    if line_exclusion_radius > 0 and line_pos != -1:
+                        cv2.rectangle(final_mask, 
+                                    (max(0, line_pos - line_exclusion_radius), 0), 
+                                    (min(width, line_pos + line_exclusion_radius), height_80), 
+                                    0, -1)
+                    
+                    if line_exclusion_radius > 0:
+                        kernel_size = max(3, int(min(width, height) * 0.008))
+                        if self._cached_kernel is None or self._cached_kernel_size != kernel_size:
+                            self._cached_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+                            self._cached_kernel_size = kernel_size
+                        cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, self._cached_kernel, dst=final_mask, iterations=2)
+                        cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, self._cached_kernel, dst=final_mask, iterations=1)
+                else:
+                    if (self._last_hsv_color is None or
+                            not np.array_equal(self.locked_color_hsv, self._last_hsv_color) or
+                            self._last_is_low_sat != self.is_low_sat_lock):
+                        self._hsv_lower_bound_cache, self._hsv_upper_bound_cache = get_hsv_bounds(self.locked_color_hsv, self.is_low_sat_lock)
+                        self._last_hsv_color = self.locked_color_hsv.copy()
+                        self._last_is_low_sat = self.is_low_sat_lock
+                    lower_bound, upper_bound = self._hsv_lower_bound_cache, self._hsv_upper_bound_cache
+                    if final_mask is None or final_mask.shape != (height_80, width):
+                        final_mask = np.empty((height_80, width), dtype=np.uint8)
+                    cv2.inRange(hsv, lower_bound, upper_bound, dst=final_mask)
+                    
+                    line_exclusion_radius = self.get_param('line_exclusion_radius') or 0
+                    if line_exclusion_radius > 0 and line_pos != -1:
+                        cv2.rectangle(final_mask, 
+                                    (max(0, line_pos - line_exclusion_radius), 0), 
+                                    (min(width, line_pos + line_exclusion_radius), height_80), 
+                                    0, -1)
+
+                cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, self._kernel, dst=final_mask, iterations=2)
+                contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                raw_zone_x, raw_zone_w = None, None
+                if contours:
+                    main_contour = max(contours, key=cv2.contourArea)
+                    x_temp, y_temp, w_temp, h_temp = cv2.boundingRect(main_contour)
+
+                    zone_min_width = self.get_param('zone_min_width')
+                    max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
+                    min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
+
+                    if w_temp > zone_min_width and w_temp < max_zone_width and h_temp >= min_zone_height:
+                        raw_zone_x, raw_zone_w = x_temp, w_temp
+                        if not self.is_color_locked:
+                            mask = np.zeros(hsv.shape[:2], dtype="uint8")
+                            cv2.drawContours(mask, [main_contour], -1, 255, -1)
+                            mean_hsv = cv2.mean(hsv, mask=mask)
+                            self.locked_color_hsv = np.array(mean_hsv[:3], dtype=np.float32)
+                            self.is_color_locked = True
+                            bgr_color = cv2.cvtColor(np.uint8([[self.locked_color_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
+                            self.locked_color_hex = f'#{bgr_color[2]:02x}{bgr_color[1]:02x}{bgr_color[0]:02x}'
+                            self.is_low_sat_lock = self.locked_color_hsv[1] < 25
             else:
-                lower_bound, upper_bound = self._get_hsv_bounds_cached(self.locked_color_hsv, self.is_low_sat_lock)
-                final_mask = cv2.inRange(hsv, lower_bound, upper_bound)
-
-            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, self._kernel, iterations=2)
-            contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            raw_zone_x, raw_zone_w = None, None
-            if contours:
-                main_contour = max(contours, key=cv2.contourArea)
-                x_temp, y_temp, w_temp, h_temp = cv2.boundingRect(main_contour)
-
-                zone_min_width = self.get_param('zone_min_width')
-                max_zone_width = width * (self.get_param('max_zone_width_percent') / 100.0)
-                min_zone_height = height_80 * (self.get_param('min_zone_height_percent') / 100.0)
-
-                if w_temp > zone_min_width and w_temp < max_zone_width and h_temp >= min_zone_height:
-                    raw_zone_x, raw_zone_w = x_temp, w_temp
-                    if not self.is_color_locked:
-                        mask = np.zeros(hsv.shape[:2], dtype="uint8")
-                        cv2.drawContours(mask, [main_contour], -1, 255, -1)
-                        mean_hsv = cv2.mean(hsv, mask=mask)
-                        self.locked_color_hsv = np.array(mean_hsv[:3], dtype=np.float32)
-                        self.is_color_locked = True
-                        bgr_color = cv2.cvtColor(np.uint8([[self.locked_color_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
-                        self.locked_color_hex = f'#{bgr_color[2]:02x}{bgr_color[1]:02x}{bgr_color[0]:02x}'
-                        self.is_low_sat_lock = self.locked_color_hsv[1] < 25
+                raw_zone_x, raw_zone_w = None, None
 
             if raw_zone_x is not None:
                 self.automation_manager.update_target_lock_activity()
                 self.frames_since_last_zone_detection = 0
 
                 zone_smoothing_factor = self.get_param('zone_smoothing_factor')
-
+                
                 if self.smoothed_zone_x is None:
                     self.smoothed_zone_x, self.smoothed_zone_w = raw_zone_x, raw_zone_w
                 else:
-                    self.smoothed_zone_x = zone_smoothing_factor * raw_zone_x + (
-                                1 - zone_smoothing_factor) * self.smoothed_zone_x
-                    self.smoothed_zone_w = zone_smoothing_factor * raw_zone_w + (
-                                1 - zone_smoothing_factor) * self.smoothed_zone_w
+                    position_change = abs(raw_zone_x - self.smoothed_zone_x)
+                    width_change = abs(raw_zone_w - self.smoothed_zone_w)
+                    
+                    max_change_threshold = width * 0.1
+                    if position_change > max_change_threshold or width_change > max_change_threshold:
+                        adaptive_smoothing = min(zone_smoothing_factor + 0.2, 1.0)
+                    else:
+                        adaptive_smoothing = max(zone_smoothing_factor - 0.1, 0.1)
+                    
+                    self.smoothed_zone_x = adaptive_smoothing * raw_zone_x + (1 - adaptive_smoothing) * self.smoothed_zone_x
+                    self.smoothed_zone_w = adaptive_smoothing * raw_zone_w + (1 - adaptive_smoothing) * self.smoothed_zone_w
             else:
                 self.frames_since_last_zone_detection += 1
 
-            if self.frames_since_last_zone_detection > 20:
+            zone_timeout_frames = max(int(game_fps * 0.167), 5)
+            if self.frames_since_last_zone_detection > zone_timeout_frames:
                 self.is_color_locked = False
                 self.locked_color_hsv = None
                 self.locked_color_hex = None
                 self.smoothed_zone_x = None
 
-            gray_line_area = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-
-            line_sensitivity = self.get_param('line_sensitivity')
-            line_min_height = self.get_param('line_min_height') / 100.0
-
-            line_pos = find_line_position(gray_line_area, line_sensitivity, line_min_height)
-
             velocity = self.velocity_calculator.add_position(line_pos, self._current_time_cache)
             acceleration = self.velocity_calculator.get_acceleration()
 
-            self.target_engaged = self.check_target_engagement(line_pos)
+            self.target_engaged = self.check_target_engagement(line_pos, game_fps)
 
             sweet_spot_center, sweet_spot_start, sweet_spot_end = None, None, None
             if self.smoothed_zone_x is not None:
@@ -947,7 +1037,7 @@ class DigTool:
                 if auto_walk_state == "move":
                     if (pending_auto_sell and dig_completed_time > 0 and 
                             current_time_ms - dig_completed_time >= post_dig_delay):
-                        print(f"Initiating auto-sell: dig_count={self.dig_count}, sell_every_x_digs={self.get_param('sell_every_x_digs')}")
+                        logger.debug(f"Initiating auto-sell: dig_count={self.dig_count}, sell_every_x_digs={self.get_param('sell_every_x_digs')}")
                         threading.Thread(target=self.automation_manager.perform_auto_sell, daemon=True).start()
                         pending_auto_sell = False
                         dig_completed_time = 0
@@ -1007,34 +1097,35 @@ class DigTool:
                 line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
 
                 if self.get_param('prediction_enabled') and line_pos != -1:
-                    min_velocity_threshold = self.get_param('min_velocity_threshold')
                     prediction_confidence_threshold = self.get_param('prediction_confidence_threshold')
-                    max_prediction_time = self.get_param('max_prediction_time') / 1000.0
-                    system_latency = self.get_param('system_latency') / 1000.0
+                    system_latency = self.get_cached_system_latency() / 1000.0
 
-                    if abs(velocity) >= min_velocity_threshold:
-                        is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
-                                line_pos > sweet_spot_center and velocity < 0)
+                    is_moving_towards = (line_pos < sweet_spot_center and velocity > 0) or (
+                            line_pos > sweet_spot_center and velocity < 0)
 
-                        if is_moving_towards:
-                            predicted_pos = self.velocity_calculator.predict_position(line_pos, sweet_spot_center,
-                                                                                      self._current_time_cache,
-                                                                                      max_prediction_time)
+                    if is_moving_towards:
+                        predicted_pos, prediction_time = self.velocity_calculator.predict_position(
+                            line_pos, sweet_spot_center, self._current_time_cache)
 
+                        if prediction_time > 0:
                             distance_to_center = abs(predicted_pos - sweet_spot_center)
                             sweet_spot_radius = (sweet_spot_end - sweet_spot_start) / 2
 
                             if distance_to_center <= sweet_spot_radius:
-                                confidence = max(0.0, 1.0 - (distance_to_center / sweet_spot_radius))
+                                base_confidence = max(0.0, 1.0 - (distance_to_center / sweet_spot_radius))
+                                velocity_confidence = self.velocity_calculator.get_prediction_confidence(
+                                    line_pos, sweet_spot_center, predicted_pos, prediction_time, game_fps)
+                                
+                                confidence = base_confidence * velocity_confidence
 
-                                if confidence >= prediction_confidence_threshold:
-                                    dist = sweet_spot_center - line_pos
-                                    time_to_arrival = dist / velocity
-
-                                    if 0 < time_to_arrival <= max_prediction_time:
-                                        sleep_duration = time_to_arrival - system_latency
-                                        if sleep_duration > 0:
-                                            should_click, click_delay, prediction_used = True, sleep_duration, True
+                                fps_adjusted_threshold = prediction_confidence_threshold * (game_fps / 120.0) ** 0.15
+                                
+                                if confidence >= fps_adjusted_threshold:
+                                    fps_latency_adjustment = system_latency * (120.0 / game_fps) * 0.8
+                                    sleep_duration = prediction_time - fps_latency_adjustment
+                                    
+                                    if sleep_duration > 0:
+                                        should_click, click_delay, prediction_used = True, sleep_duration, True
 
                 if not should_click and line_in_sweet_spot:
                     should_click = True
@@ -1064,12 +1155,12 @@ class DigTool:
                 sell_every_x_digs = self.get_param('sell_every_x_digs')
                 has_sell_button = self.automation_manager.sell_button_position is not None
                 
-                print(f"Dig completed #{self.dig_count}: auto_sell_enabled={auto_sell_enabled}, sell_button_set={has_sell_button}, sell_every_x_digs={sell_every_x_digs}")
+                logger.info(f"Dig completed #{self.dig_count}: auto_sell_enabled={auto_sell_enabled}, sell_button_set={has_sell_button}, sell_every_x_digs={sell_every_x_digs}")
                 
                 if (auto_sell_enabled and has_sell_button and
                         self.dig_count > 0 and self.dig_count % sell_every_x_digs == 0):
                     pending_auto_sell = True
-                    print(f"Auto-sell triggered! Will sell after {post_dig_delay}ms delay")
+                    logger.info(f"Auto-sell triggered! Will sell after {post_dig_delay}ms delay")
                 
                 auto_walk_state = "move"
                 self.check_milestone_notifications()
@@ -1082,7 +1173,7 @@ class DigTool:
                     cv2.rectangle(preview_img, (int(sweet_spot_start), 0), (int(sweet_spot_end), zone_y2),
                                   (0, 255, 255), 2)
                 if line_pos != -1:
-                    cv2.line(preview_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 3)
+                    cv2.line(preview_img, (line_pos, 0), (line_pos, height), (0, 0, 255), 1)
                 h, w = preview_img.shape[:2]
                 thumbnail = cv2.resize(preview_img, (150, int(150 * h / w)), interpolation=cv2.INTER_NEAREST)
 
@@ -1104,10 +1195,85 @@ class DigTool:
                     pass
 
             elapsed = time.perf_counter() - start_time
-            if target_delay > elapsed: time.sleep(target_delay - elapsed)
+            if screenshot_delay > elapsed: time.sleep(screenshot_delay - elapsed)
 
     def run(self):
         self.root.mainloop()
+
+    def manual_latency_measurement(self):
+        def measure_in_background():
+            try:
+                self.root.after(0, lambda: self.main_window.latency_status_label.config(
+                    text="Measuring...", fg='orange'))
+                
+                measured_latency = self.measure_system_latency()
+                
+                self._cached_latency = measured_latency
+                if 'system_latency' in self.param_vars:
+                    self.param_vars['system_latency'].set(measured_latency)
+                
+                self.root.after(0, lambda: self.main_window.latency_status_label.config(
+                    text=f"Measured: {measured_latency}ms", fg='green'))
+                
+                self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
+                
+                logger.info(f"Manual latency measurement completed: {measured_latency}ms")
+                
+            except Exception as e:
+                logger.error(f"Error in manual latency measurement: {e}")
+                self.root.after(0, lambda: self.main_window.latency_status_label.config(
+                    text="Error measuring", fg='red'))
+                self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
+        
+        threading.Thread(target=measure_in_background, daemon=True).start()
+
+    def perform_initial_latency_measurement(self):
+        if 'system_latency' in self.param_vars:
+            try:
+                value = self.param_vars['system_latency'].get()
+                if value == 'auto' or (isinstance(value, str) and value.strip().lower() == 'auto'):
+                    logger.info("Performing initial system latency measurement...")
+                    measured_latency = self.measure_system_latency()
+                    self._cached_latency = measured_latency
+                    self.param_vars['system_latency'].set(measured_latency)
+                    logger.info(f"System latency measured: {measured_latency}ms")
+                    return measured_latency
+            except Exception as e:
+                logger.warning(f"Could not measure system latency automatically: {e}")
+
+                default_latency = 50
+                self._cached_latency = default_latency
+                self.param_vars['system_latency'].set(default_latency)
+                return default_latency
+        return None
+
+    def get_cached_system_latency(self):
+        if hasattr(self, '_cached_latency') and hasattr(self, '_latency_measurement_time'):
+            if time.time() - self._latency_measurement_time < 300: 
+                return self._cached_latency
+        
+        if 'system_latency' in self.param_vars:
+            try:
+                value = self.param_vars['system_latency'].get()
+                if isinstance(value, (int, float)) and value > 0:
+                    self._cached_latency = int(value)
+                    self._latency_measurement_time = time.time()
+                    return self._cached_latency
+            except:
+                pass
+        
+        if not hasattr(self, '_cached_latency') or not hasattr(self, '_latency_measurement_time'):
+            logger.info("Measuring system latency (one-time measurement)...")
+            measured_latency = self.measure_system_latency()
+            self._cached_latency = measured_latency
+            self._latency_measurement_time = time.time()
+            
+            if 'system_latency' in self.param_vars:
+                self.param_vars['system_latency'].set(measured_latency)
+            
+            return measured_latency
+        
+        return self._cached_latency
 
 
 if __name__ == "__main__":
