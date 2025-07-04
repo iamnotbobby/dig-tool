@@ -154,16 +154,28 @@ If your macro walks correctly but **fails to get strong hits**, or **only gets t
   * The slider should be to the **left** and appear **grey**.  
     ![Notifications Viewport Example](/assets/notifications_viewport_disabled.png)
 
-* If Notifications Viewport is disabled but the preview still shows the **entire black area as the bounding box** (instead of the dig zone):
+* If Notifications Viewport is **enabled**, disable it and test again.
 
-  * This is a **known bug** with no current fix.
-  * The macro cannot accurately locate the sweet spot in this case.
+* If Notifications Viewport is **already disabled**, and you're still having issues, then:
 
-* If the bounding box **does follow the dig zone and sweet spot**, but strong hits are still rare or inconsistent:
+  * **Open the macro’s settings** and check if **Prediction** is turned on by navigating to `Behavior Settings` > `Prediction Settings`.
+    * Optionally press <kbd>F3</kbd> or the overlay hotkey to show the overlay. An indicator will appear as `PRED: ON` or `PRED: OFF`.
+  * If Prediction is on, **turn it off** and test again, as it can interfere with accuracy.
 
-  * Make sure your **FPS is uncapped** in Roblox.
-  * In **Roblox settings**, set **`Maximum Frame Rate` to 240**.
-  * Try to reach **at least 150 FPS**, and ideally **200+ FPS**.
+* If both Notifications Viewport is disabled **and** Prediction is off, but you're still having issues:
+
+  * Check the preview:
+
+    * If the preview shows the **entire black area as the bounding box** instead of the dig zone:
+
+      * This is a **known bug** with no current fix.
+      * The macro cannot locate the sweet spot in this case.
+
+    * If the bounding box **is correct** and follows the dig zone/sweet spot:
+
+      * Make sure your **FPS is uncapped** in Roblox.
+      * In **Roblox settings**, set **`Maximum Frame Rate` to 240**.
+      * Try to reach **at least 150 FPS**, and ideally **200+ FPS**.
 
 #### Final step:
 
@@ -189,28 +201,29 @@ When importing walk patterns, it may **look like the import failed**, but this i
 
 #### AZERTY keyboard users — read this!
 
-The macro supports AZERTY keyboards, but you can’t import AZERTY walk pattern files directly — only patterns using W, A, S, D can be imported.
+The macro does **not support importing walk patterns that use AZERTY-style movement keys** (`ZQSD`). Only patterns using `W`, `A`, `S`, and `D` are supported for import.
 
 If you try to import a `.json` file and see an error like:
 
 > `Invalid moves (only W, A, S, D allowed)`
 
-This means the file was created using **AZERTY-style movement keys** (`ZQSD`).
+…it means the file was created using **AZERTY keys**, which the macro cannot recognize.
 
-To fix this:
+#### What you can do:
 
-1. Open the `.json` file in any text editor (like Notepad).
-2. Find the line that looks like:
+If you're using an AZERTY keyboard, consider using a **community fork that adds AZERTY support**:
 
-   ```json
-   {
-     "Pattern_Name": [
-       "z",
-       "q",
-       ...
-   ```
-3. Manually copy each letter of the pattern into the macro’s walk pattern key recorder.
+* **Download precompiled binaries** (no setup required):
+  [`https://github.com/AlinaWan/dig-tool-azerty-bin/releases`](https://github.com/AlinaWan/dig-tool-azerty-bin/releases)
 
+  > This is **just a binary mirror** of the fork below — useful if you don’t want to build it yourself.
+
+* **Or build from the actual source fork**:
+  [`https://github.com/sltcvtfk/dig-tool`](https://github.com/sltcvtfk/dig-tool)
+
+  > This is a fork of the original project that adds AZERTY support.
+
+> These versions are **community-maintained forks** and are **not official releases**. Use them at your own discretion.
 
 ### ❌ Windows Defender blocked or deleted the executable
 
