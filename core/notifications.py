@@ -1,5 +1,6 @@
 import requests
 import time
+from utils.debug_logger import logger
 
 
 class DiscordNotifier:
@@ -12,7 +13,7 @@ class DiscordNotifier:
     def send_notification(self, message, user_id=None, color=0x00ff00):
         """Send a notification to Discord via webhook"""
         if not self.webhook_url:
-            print("Discord webhook URL not set!")
+            logger.warning("Discord webhook URL not set!")
             return False
 
         try:
@@ -38,14 +39,14 @@ class DiscordNotifier:
             )
 
             if response.status_code == 204:
-                print("Discord notification sent successfully")
+                logger.info("Discord notification sent successfully")
                 return True
             else:
-                print(f"Discord notification failed: {response.status_code}")
+                logger.error(f"Discord notification failed: {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"Error sending Discord notification: {e}")
+            logger.error(f"Error sending Discord notification: {e}")
             return False
 
     def send_startup_notification(self, user_id=None):

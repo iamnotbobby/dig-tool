@@ -556,7 +556,7 @@ class MainWindow:
             return btn
 
         create_dual_param_entry(panes['detection'].sub_frame, "Line Sensitivity:", 'line_sensitivity',
-                                "Line Min Height (%):", 'line_min_height')
+                                "Line Detection Offset:", 'line_detection_offset')
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Width:", 'zone_min_width',
                                 "Zone Max Width (%):", 'max_zone_width_percent')
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Height (%):", 'min_zone_height_percent',
@@ -564,14 +564,28 @@ class MainWindow:
 
         create_param_entry(panes['behavior'].sub_frame, "Zone Smoothing:", 'zone_smoothing_factor')
         create_param_entry(panes['behavior'].sub_frame, "Target Width (%):", 'sweet_spot_width_percent')
+        create_param_entry(panes['behavior'].sub_frame, "Line Exclusion Radius:", 'line_exclusion_radius')
         create_param_entry(panes['behavior'].sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
 
         pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings",
                                                 "#e8f5e8")  # Light green for predictions
         create_checkbox_param(pred_subsection.content, "Enable Prediction", 'prediction_enabled')
         create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
-        create_param_entry(pred_subsection.content, "Max Prediction (ms):", 'max_prediction_time')
-        create_param_entry(pred_subsection.content, "Min Velocity:", 'min_velocity_threshold')
+        
+        # Manual latency measurement button
+        latency_button_frame = Frame(pred_subsection.content)
+        latency_button_frame.pack(fill='x', pady=2)
+        
+        latency_measure_btn = ttk.Button(latency_button_frame, text="Measure Latency", 
+                                        command=lambda: self.dig_tool.manual_latency_measurement())
+        latency_measure_btn.pack(side='left', padx=(0, 5))
+        
+        Tooltip(latency_measure_btn, "Manually measure system latency. This will test your system's input/display latency and update the System Latency setting.")
+        
+        self.latency_status_label = Label(latency_button_frame, text="", fg='gray', font=('Segoe UI', 8))
+        self.latency_status_label.pack(side='left', padx=(5, 0))
+        
+        create_param_entry(pred_subsection.content, "Game FPS:", 'target_fps')
         create_param_entry(pred_subsection.content, "Prediction Confidence:", 'prediction_confidence_threshold')
 
         walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings",
@@ -651,7 +665,9 @@ class MainWindow:
         self.dig_tool.param_vars['debug_on_top'].trace_add('write', self.dig_tool.toggle_debug_on_top)
 
         create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
+        create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
         create_dropdown_param(panes['debug'].sub_frame, "Click Method:", 'click_method', ["win32api", "ahk"])
+        create_section_button(panes['debug'].sub_frame, "Show Debug Console", self.dig_tool.show_debug_console)
         create_section_button(panes['debug'].sub_frame, "Test Sell Click", self.dig_tool.test_sell_button_click)
         create_section_button(panes['debug'].sub_frame, "Test Click Method", self.test_click_method)
 

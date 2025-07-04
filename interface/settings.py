@@ -5,6 +5,7 @@ from tkinter import filedialog
 from PIL import Image, ImageTk
 import threading
 import time
+from utils.debug_logger import logger
 
 from interface.settings_feedback_window import SettingsFeedbackWindow
 
@@ -14,24 +15,25 @@ class SettingsManager:
         self.dig_tool = dig_tool_instance
 
         self.default_params = {
-            'line_sensitivity': 50,
-            'line_min_height': 100,
+            'line_sensitivity': 100,
             'zone_min_width': 100,
             'saturation_threshold': 0.5,
             'min_zone_height_percent': 100,
-            'sweet_spot_width_percent': 10,
+            'sweet_spot_width_percent': 15,
             'prediction_enabled': True,
-            'system_latency': 0,
-            'max_prediction_time': 50,
-            'min_velocity_threshold': 300,
-            'prediction_confidence_threshold': 0.8,
+            'system_latency': 'auto',
+            'prediction_confidence_threshold': 0.6,
             'zone_smoothing_factor': 0.8,
+            'line_exclusion_radius': 10,
             'post_click_blindness': 50,
             'max_zone_width_percent': 80,
+            'target_fps': 120,
+            'line_detection_offset': 5.0,
             'main_on_top': True,
             'preview_on_top': True,
             'debug_on_top': True,
             'debug_clicks_enabled': False,
+            'screenshot_fps': 240,
             'auto_sell_enabled': False,
             'sell_every_x_digs': 10,
             'sell_delay': 3000,
@@ -52,23 +54,23 @@ class SettingsManager:
 
         self.param_descriptions = {
             'line_sensitivity': "How sharp the contrast must be to be considered a line. Higher values = less sensitive to weak edges.",
-            'line_min_height': "The line must span this percentage of the capture height to be considered valid. 100% = full height required.",
+            'line_detection_offset': "Pixels to offset the detected line position. Positive = right, negative = left. Decimals allowed for precise positioning.",
             'zone_min_width': "The minimum pixel width for a valid target zone. Smaller zones will be ignored.",
             'max_zone_width_percent': "The maximum width of a target zone as a percent of the capture width. Prevents detecting overly large areas.",
             'min_zone_height_percent': "A target zone must span this percentage of the capture height to be valid. 100% = full height required.",
             'saturation_threshold': "How colorful a pixel must be to be part of the initial target zone search. Higher = more colorful required.",
             'zone_smoothing_factor': "How much to smooth the movement of the target zone. 1.0 = no smoothing, lower = more smoothing.",
+            'line_exclusion_radius': "Radius around detected line to exclude from zone detection. Prevents moving line from interfering with zone boundaries.",
             'sweet_spot_width_percent': "The width of the clickable 'sweet spot' in the middle of the zone. Smaller = more precise clicking required.",
             'post_click_blindness': "How long to wait after clicking before scanning again (milliseconds). Prevents multiple rapid clicks.",
             'prediction_enabled': "Predicts the line's movement to click earlier, compensating for input/display latency.",
-            'system_latency': "Your system's input/display latency in milliseconds. Used for prediction timing compensation.",
-            'max_prediction_time': "The maximum time in the future the bot is allowed to predict a click (milliseconds).",
-            'min_velocity_threshold': "Minimum velocity required for prediction (pixels per second). Prevents prediction on slow/stationary lines.",
+            'system_latency': "Your system's input/display latency in milliseconds. Set to 'auto' for automatic measurement at startup, or enter a custom value. Use the 'Measure Latency' button to manually measure.",
             'prediction_confidence_threshold': "How confident the prediction must be (0.0-1.0). Higher = more conservative prediction.",
             'main_on_top': "Keep the main window always on top of other windows.",
             'preview_on_top': "Keep the preview window always on top of other windows.",
             'debug_on_top': "Keep the debug window always on top of other windows.",
             'debug_clicks_enabled': "Save screenshots and debug information for every click performed.",
+            'screenshot_fps': "Target frames per second for screenshot capture. Higher = lower latency but more CPU usage.",
             'auto_sell_enabled': "Automatically sell items after a certain number of digs.",
             'sell_every_x_digs': "Number of digs before auto-selling items.",
             'sell_delay': "Delay in milliseconds before clicking the sell button.",
@@ -81,6 +83,7 @@ class SettingsManager:
             'shovel_slot': "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
             'shovel_timeout': "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
             'milestone_interval': "Send Discord notification every X digs (milestone notifications).",
+            'target_fps': "Your game's FPS for prediction calculations. Higher FPS = more precise predictions. Does not affect screenshot rate.",
             'use_custom_cursor': "Move cursor to set position before clicking when enabled. Cannot be used with Auto-Walk.",
             'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security.",
             'shovel_equip_mode': "Whether to press the shovel slot key once ('single') or twice ('double') when re-equipping.",
@@ -129,7 +132,7 @@ class SettingsManager:
                 img = img.resize(size, Image.Resampling.LANCZOS)
                 return ImageTk.PhotoImage(img)
         except Exception as e:
-            print(f"Error loading icon from {icon_path}: {e}")
+            logger.error(f"Error loading icon from {icon_path}: {e}")
         return None
 
     def get_conflict_tooltip(self, setting_key):
@@ -201,30 +204,43 @@ class SettingsManager:
 
     def validate_param_value(self, key, value):
         try:
-            if key in ['line_sensitivity', 'line_min_height', 'zone_min_width', 'saturation_threshold',
-                       'min_zone_height_percent', 'sweet_spot_width_percent', 'system_latency',
-                       'max_prediction_time', 'post_click_blindness', 'max_zone_width_percent',
-                       'min_velocity_threshold', 'sell_every_x_digs', 'sell_delay', 'walk_duration',
-                       'milestone_interval']:
+            if key == 'system_latency':
+                if isinstance(value, str) and value.strip().lower() == 'auto':
+                    return True
                 val = int(value)
-                if key in ['line_min_height', 'min_zone_height_percent', 'sweet_spot_width_percent',
+                return val >= 0
+            elif key in ['line_sensitivity', 'zone_min_width', 'saturation_threshold',
+                       'min_zone_height_percent', 'sweet_spot_width_percent',
+                       'post_click_blindness', 'max_zone_width_percent',
+                       'sell_every_x_digs', 'sell_delay', 'walk_duration',
+                       'milestone_interval', 'target_fps', 'screenshot_fps']:
+                val = int(value)
+                if key in ['min_zone_height_percent', 'sweet_spot_width_percent',
                            'max_zone_width_percent']:
                     return 0 <= val <= 100
-                elif key in ['line_sensitivity', 'zone_min_width', 'saturation_threshold', 'system_latency',
-                             'max_prediction_time', 'post_click_blindness', 'min_velocity_threshold',
+                elif key in ['line_sensitivity', 'zone_min_width', 'saturation_threshold',
+                             'post_click_blindness',
                              'sell_every_x_digs', 'sell_delay', 'walk_duration', 'milestone_interval']:
                     return val >= 1 if key == 'milestone_interval' else val >= 0
+                elif key == 'target_fps':
+                    return 1 <= val <= 1000
+                elif key == 'screenshot_fps':
+                    return 30 <= val <= 500
                 return True
-            elif key in ['zone_smoothing_factor', 'prediction_confidence_threshold']:
+            elif key in ['zone_smoothing_factor', 'prediction_confidence_threshold', 'line_detection_offset', 'line_exclusion_radius']:
                 val = float(value)
                 if key == 'zone_smoothing_factor':
                     return 0.0 <= val <= 2.0
                 elif key == 'prediction_confidence_threshold':
                     return 0.0 <= val <= 1.0
+                elif key == 'line_detection_offset':
+                    return True  # Allow any float value (positive, negative, decimal)
+                elif key == 'line_exclusion_radius':
+                    return val >= 0  # Allow 0 to disable, positive values for radius
                 return True
             elif key in ['prediction_enabled', 'main_on_top', 'preview_on_top', 'debug_on_top',
                          'debug_clicks_enabled', 'auto_sell_enabled', 'auto_walk_enabled', 'use_custom_cursor',
-                         'include_discord_in_settings']:
+                         'auto_shovel_enabled', 'include_discord_in_settings']:
                 return isinstance(value, bool)
             elif key in ['user_id', 'webhook_url']:
                 return isinstance(value, str)
