@@ -32,6 +32,9 @@ class SettingsManager:
             'sell_every_x_digs': 10,
             'sell_delay': 3000,
             'auto_walk_enabled': False,
+            'ranged_auto_walk_enabled': False,
+            'walk_min_duration': 250,
+            'walk_max_duration': 500,
             'walk_duration': 500,
             'user_id': '',
             'webhook_url': '',
@@ -41,6 +44,9 @@ class SettingsManager:
         }
 
         self.param_descriptions = {
+            'ranged_auto_walk_enabled': "Automatically move around in a range while digging",
+            'walk_min_duration': "The minimum the ranged walk can go too",
+            'walk_max_duration': "The maximum the ranged walk can go too",
             'line_sensitivity': "How sharp the contrast must be to be considered a line. Higher values = less sensitive to weak edges.",
             'line_min_height': "The line must span this percentage of the capture height to be considered valid. 100% = full height required.",
             'zone_min_width': "The minimum pixel width for a valid target zone. Smaller zones will be ignored.",

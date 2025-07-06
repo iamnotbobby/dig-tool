@@ -29,7 +29,7 @@ class Tooltip:
         self.tooltip_window.wm_attributes('-topmost', True)
 
         label = tk.Label(self.tooltip_window, text=self.text, justify='left',
-                         background="#ffffe0", relief='solid', borderwidth=1,
+                         background="#000000", relief='solid', borderwidth=1,
                          font=("Segoe UI", 9, "normal"), wraplength=300, padx=8, pady=6)
         label.pack()
 
@@ -57,7 +57,7 @@ class Tooltip:
 
 
 class CollapsiblePane(Frame):
-    def __init__(self, parent, text="", manager=None, bg_color="#ffffff", **kwargs):
+    def __init__(self, parent, text="", manager=None, bg_color="#000000", **kwargs):
         Frame.__init__(self, parent, **kwargs)
         self.configure(bg=parent.cget('bg'))
         self.text = text
@@ -65,7 +65,7 @@ class CollapsiblePane(Frame):
         self.bg_color = bg_color
         self.is_open = tk.BooleanVar(value=False)
 
-        self.header_frame = Frame(self, bg="#dcdcdc")
+        self.header_frame = Frame(self, bg="#000000")
         self.header_frame.pack(fill="x")
 
         self.toggle_button = ttk.Button(self.header_frame, text=f'+ {self.text}', command=self.toggle,
@@ -201,6 +201,8 @@ class GameOverlay:
                 self.status_label.config(text="STATUS: WALKING", fg='yellow')
             elif automation_status == "AUTO WALKING":
                 self.status_label.config(text="STATUS: AUTO WALKING", fg='lime')
+            elif automation_status == "RANGED AUTO WALKING":
+                self.status_label.config(text="STATUS: RANGED AUTO WALKING", fg='lime')
             elif automation_status == "ACTIVE":
                 self.status_label.config(text="STATUS: ACTIVE", fg='lime')
             else:
