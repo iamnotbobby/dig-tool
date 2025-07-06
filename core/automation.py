@@ -1,6 +1,6 @@
 import time
 import threading
-import autoit
+from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController
 
 
@@ -73,36 +73,6 @@ class AutomationManager:
 
         return auto_sell_enabled and self.sell_button_position is not None
 
-    def autoit_click(self, x, y, retries=3):
-        for attempt in range(retries):
-            try:
-                print(f"AutoIt click attempt {attempt + 1}: Target: ({x}, {y})")
-
-                autoit.mouse_move(x, y, speed=2)
-                time.sleep(0.1)
-
-                current_pos = autoit.mouse_get_pos()
-                tolerance = 5
-
-                if abs(current_pos[0] - x) <= tolerance and abs(current_pos[1] - y) <= tolerance:
-                    autoit.mouse_click("left", x, y, speed=2)
-                    time.sleep(0.1)
-                    print(f"AutoIt click successful at {current_pos}")
-                    return True
-                else:
-                    print(f"AutoIt position verification: Expected ({x}, {y}), Got {current_pos}")
-                    if attempt < retries - 1:
-                        time.sleep(0.2)
-                        continue
-
-            except Exception as e:
-                print(f"AutoIt click attempt {attempt + 1} failed: {e}")
-                if attempt < retries - 1:
-                    time.sleep(0.2)
-                    continue
-
-        print("All AutoIt click attempts failed")
-        return False
 
     def perform_auto_sell(self):
         try:
@@ -112,7 +82,7 @@ class AutomationManager:
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling...")
 
-            autoit.send("g")
+            self.send_key('g')
             time.sleep(0.3)
 
             sell_delay = max(self.dig_tool.get_param('sell_delay') / 1000.0, 2.5)
@@ -120,18 +90,16 @@ class AutomationManager:
 
             x, y = self.sell_button_position
 
-            print(f"Performing AutoIt click at sell button: {x}, {y}")
-            success = self.autoit_click(x, y)
-
-            if success:
-                print("Sell click successful")
-                time.sleep(2.5)
-                autoit.send("g")
-                time.sleep(1.0)
-                self.sell_count += 1
-                self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed")
-            else:
-                self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
+            self.mouse_controller.position = (x, y)
+            time.sleep(0.1)
+            self.mouse_controller.click(Button.left)
+            time.sleep(0.1)
+            
+            time.sleep(2.5)
+            self.send_key('g')
+            time.sleep(1.0)
+            self.sell_count += 1
+            self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed")
 
             self.is_selling = False
 
@@ -149,21 +117,20 @@ class AutomationManager:
 
     def _test_sell_click_with_delay(self):
         x, y = self.sell_button_position
-        print(f"Testing AutoIt click at position: {x}, {y}")
+        
 
         for i in range(5, 0, -1):
             self.dig_tool.update_status(f"Test click in {i} seconds... Position: ({x}, {y})")
             time.sleep(1.0)
 
         self.dig_tool.update_status("Performing AutoIt test click...")
-        print(f"Executing AutoIt test click at: {x}, {y}")
+        
 
-        success = self.autoit_click(x, y)
-
-        if success:
-            self.dig_tool.update_status("AutoIt test click completed successfully!")
-        else:
-            self.dig_tool.update_status("AutoIt test click failed!")
+        self.mouse_controller.position = (x, y)
+        time.sleep(0.1)
+        self.mouse_controller.click(Button.left)
+        time.sleep(0.1)
+        self.dig_tool.update_status("Test click completed.")
 
     def send_key(self, key, duration=0.1):
         try:

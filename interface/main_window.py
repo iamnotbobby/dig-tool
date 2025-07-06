@@ -39,11 +39,11 @@ class MainWindow:
         self.dig_tool = dig_tool_instance
 
     def create_ui(self):
-        BG_COLOR = "#f0f0f0"  # Main background - light gray
-        FRAME_BG = "#ffffff"  # Frame backgrounds - white
-        TEXT_COLOR = "#000000"  # Primary text - black
-        BTN_BG = "#e1e1e1"  # Button background - light gray
-        FONT_FAMILY = "Segoe UI"  # Primary font
+        BG_COLOR = "#f0f0f0"
+        FRAME_BG = "#ffffff"
+        TEXT_COLOR = "#000000"
+        BTN_BG = "#e1e1e1"
+        FONT_FAMILY = "Segoe UI"
 
         SECTION_PADY = 5
         PARAM_PADY = 4
@@ -72,7 +72,7 @@ class MainWindow:
                             bg=FRAME_BG, fg=TEXT_COLOR)
         info_header.pack(pady=(6, 4))
 
-        # Status items - stacked vertically
+        
         self.dig_tool.area_info_label = Label(info_panel, text="Game Area: Not set", font=(FONT_FAMILY, 8),
                                               bg=FRAME_BG, fg="#666666", anchor='w')
         self.dig_tool.area_info_label.pack(fill='x', padx=12, pady=2)
@@ -132,14 +132,14 @@ class MainWindow:
         self.dig_tool.accordion = AccordionManager(self.dig_tool)
 
         panes_config = [
-            ("Detection", "#e8f4f8"),  # Light blue - detection settings
-            ("Behavior", FRAME_BG),  # White - behavior settings
-            ("Auto-Sell", "#fff8e8"),  # Light yellow - auto-sell settings
-            ("Discord", "#f8e8f8"),  # Light pink - discord settings
-            ("Window", "#f8f0e8"),  # Light orange - window settings
-            ("Debug", "#f8e8e8"),  # Light red - debug settings
-            ("Hotkeys", "#e8e8f8"),  # Light purple - hotkey settings
-            ("Settings", "#e8f8f0")  # Light green - settings
+            ("Detection", "#e8f4f8"),
+            ("Behavior", FRAME_BG),
+            ("Auto-Sell", "#fff8e8"),
+            ("Discord", "#f8e8f8"),
+            ("Window", "#f8f0e8"),
+            ("Debug", "#f8e8e8"),
+            ("Hotkeys", "#e8e8f8"),
+            ("Settings", "#e8f8f0")
         ]
 
         panes = {}
@@ -246,7 +246,7 @@ class MainWindow:
             Button(btn_frame, text=text, command=command, font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR,
                    relief='solid', borderwidth=1, pady=4).pack(expand=True, fill=tk.X)
 
-        # Detection pane - Light blue background (#e8f4f8)
+        # Detection pane
         create_dual_param_entry(panes['detection'].sub_frame, "Line Sensitivity:", 'line_sensitivity',
                                 "Line Min Height (%):", 'line_min_height')
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Width:", 'zone_min_width',
@@ -254,12 +254,12 @@ class MainWindow:
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Height (%):", 'min_zone_height_percent',
                                 "Saturation Threshold:", 'saturation_threshold')
 
-        # Behavior pane - White background with colored subsections
+        # Behavior pane
         create_param_entry(panes['behavior'].sub_frame, "Zone Smoothing:", 'zone_smoothing_factor')
         create_param_entry(panes['behavior'].sub_frame, "Target Width (%):", 'sweet_spot_width_percent')
         create_param_entry(panes['behavior'].sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
 
-        # Prediction subsection - Light green background (#e8f5e8)
+        # Prediction subsection
         pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings", "#e8f5e8")
         create_checkbox_param(pred_subsection.content, "Enable Prediction", 'prediction_enabled')
         create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
@@ -267,7 +267,7 @@ class MainWindow:
         create_param_entry(pred_subsection.content, "Min Velocity:", 'min_velocity_threshold')
         create_param_entry(pred_subsection.content, "Prediction Confidence:", 'prediction_confidence_threshold')
 
-        # Auto-walk subsection - Light blue background (#e8f0ff)
+        # Auto-walk subsection
         walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings", "#e8f0ff")
         create_checkbox_param(walk_subsection.content, "Enable Auto-Walk", 'auto_walk_enabled')
         create_param_entry(walk_subsection.content, "Walk Duration (ms):", 'walk_duration')
@@ -285,22 +285,22 @@ class MainWindow:
                                      state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9))
         pattern_combo.pack(side='right', ipady=3)
 
-        # Cursor subsection - Light orange background (#fff0e8)
+        # Cursor subsection
         cursor_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Cursor Settings", "#fff0e8")
         create_checkbox_param(cursor_subsection.content, "Use Custom Cursor Position", 'use_custom_cursor')
 
-        # Auto-Sell pane - Light yellow background (#fff8e8)
+        # Auto-Sell pane
         create_checkbox_param(panes['auto_sell'].sub_frame, "Enable Auto-Sell", 'auto_sell_enabled')
         create_dual_param_entry(panes['auto_sell'].sub_frame, "Sell Every X Digs:", 'sell_every_x_digs',
                                 "Sell Delay (ms):", 'sell_delay')
 
-        # Discord pane - Light pink background (#f8e8f8)
+        # Discord pane
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", self.dig_tool.test_discord_ping)
 
-        # Window pane - Light orange background (#f8f0e8)
+        # Window pane
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
         self.dig_tool.param_vars['main_on_top'].trace_add('write', self.dig_tool.toggle_main_on_top)
         create_checkbox_param(panes['window'].sub_frame, "Preview Window Always on Top", 'preview_on_top')
@@ -308,11 +308,11 @@ class MainWindow:
         create_checkbox_param(panes['window'].sub_frame, "Debug Window Always on Top", 'debug_on_top')
         self.dig_tool.param_vars['debug_on_top'].trace_add('write', self.dig_tool.toggle_debug_on_top)
 
-        # Debug pane - Light red background (#f8e8e8)
+        # Debug pane
         create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
         create_section_button(panes['debug'].sub_frame, "Test Sell Click", self.dig_tool.test_sell_button_click)
 
-        # Hotkeys pane - Light purple background (#e8e8f8)
+        # Hotkeys pane
         def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=parent.cget('bg'))
             frame.pack(fill='x', pady=BUTTON_PADY, padx=PARAM_PADX)
@@ -327,34 +327,22 @@ class MainWindow:
             default_value = self.dig_tool.settings_manager.get_default_keybind(key_name)
             self.dig_tool.keybind_vars[key_name] = tk.StringVar(value=default_value)
 
-            def set_hotkey_thread(key_var, button):
-                button.config(text="Press any key...", state=tk.DISABLED, bg="#0078D4", fg="#ffffff")
-                self.dig_tool.root.update_idletasks()
-                try:
-                    import keyboard
-                    event = keyboard.read_event(suppress=True)
-                    if event.event_type == keyboard.KEY_DOWN:
-                        key_var.set(event.name)
-                except Exception as e:
-                    self.dig_tool.update_status(f"Hotkey capture failed: {e}")
-                finally:
-                    button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
-                    self.dig_tool.apply_keybinds()
-
             hotkey_btn = Button(frame, text=default_value.upper(), font=(FONT_FAMILY, 10, 'bold'), bg=BTN_BG,
                                 fg=TEXT_COLOR, relief='solid', borderwidth=1, width=12, pady=4)
             hotkey_btn.config(
-                command=lambda v=self.dig_tool.keybind_vars[key_name], b=hotkey_btn: __import__('threading').Thread(
-                    target=set_hotkey_thread,
-                    args=(v, b),
-                    daemon=True).start())
+                command=lambda entry=self.dig_tool.keybind_vars[key_name], button=hotkey_btn: (
+                    button.config(state=tk.DISABLED, text="Type key..."),
+                    self.dig_tool.root.after(100, lambda: button.config(state=tk.NORMAL, text=entry.get().upper())),
+                    # For now, direct input is expected. No automatic key capture.
+                )
+            )
             hotkey_btn.pack(side='right')
 
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Bot:", 'toggle_bot')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle GUI:", 'toggle_gui')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
 
-        # Settings pane - Light green background (#e8f8f0)
+        # Settings pane
         create_checkbox_param(panes['settings'].sub_frame, "Include Discord Info in Settings",
                               'include_discord_in_settings')
 

@@ -5,13 +5,7 @@ from utils.system_utils import check_dependencies
 
 check_dependencies()
 
-try:
-    import ctypes
 
-    PROCESS_PER_MONITOR_DPI_AWARE = 2
-    ctypes.windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
-except:
-    pass
 
 import cv2
 import numpy as np
@@ -20,20 +14,19 @@ from tkinter import Label, Frame, TclError
 import threading
 import time
 from PIL import Image, ImageTk
-import keyboard
 import queue
 
 from interface.components import GameOverlay
 from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from utils.screen_capture import ScreenCapture
-from utils.system_utils import send_click, check_display_scale
+from utils.system_utils import send_click
 from core.detection import find_line_position, VelocityCalculator
 from core.automation import AutomationManager
 from core.notifications import DiscordNotifier
 
 warnings.filterwarnings("ignore")
-check_display_scale()
+
 
 
 class DigTool:
@@ -86,7 +79,7 @@ class DigTool:
         self.debug_label = None
         self.color_swatch_label = None
         self.main_loop_thread = None
-        self.hotkey_thread = None
+        
         self.results_queue = queue.Queue(maxsize=1)
         self.debug_dir = "debug_clicks"
         self.debug_log_path = os.path.join(self.debug_dir, "click_log.txt")
@@ -99,8 +92,22 @@ class DigTool:
         self.root.after(50, self.update_gui_from_queue)
 
     def ensure_debug_dir(self):
-        if self.get_param('debug_clicks_enabled') and not os.path.exists(self.debug_dir):
-            os.makedirs(self.debug_dir)
+        debug_enabled = self.get_param('debug_clicks_enabled')
+        print(f"[DEBUG] ensure_debug_dir called. debug_clicks_enabled: {debug_enabled}")
+        if debug_enabled:
+            if not os.path.exists(self.debug_dir):
+                print(f"[DEBUG] Attempting to create debug directory: {self.debug_dir}")
+                try:
+                    os.makedirs(self.debug_dir)
+                    print(f"[DEBUG] Successfully created debug directory: {self.debug_dir}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to create debug directory {self.debug_dir}: {e}")
+            else:
+                print(f"[DEBUG] Debug directory already exists: {self.debug_dir}")
+        else:
+            print("[DEBUG] Debug clicks disabled, skipping directory creation.")
+            
+        
 
     def on_closing(self):
         if self.running:
@@ -120,13 +127,13 @@ class DigTool:
         self.root.after(100, self._check_shutdown)
 
     def _check_shutdown(self):
-        hotkey_alive = self.hotkey_thread and self.hotkey_thread.is_alive()
         main_loop_alive = self.main_loop_thread and self.main_loop_thread.is_alive()
-        if hotkey_alive or main_loop_alive:
+        if main_loop_alive:
             self.root.after(100, self._check_shutdown)
         else:
             try:
-                keyboard.unhook_all()
+                if self.global_hotkeys:
+                    self.global_hotkeys.stop()
                 self.screen_grabber.close()
             except Exception as e:
                 print(f"Error during final cleanup: {e}")
@@ -134,29 +141,50 @@ class DigTool:
                 self.root.destroy()
 
     def start_threads(self):
-        if self.hotkey_thread is None:
-            self.hotkey_thread = threading.Thread(target=self.hotkey_listener, daemon=True)
-            self.hotkey_thread.start()
         if self.main_loop_thread is None:
             self.main_loop_thread = threading.Thread(target=self.run_main_loop, daemon=True)
             self.main_loop_thread.start()
+        self.apply_keybinds() # Apply hotkeys after main loop starts
 
-    def hotkey_listener(self):
-        self.root.after(0, self.apply_keybinds)
-        while self.preview_active:
-            time.sleep(0.5)
+    
+
+    
 
     def apply_keybinds(self):
-        keyboard.unhook_all()
-        try:
-            keyboard.add_hotkey(self.keybind_vars['toggle_bot'].get(), self.toggle_detection)
-            keyboard.add_hotkey(self.keybind_vars['toggle_gui'].get(), self.toggle_gui)
-            keyboard.add_hotkey(self.keybind_vars['toggle_overlay'].get(), self.toggle_overlay)
-            self.update_main_button_text()
-            self.update_status("Keybinds applied successfully.")
-        except (ValueError, TclError, Exception) as e:
-            self.update_status(f"Error: Invalid keybind - {e}")
-            self.update_main_button_text()
+        keybind_map = {
+            'f1': '<F1>',
+            'f2': '<F2>',
+            'f3': '<F3>',
+            'f4': '<F4>',
+            'f5': '<F5>',
+            'f6': '<F6>',
+            'f7': '<F7>',
+            'f8': '<F8>',
+            'f9': '<F9>',
+            'f10': '<F10>',
+            'f11': '<F11>',
+            'f12': '<F12>',
+            # Add other special keys as needed
+        }
+
+        
+        tk_toggle_bot_key = self._format_key_for_tkinter(self.keybind_vars['toggle_bot'].get())
+        self.root.bind(f"<{tk_toggle_bot_key}>", lambda event: self.toggle_detection())
+
+        tk_toggle_gui_key = self._format_key_for_tkinter(self.keybind_vars['toggle_gui'].get())
+        self.root.bind(f"<{tk_toggle_gui_key}>", lambda event: self.toggle_gui())
+
+        tk_toggle_overlay_key = self._format_key_for_tkinter(self.keybind_vars['toggle_overlay'].get())
+        self.root.bind(f"<{tk_toggle_overlay_key}>", lambda event: self.toggle_overlay())
+
+        self.update_main_button_text()
+        self.update_status("Keybinds applied successfully.")
+
+    def _format_key_for_tkinter(self, key_string):
+        key_string = key_string.lower()
+        if key_string.startswith('f') and key_string[1:].isdigit():
+            return f"F{key_string[1:]}"
+        return key_string
 
     def toggle_gui(self):
         self.root.after(0, self._toggle_gui_thread_safe)
@@ -235,7 +263,11 @@ class DigTool:
     def start_area_selection(self):
         self.root.iconify()
         self.selection_overlay = tk.Toplevel()
-        self.selection_overlay.attributes('-fullscreen', True, '-alpha', 0.2, '-topmost', True)
+        screen_width, screen_height = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.selection_overlay.geometry(f"{screen_width}x{screen_height}+0+0")
+        self.selection_overlay.overrideredirect(True)
+        self.selection_overlay.attributes('-alpha', 0.2)
+        self.selection_overlay.attributes('-topmost', True)
         self.selection_overlay.configure(bg='blue', cursor='crosshair')
         self.selection_rect = tk.Frame(self.selection_overlay, bg='red', highlightthickness=1,
                                        highlightbackground='white')
@@ -268,7 +300,8 @@ class DigTool:
     def start_sell_button_selection(self):
         self.root.iconify()
         self.sell_selection_overlay = tk.Toplevel()
-        self.sell_selection_overlay.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
+        self.sell_selection_overlay.attributes('-alpha', 0.3)
+        self.sell_selection_overlay.state('zoomed')
         self.sell_selection_overlay.configure(bg='red', cursor='crosshair')
 
         instruction_label = Label(self.sell_selection_overlay,
@@ -288,7 +321,8 @@ class DigTool:
     def start_cursor_position_selection(self):
         self.root.iconify()
         self.cursor_selection_overlay = tk.Toplevel()
-        self.cursor_selection_overlay.attributes('-fullscreen', True, '-alpha', 0.3, '-topmost', True)
+        self.cursor_selection_overlay.attributes('-alpha', 0.3)
+        self.cursor_selection_overlay.state('zoomed')
         self.cursor_selection_overlay.configure(bg='blue', cursor='crosshair')
 
         instruction_label = Label(self.cursor_selection_overlay,
@@ -500,6 +534,7 @@ class DigTool:
     def log_click_debug(self, click_num, line_pos, velocity, acceleration, sweet_spot_start, sweet_spot_end,
                         prediction_used, confidence, screenshot_filename):
         if not self.get_param('debug_clicks_enabled'):
+            print("[DEBUG] log_click_debug: Debug clicks disabled, returning.")
             return
         try:
             timestamp = int(time.time())
@@ -511,10 +546,12 @@ class DigTool:
 
             log_entry = f"{click_num:03d} | {timestamp} | {line_pos:4d} | {velocity:6.1f} | {acceleration:6.1f} | {sweet_spot_range:>10} | {click_type:>10} | {confidence:4.2f} | {screenshot_filename}\n"
 
+            print(f"[DEBUG] log_click_debug: Attempting to write log entry: {log_entry.strip()}")
             with open(self.debug_log_path, 'a') as f:
                 f.write(log_entry)
+            print("[DEBUG] log_click_debug: Log entry written successfully.")
         except Exception as e:
-            print(f"Error logging click debug: {e}")
+            print(f"[ERROR] Error logging click debug: {e}")
 
     def update_status(self, text):
         if self.root.winfo_exists():
@@ -529,11 +566,15 @@ class DigTool:
         if self.get_param('use_custom_cursor') and self.cursor_position:
             try:
                 current_pos = self.cursor_position
-                ctypes.windll.user32.SetCursorPos(*current_pos)
+                from pynput.mouse import Controller
+                mouse = Controller()
+                mouse.position = current_pos
                 time.sleep(0.01)
             except Exception as e:
                 print(f"Error setting cursor position: {e}")
 
+        
+        print(f"[DEBUG] Attempting click at {time.time()}")
         send_click()
         self.last_click_time = time.time() * 1000
         self.click_count += 1
@@ -542,10 +583,15 @@ class DigTool:
     def save_debug_screenshot(self, screenshot, line_pos, sweet_spot_start, sweet_spot_end, zone_y2_cached, velocity,
                               acceleration, prediction_used=False, confidence=0.0):
         if not self.get_param('debug_clicks_enabled'):
+            print("[DEBUG] save_debug_screenshot: Debug clicks disabled, returning.")
             return
 
         try:
             self.ensure_debug_dir()
+            if not os.path.exists(self.debug_dir):
+                print(f"[ERROR] save_debug_screenshot: Debug directory {self.debug_dir} does not exist after ensure_debug_dir.")
+                return
+
             debug_img = screenshot.copy()
             height = debug_img.shape[0]
 
@@ -562,13 +608,15 @@ class DigTool:
 
             filename = f"click_{self.click_count + 1:03d}_{int(time.time())}.jpg"
             filepath = os.path.join(self.debug_dir, filename)
+            print(f"[DEBUG] Attempting to save screenshot to: {filepath}")
             cv2.imwrite(filepath, debug_img)
+            print(f"[DEBUG] Successfully saved screenshot: {filename}")
 
             self.log_click_debug(self.click_count + 1, line_pos, velocity, acceleration, sweet_spot_start,
                                  sweet_spot_end,
                                  prediction_used, confidence, filename)
         except Exception as e:
-            print(f"Error saving debug screenshot: {e}")
+            print(f"[ERROR] Error saving debug screenshot: {e}")
 
     def run_main_loop(self):
         target_fps = 120
@@ -761,6 +809,7 @@ class DigTool:
 
                 if should_click:
                     if self.get_param('debug_clicks_enabled'):
+                        print("Calling save_debug_screenshot...")
                         self.save_debug_screenshot(screenshot, line_pos, sweet_spot_start, sweet_spot_end,
                                                    zone_y2_cached,
                                                    velocity, acceleration, prediction_used, confidence)
