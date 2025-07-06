@@ -4,7 +4,7 @@ from interface.components import CollapsiblePane, AccordionManager, Tooltip
 
 
 class CollapsibleSubsection:
-    def __init__(self, parent, title, bg_color="#f0f0f0"):
+    def __init__(self, parent, title, bg_color="#ffffff"):
         self.parent = parent
         self.title = title
         self.bg_color = bg_color
@@ -17,7 +17,7 @@ class CollapsibleSubsection:
         self.header.pack(fill='x')
 
         self.toggle_btn = Button(self.header, text=f"▶ {title}", font=("Segoe UI", 9, 'bold'),
-                                 bg=bg_color, fg="#333333", relief='flat', anchor='w',
+                                 bg=bg_color, fg="#FFFFFF", relief='flat', anchor='w',
                                  command=self.toggle, pady=2, padx=8)
         self.toggle_btn.pack(fill='x')
 
@@ -39,10 +39,10 @@ class MainWindow:
         self.dig_tool = dig_tool_instance
 
     def create_ui(self):
-        BG_COLOR = "#f0f0f0"  # Main background - light gray
-        FRAME_BG = "#ffffff"  # Frame backgrounds - white
-        TEXT_COLOR = "#000000"  # Primary text - black
-        BTN_BG = "#e1e1e1"  # Button background - light gray
+        BG_COLOR = "#000000"  # Main background - light gray
+        FRAME_BG = "#000000"  # Frame backgrounds - white
+        TEXT_COLOR = "#FFFFFF"  # Primary text - black
+        BTN_BG = "#000000"  # Button background - light gray
         FONT_FAMILY = "Segoe UI"  # Primary font
 
         SECTION_PADY = 5
@@ -74,15 +74,15 @@ class MainWindow:
 
         # Status items - stacked vertically
         self.dig_tool.area_info_label = Label(info_panel, text="Game Area: Not set", font=(FONT_FAMILY, 8),
-                                              bg=FRAME_BG, fg="#666666", anchor='w')
+                                              bg=FRAME_BG, fg="#FFFFFF", anchor='w')
         self.dig_tool.area_info_label.pack(fill='x', padx=12, pady=2)
 
         self.dig_tool.sell_info_label = Label(info_panel, text="Sell Button: Not set", font=(FONT_FAMILY, 8),
-                                              bg=FRAME_BG, fg="#666666", anchor='w')
+                                              bg=FRAME_BG, fg="#FFFFFF", anchor='w')
         self.dig_tool.sell_info_label.pack(fill='x', padx=12, pady=2)
 
         self.dig_tool.cursor_info_label = Label(info_panel, text="Cursor Position: Not set", font=(FONT_FAMILY, 8),
-                                                bg=FRAME_BG, fg="#666666", anchor='w')
+                                                bg=FRAME_BG, fg="#FFFFFF", anchor='w')
         self.dig_tool.cursor_info_label.pack(fill='x', padx=12, pady=(2, 8))
 
         actions_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
@@ -132,14 +132,14 @@ class MainWindow:
         self.dig_tool.accordion = AccordionManager(self.dig_tool)
 
         panes_config = [
-            ("Detection", "#e8f4f8"),  # Light blue - detection settings
+            ("Detection", "#000000"),  # Light blue - detection settings
             ("Behavior", FRAME_BG),  # White - behavior settings
-            ("Auto-Sell", "#fff8e8"),  # Light yellow - auto-sell settings
-            ("Discord", "#f8e8f8"),  # Light pink - discord settings
-            ("Window", "#f8f0e8"),  # Light orange - window settings
-            ("Debug", "#f8e8e8"),  # Light red - debug settings
-            ("Hotkeys", "#e8e8f8"),  # Light purple - hotkey settings
-            ("Settings", "#e8f8f0")  # Light green - settings
+            ("Auto-Sell", "#000000"),  # Light yellow - auto-sell settings
+            ("Discord", "#000000"),  # Light pink - discord settings
+            ("Window", "#000000"),  # Light orange - window settings
+            ("Debug", "#000000"),  # Light red - debug settings
+            ("Hotkeys", "#000000"),  # Light purple - hotkey settings
+            ("Settings", "#000000")  # Light green - settings
         ]
 
         panes = {}
@@ -239,6 +239,50 @@ class MainWindow:
             Tooltip(check, tooltip_text)
 
             return check
+        def create_dual_checkbox_param(parent, text1, var_key1, text2, var_key2):
+            frame = Frame(parent, bg=parent.cget('bg'))
+            frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
+
+            # Checkbox 1 setup
+            default_value1 = self.dig_tool.settings_manager.get_default_value(var_key1)
+            if var_key1 not in self.dig_tool.param_vars:
+                self.dig_tool.param_vars[var_key1] = tk.BooleanVar(value=default_value1)
+                self.dig_tool.last_known_good_params[var_key1] = default_value1
+
+            check1 = Checkbutton(frame, text=text1, variable=self.dig_tool.param_vars[var_key1], bg=parent.cget('bg'),
+                                 fg=TEXT_COLOR, selectcolor=BG_COLOR, activebackground=parent.cget('bg'),
+                                 activeforeground=TEXT_COLOR, font=(FONT_FAMILY, 9), anchor='w')
+            check1.pack(side=tk.LEFT, fill='x', expand=True)
+            Tooltip(check1, self.dig_tool.settings_manager.get_description(var_key1))
+
+            # Checkbox 2 setup
+            default_value2 = self.dig_tool.settings_manager.get_default_value(var_key2)
+            if var_key2 not in self.dig_tool.param_vars:
+                self.dig_tool.param_vars[var_key2] = tk.BooleanVar(value=default_value2)
+                self.dig_tool.last_known_good_params[var_key2] = default_value2
+
+            check2 = Checkbutton(frame, text=text2, variable=self.dig_tool.param_vars[var_key2], bg=parent.cget('bg'),
+                                 fg=TEXT_COLOR, selectcolor=BG_COLOR, activebackground=parent.cget('bg'),
+                                 activeforeground=TEXT_COLOR, font=(FONT_FAMILY, 9), anchor='w')
+            check2.pack(side=tk.LEFT, fill='x', expand=True, padx=(10, 0)) # Add some padding between them
+            Tooltip(check2, self.dig_tool.settings_manager.get_description(var_key2))
+
+            # --- Trace functions to handle mutual exclusion ---
+            def on_checkbox1_change(*args):
+                if self.dig_tool.param_vars[var_key1].get():
+                    # If checkbox 1 is checked, uncheck checkbox 2
+                    self.dig_tool.param_vars[var_key2].set(False)
+
+            def on_checkbox2_change(*args):
+                if self.dig_tool.param_vars[var_key2].get():
+                    # If checkbox 2 is checked, uncheck checkbox 1
+                    self.dig_tool.param_vars[var_key1].set(False)
+
+            # Attach the trace functions to the BooleanVars
+            self.dig_tool.param_vars[var_key1].trace_add('write', on_checkbox1_change)
+            self.dig_tool.param_vars[var_key2].trace_add('write', on_checkbox2_change)
+
+            return check1, check2
 
         def create_section_button(parent, text, command):
             btn_frame = Frame(parent, bg=parent.cget('bg'))
@@ -260,7 +304,7 @@ class MainWindow:
         create_param_entry(panes['behavior'].sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
 
         # Prediction subsection - Light green background (#e8f5e8)
-        pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings", "#e8f5e8")
+        pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings", "#000000")
         create_checkbox_param(pred_subsection.content, "Enable Prediction", 'prediction_enabled')
         create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
         create_param_entry(pred_subsection.content, "Max Prediction (ms):", 'max_prediction_time')
@@ -268,15 +312,16 @@ class MainWindow:
         create_param_entry(pred_subsection.content, "Prediction Confidence:", 'prediction_confidence_threshold')
 
         # Auto-walk subsection - Light blue background (#e8f0ff)
-        walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings", "#e8f0ff")
-        create_checkbox_param(walk_subsection.content, "Enable Auto-Walk", 'auto_walk_enabled')
+        walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings", "#000000")
+        create_dual_checkbox_param(walk_subsection.content, "Enable Auto-Walk", 'auto_walk_enabled', "Enable Ranged Auto-Walk", 'ranged_auto_walk_enabled')
+        
         create_param_entry(walk_subsection.content, "Walk Duration (ms):", 'walk_duration')
-
+        create_dual_param_entry(walk_subsection.content, "Walk Min Duration (ms)", 'walk_min_duration', "Walk Max Duration (ms)", 'walk_max_duration')
         # Walk pattern selector
-        pattern_frame = Frame(walk_subsection.content, bg="#e8f0ff")
+        pattern_frame = Frame(walk_subsection.content, bg="#000000")
         pattern_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
 
-        Label(pattern_frame, text="Walk Pattern:", font=(FONT_FAMILY, 9), bg="#e8f0ff", fg=TEXT_COLOR,
+        Label(pattern_frame, text="Walk Pattern:", font=(FONT_FAMILY, 9), bg="#000000", fg=TEXT_COLOR,
               width=LABEL_WIDTH, anchor='w').pack(side='left')
 
         self.dig_tool.walk_pattern_var = tk.StringVar(value="circle")
@@ -286,7 +331,7 @@ class MainWindow:
         pattern_combo.pack(side='right', ipady=3)
 
         # Cursor subsection - Light orange background (#fff0e8)
-        cursor_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Cursor Settings", "#fff0e8")
+        cursor_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Cursor Settings", "#000000")
         create_checkbox_param(cursor_subsection.content, "Use Custom Cursor Position", 'use_custom_cursor')
 
         # Auto-Sell pane - Light yellow background (#fff8e8)
@@ -328,7 +373,7 @@ class MainWindow:
             self.dig_tool.keybind_vars[key_name] = tk.StringVar(value=default_value)
 
             def set_hotkey_thread(key_var, button):
-                button.config(text="Press any key...", state=tk.DISABLED, bg="#0078D4", fg="#ffffff")
+                button.config(text="Press any key...", state=tk.DISABLED, bg="#000000", fg="#ffffff")
                 self.dig_tool.root.update_idletasks()
                 try:
                     import keyboard

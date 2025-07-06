@@ -1,5 +1,8 @@
 import warnings
 import os
+import autoit
+import os
+print(os.path.dirname(autoit.__file__))
 
 from utils.system_utils import check_dependencies
 
@@ -681,10 +684,10 @@ class DigTool:
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
 
-            if self.running and self.get_param('auto_walk_enabled') and not self.automation_manager.is_selling:
+            if self.running and (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')) and not self.automation_manager.is_selling:
 
                 if auto_walk_state == "move":
-                    if (self.get_param('auto_sell_enabled') and self.automation_manager.sell_button_position and
+                    if ((self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')) and self.automation_manager.sell_button_position and
                             self.dig_count > 0 and self.dig_count % self.get_param('sell_every_x_digs') == 0 and
                             dig_completed_time > 0 and current_time_ms - dig_completed_time >= post_dig_delay):
                         threading.Thread(target=self.automation_manager.perform_auto_sell, daemon=True).start()
@@ -699,6 +702,7 @@ class DigTool:
 
                         auto_walk_state = "click_to_start"
                         move_completed_time = current_time_ms + self.get_param('walk_duration') + 300
+                        print(f'[Auto Walk Enabled] Walk Duration:{self.get_param('walk_duration')}')
 
                 elif auto_walk_state == "click_to_start" and current_time_ms >= move_completed_time and not self.automation_manager.is_selling:
                     if not self.click_lock.locked():
@@ -717,7 +721,7 @@ class DigTool:
                     pass
 
             should_allow_clicking = True
-            if self.get_param('auto_walk_enabled'):
+            if (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')):
                 should_allow_clicking = auto_walk_state == "digging" and not self.automation_manager.is_selling
 
             if (self.running and should_allow_clicking and current_time_ms >= self.blind_until and
@@ -768,7 +772,7 @@ class DigTool:
                     self.click_lock.acquire()
                     threading.Thread(target=self.perform_click, args=(click_delay,)).start()
 
-            if (self.get_param('auto_walk_enabled') and auto_walk_state == "digging" and
+            if ((self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')) and auto_walk_state == "digging" and
                     raw_zone_x is None and self.frames_since_last_zone_detection > 30):
                 self.dig_count += 1
                 dig_completed_time = current_time_ms

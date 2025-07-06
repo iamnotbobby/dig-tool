@@ -1,6 +1,7 @@
 import time
 import threading
 import autoit
+import random
 from pynput.keyboard import Controller as KeyboardController
 
 
@@ -31,13 +32,24 @@ class AutomationManager:
             return "WALKING"
         elif self.dig_tool.get_param('auto_walk_enabled'):
             return "AUTO WALKING"
+        elif self.dig_tool.get_param('ranged_auto_walk_enabled'):
+            return "RANGED AUTO WALKING"
         else:
             return "ACTIVE"
 
     def perform_walk_step(self, direction):
         try:
             self.is_walking = True
-            walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+
+            if self.dig_tool.get_param('auto_walk_enabled'):
+                walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+                print(f"[Auto Walk Enabled] Walk Duration:{walk_duration}")
+            elif self.dig_tool.get_param('ranged_auto_walk_enabled'):
+                walk_min_duration = self.dig_tool.get_param('walk_min_duration')
+                walk_max_duration = self.dig_tool.get_param('walk_max_duration')
+                walk_range_duration = random.randint(walk_min_duration, walk_max_duration)
+                walk_duration = walk_range_duration / 1000
+                print(f"[Ranged Auto Walk Enabled] Walk Duration:{walk_duration}")
             self.keyboard_controller.press(direction)
             time.sleep(walk_duration)
             self.keyboard_controller.release(direction)
