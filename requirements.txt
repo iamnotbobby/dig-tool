@@ -10,3 +10,4 @@ PyInstaller
 pynput
 requests
 mss
+bettercam
