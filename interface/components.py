@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import Label, Frame, ttk
-import win32gui, win32con
+
 from PIL import Image, ImageTk
 import cv2
 
@@ -127,17 +127,7 @@ class GameOverlay:
         self.overlay.attributes('-alpha', 0.9)
         self.overlay.configure(bg='black', bd=2, relief='solid')
 
-        icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-        if icon:
-            self.overlay.iconphoto(False, icon)
-
-        try:
-            hwnd = self.overlay.winfo_id()
-            style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-            style |= win32con.WS_EX_TOOLWINDOW
-            win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style)
-        except Exception:
-            pass
+        
 
         Label(self.overlay, text="Dig Tool", fg='white', bg='black', font=('Consolas', 11, 'bold')).pack(pady=(5, 5))
 

@@ -6,13 +6,14 @@ PyInstaller.__main__.run([
     '--windowed',
     '--name=DigTool',
     '--icon=assets/icon.ico',
-    '--add-data=assets;assets',
-    '--add-data=core;core',
-    '--add-data=interface;interface',
-    '--add-data=utils;utils',
+    '--add-data=assets:assets',
+    '--add-data=core:core',
+    '--add-data=interface:interface',
+    '--add-data=utils:utils',
     '--distpath=dist',
     '--workpath=build',
     '--specpath=.',
-    '--collect-all=autoit',
-    '--clean'
+    
+    '--clean',
+    '--noconfirm'
 ])
