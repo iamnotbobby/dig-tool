@@ -23,6 +23,7 @@ import threading
 import time
 import json
 from PIL import Image, ImageTk
+import bettercam
 import keyboard
 import queue
 
@@ -30,7 +31,6 @@ from interface.components import GameOverlay
 from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from interface.custom_pattern_window import CustomPatternWindow
-from utils.screen_capture import ScreenCapture
 from utils.system_utils import send_click, check_display_scale, measure_system_latency
 from utils.debug_logger import logger, save_debug_screenshot, log_click_debug
 from core.detection import find_line_position, VelocityCalculator, get_hsv_bounds
@@ -77,7 +77,7 @@ class DigTool:
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
-        self.screen_grabber = ScreenCapture()
+        self.cam = bettercam.create(output_color="BGR")
         self.click_count = 0
         self.dig_count = 0
         self.click_lock = threading.Lock()
@@ -124,6 +124,11 @@ class DigTool:
 
         self._click_thread_pool = []
         self._max_click_threads = 3
+
+        # Benchmarking
+        # self.frame_times = []
+        # self.last_report_time = time.time()
+        # self.report_interval = 1
 
         self.main_window.create_ui()
         
@@ -232,7 +237,8 @@ class DigTool:
         else:
             try:
                 keyboard.unhook_all()
-                self.screen_grabber.close()
+                self.cam.stop()
+                self.cam.release()
             except Exception as e:
                 logger.error(f"Error during final cleanup: {e}")
             finally:
@@ -885,7 +891,7 @@ class DigTool:
             should_process_zones = frame_skip_counter % process_every_nth_frame == 0
 
             capture_start = time.perf_counter()
-            screenshot = self.screen_grabber.capture(bbox=self.game_area, region_key="main_game")
+            screenshot = self.cam.grab(region=(tuple(self.game_area)))
             capture_time = time.perf_counter() - capture_start
             
             if screenshot is None:
@@ -1195,6 +1201,19 @@ class DigTool:
                     pass
 
             elapsed = time.perf_counter() - start_time
+
+            # Benchmarking
+
+            # self.frame_times.append(elapsed)
+            # now = time.time()
+            # if now - self.last_report_time >= self.report_interval:
+            #     if self.frame_times:
+            #         avg_time = sum(self.frame_times) / len(self.frame_times)
+            #         avg_fps = 1.0 / avg_time if avg_time > 0 else 0
+            #         print(f"[Benchmark] Avg FPS: {avg_fps:.2f}, Avg frame time: {avg_time*1000:.2f} ms over {len(self.frame_times)} frames")
+            #         self.frame_times.clear()
+            #     self.last_report_time = now
+            
             if screenshot_delay > elapsed: time.sleep(screenshot_delay - elapsed)
 
     def run(self):
