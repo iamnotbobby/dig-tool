@@ -653,6 +653,8 @@ class MainWindow:
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
+        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
+                              'include_screenshot_in_discord')
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", self.dig_tool.test_discord_ping)
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
