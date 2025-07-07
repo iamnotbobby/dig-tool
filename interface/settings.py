@@ -49,6 +49,7 @@ class SettingsManager:
             'include_discord_in_settings': False,
             'shovel_equip_mode': 'double',
             'click_method': 'win32api',
+            'include_screenshot_in_discord': False
         }
 
         self.param_descriptions = {
@@ -86,6 +87,7 @@ class SettingsManager:
             'include_discord_in_settings': "When enabled, Discord webhook and user ID will be included in regular settings files. When disabled, they are excluded for security.",
             'shovel_equip_mode': "Whether to press the shovel slot key once ('single') or twice ('double') when re-equipping.",
             'click_method': "Method used for sending clicks: 'win32api' or 'ahk'.",
+            'include_screenshot_in_discord': "When enabled, screenshots of your game will be included in Discord milestone notifications."
         }
 
         self.default_keybinds = {
