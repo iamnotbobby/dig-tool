@@ -219,7 +219,7 @@ class DigTool:
                 user_id = self.param_vars.get('user_id', tk.StringVar()).get()
                 if webhook_url:
                     self.discord_notifier.set_webhook_url(webhook_url)
-                    self.discord_notifier.send_shutdown_notification(user_id if user_id else None)
+                    threading.Thread(target=self.discord_notifier.send_shutdown_notification, args=(user_id if user_id else None), daemon=True).start()
             except:
                 pass
 
@@ -598,6 +598,7 @@ class DigTool:
     def test_discord_ping(self):
         try:
             webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+            include_screenshot = self.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
             user_id = self.param_vars.get('user_id', tk.StringVar()).get()
 
             if not webhook_url:
@@ -607,7 +608,8 @@ class DigTool:
             self.update_status("Testing Discord ping...")
             self.discord_notifier.set_webhook_url(webhook_url)
 
-            success = self.discord_notifier.test_webhook(user_id if user_id else None)
+            success = threading.Thread(target=self.discord_notifier.test_webhook, args=(user_id if user_id else None, include_screenshot), daemon=True)
+            success.start()
 
             if success:
                 self.update_status("Discord ping test completed successfully!")
@@ -620,6 +622,7 @@ class DigTool:
     def check_milestone_notifications(self):
         try:
             webhook_url = self.param_vars.get('webhook_url', tk.StringVar()).get()
+            include_screenshot = self.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
             user_id = self.param_vars.get('user_id', tk.StringVar()).get()
             milestone_interval = self.param_vars.get('milestone_interval', tk.IntVar()).get()
 
@@ -630,11 +633,12 @@ class DigTool:
                     self.dig_count % milestone_interval == 0 and
                     self.dig_count != self.last_milestone_notification):
                 self.discord_notifier.set_webhook_url(webhook_url)
-                self.discord_notifier.send_milestone_notification(
+                threading.Thread(target=self.discord_notifier.send_milestone_notification, args=(
                     self.dig_count,
                     self.click_count,
-                    user_id if user_id else None
-                )
+                    user_id if user_id else None,
+                    include_screenshot
+                ), daemon=True).start()
                 self.last_milestone_notification = self.dig_count
 
         except Exception as e:
@@ -757,7 +761,7 @@ class DigTool:
                 user_id = self.param_vars.get('user_id', tk.StringVar()).get()
                 if webhook_url:
                     self.discord_notifier.set_webhook_url(webhook_url)
-                    self.discord_notifier.send_startup_notification(user_id if user_id else None)
+                    threading.Thread(target=self.discord_notifier.send_startup_notification, args=(user_id), daemon=True).start()
             except:
                 pass
 
@@ -770,7 +774,7 @@ class DigTool:
                 user_id = self.param_vars.get('user_id', tk.StringVar()).get()
                 if webhook_url:
                     self.discord_notifier.set_webhook_url(webhook_url)
-                    self.discord_notifier.send_shutdown_notification(user_id if user_id else None)
+                    threading.Thread(target=self.discord_notifier.send_shutdown_notification, args=(user_id), daemon=True).start()
             except:
                 pass
 
@@ -808,9 +812,6 @@ class DigTool:
             self._click_thread_pool.append(click_thread)
             click_thread.start()
 
-    def _instant_click(self):
-        if not self.running:
-            return
     def _instant_click(self):
         if not self.running:
             return
