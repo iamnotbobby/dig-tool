@@ -570,20 +570,20 @@ class MainWindow:
         pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings",
                                                 "#e8f5e8")  # Light green for predictions
         create_checkbox_param(pred_subsection.content, "Enable Prediction", 'prediction_enabled')
-        create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
+        # create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
         
         # Manual latency measurement button
-        latency_button_frame = Frame(pred_subsection.content)
-        latency_button_frame.pack(fill='x', pady=2)
+        # latency_button_frame = Frame(pred_subsection.content)
+        # latency_button_frame.pack(fill='x', pady=2)
         
-        latency_measure_btn = ttk.Button(latency_button_frame, text="Measure Latency", 
-                                        command=lambda: self.dig_tool.manual_latency_measurement())
-        latency_measure_btn.pack(side='left', padx=(0, 5))
+        # latency_measure_btn = ttk.Button(latency_button_frame, text="Measure Latency", 
+        #                                 command=lambda: self.dig_tool.manual_latency_measurement())
+        # latency_measure_btn.pack(side='left', padx=(0, 5))
         
-        Tooltip(latency_measure_btn, "Manually measure system latency. This will test your system's input/display latency and update the System Latency setting.")
+        # Tooltip(latency_measure_btn, "Manually measure system latency. This will test your system's input/display latency and update the System Latency setting.")
         
-        self.latency_status_label = Label(latency_button_frame, text="", fg='gray', font=('Segoe UI', 8))
-        self.latency_status_label.pack(side='left', padx=(5, 0))
+        # self.latency_status_label = Label(latency_button_frame, text="", fg='gray', font=('Segoe UI', 8))
+        # self.latency_status_label.pack(side='left', padx=(5, 0))
         
         create_param_entry(pred_subsection.content, "Game FPS:", 'target_fps')
         create_param_entry(pred_subsection.content, "Prediction Confidence:", 'prediction_confidence_threshold')

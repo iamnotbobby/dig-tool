@@ -21,7 +21,6 @@ class SettingsManager:
             'min_zone_height_percent': 100,
             'sweet_spot_width_percent': 15,
             'prediction_enabled': True,
-            'system_latency': 'auto',
             'prediction_confidence_threshold': 0.6,
             'zone_smoothing_factor': 0.8,
             'line_exclusion_radius': 10,
@@ -63,7 +62,6 @@ class SettingsManager:
             'sweet_spot_width_percent': "The width of the clickable 'sweet spot' in the middle of the zone. Smaller = more precise clicking required.",
             'post_click_blindness': "How long to wait after clicking before scanning again (milliseconds). Prevents multiple rapid clicks.",
             'prediction_enabled': "Predicts the line's movement to click earlier, compensating for input/display latency.",
-            'system_latency': "Your system's input/display latency in milliseconds. Set to 'auto' for automatic measurement at startup, or enter a custom value. Use the 'Measure Latency' button to manually measure.",
             'prediction_confidence_threshold': "How confident the prediction must be (0.0-1.0). Higher = more conservative prediction.",
             'main_on_top': "Keep the main window always on top of other windows.",
             'preview_on_top': "Keep the preview window always on top of other windows.",
@@ -202,12 +200,7 @@ class SettingsManager:
 
     def validate_param_value(self, key, value):
         try:
-            if key == 'system_latency':
-                if isinstance(value, str) and value.strip().lower() == 'auto':
-                    return True
-                val = int(value)
-                return val >= 0
-            elif key in ['line_sensitivity', 'zone_min_width', 'saturation_threshold',
+            if key in ['line_sensitivity', 'zone_min_width', 'saturation_threshold',
                        'min_zone_height_percent', 'sweet_spot_width_percent',
                        'post_click_blindness', 'max_zone_width_percent',
                        'sell_every_x_digs', 'sell_delay', 'walk_duration',
@@ -562,6 +555,7 @@ class SettingsManager:
 
                 filename = os.path.basename(filepath)
                 self.dig_tool.update_status(f"Settings loaded from {filename} - See details window")
+                self.dig_tool.trigger_game_area_changed()
 
             except json.JSONDecodeError:
                 feedback.show_error("Invalid JSON", "The selected file contains invalid JSON data")
@@ -639,6 +633,7 @@ class SettingsManager:
                 feedback.operation_complete(success=True)
 
                 self.dig_tool.update_status("Settings reset to defaults - See details window")
+                self.dig_tool.trigger_game_area_changed()
 
             except Exception as e:
                 feedback.show_error("Reset Failed", str(e))

@@ -224,6 +224,9 @@ class GameOverlay:
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
 
+        self.benchmark_label = Label(stats_frame, text="BENCH: 0 FPS", fg='maroon1', bg='black', font=('Consolas', 9))
+        self.benchmark_label.grid(row=2, column=0, sticky='w')
+
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
         
@@ -306,8 +309,10 @@ class GameOverlay:
 
             velocity = kwargs.get('velocity', 0)
             click_count = kwargs.get('click_count', 0)
+            benchmark_fps = kwargs.get('benchmark_fps', 0)
             self.spd_label.config(text=f"SPD: {velocity:>5.0f}")
             self.clicks_label.config(text=f"CLICKS: {click_count:<5}")
+            self.benchmark_label.config(text=f"BENCH: {benchmark_fps:<5} FPS")
 
             is_pred = self.parent.get_param('prediction_enabled')
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')

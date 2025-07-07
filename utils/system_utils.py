@@ -5,7 +5,9 @@ import numpy as np
 import win32gui, win32ui, win32con, win32api
 import os
 import sys
+import time
 import ctypes
+import bettercam
 import tkinter as tk
 from tkinter import messagebox
 from utils.debug_logger import logger
@@ -538,28 +540,21 @@ def measure_system_latency(game_area=None):
         
         test_iterations = 10
         
-        if game_area:
-            x1, y1, x2, y2 = game_area
-            w, h = x2 - x1, y2 - y1
-            test_region = (x1, y1, x1 + min(w, 200), y1 + min(h, 100))
-        else:
-            test_region = (100, 100, 300, 200)
-        
-        from utils.screen_capture import ScreenCapture
-        test_screen_grabber = ScreenCapture()
-        
+        test_region = game_area or (100, 100, 300, 200)
+
+        cam = bettercam.create(output_color="BGR")
+        if not cam.is_capturing:
+            cam.start(region=(tuple(test_region)), target_fps=240, video_mode=True)
+
         for _ in range(5):
-            test_screen_grabber.capture(bbox=test_region, region_key="latency_warmup")
-            time.sleep(0.002)
-        
-        test_screen_grabber.clear_cache()
+            cam.get_latest_frame()
         
         for i in range(test_iterations):
             pipeline_start = time.perf_counter()
             
             screenshot_start = time.perf_counter()
             try:
-                screenshot = test_screen_grabber.capture(bbox=test_region, region_key=f"latency_test_{i}")
+                screenshot = cam.get_latest_frame()
                 if screenshot is not None:
                     img_array = screenshot
                 else:
@@ -604,6 +599,8 @@ def measure_system_latency(game_area=None):
             
             time.sleep(0.005)
         
+        # cam.stop()
+
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             
@@ -618,8 +615,6 @@ def measure_system_latency(game_area=None):
             click_measurements.append(actual_click_latency)
             
             time.sleep(0.01)
-        
-        test_screen_grabber.close()
         
         def robust_average(measurements):
             if not measurements:
@@ -671,7 +666,7 @@ def measure_system_latency(game_area=None):
         
         safety_margin = total_latency * 0.15
         final_latency = total_latency + safety_margin
-        
+
         return max(5, min(150, int(final_latency)))
         
     except Exception:

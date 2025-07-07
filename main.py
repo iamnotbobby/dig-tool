@@ -72,12 +72,17 @@ class DigTool:
         self.root.after(500, self.perform_initial_latency_measurement)
 
         self.game_area = None
+        self.game_area_changed = False
         self.cursor_position = None
         self.running = False
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
+
+        logger.info(bettercam.device_info())
+        logger.info(bettercam.output_info())
         self.cam = bettercam.create(output_color="BGR")
+
         self.click_count = 0
         self.dig_count = 0
         self.click_lock = threading.Lock()
@@ -126,9 +131,11 @@ class DigTool:
         self._max_click_threads = 3
 
         # Benchmarking
-        # self.frame_times = []
-        # self.last_report_time = time.time()
-        # self.report_interval = 1
+        self.report_interval = 1
+        self.frame_times = []
+        self.last_report_time = time.time()
+        self.last_frame_time = time.perf_counter()
+        self.benchmark_fps = 0
 
         self.main_window.create_ui()
         
@@ -290,6 +297,9 @@ class DigTool:
         if self.main_loop_thread is None:
             self.main_loop_thread = threading.Thread(target=self.run_main_loop, daemon=True)
             self.main_loop_thread.start()
+
+    def trigger_game_area_changed(self):
+        self.game_area_changed = True
 
     def hotkey_listener(self):
         logger.info("Hotkey listener thread started")
@@ -544,6 +554,7 @@ class DigTool:
         x1, y1 = self.drag_start;
         x2, y2 = event.x_root, event.y_root
         self.game_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+        self.game_area_changed = True
         self.selection_overlay.destroy()
         self.root.deiconify()
         self.update_status("Game area set. Press Start to begin.")
@@ -868,7 +879,7 @@ class DigTool:
         frame_skip_counter = 0
         
         while self.preview_active:
-            start_time = time.perf_counter()
+            frame_start_time = time.perf_counter()
             self._update_time_cache()
             current_time_ms = self._current_time_ms_cache
 
@@ -884,6 +895,12 @@ class DigTool:
                 time.sleep(screenshot_delay)
                 continue
 
+            if self.game_area_changed:
+                self.game_area_changed = False
+                if self.cam.is_capturing:
+                    self.cam.stop()
+                self.cam.start(region=(tuple(self.game_area)), target_fps=self.get_param('screenshot_fps'), video_mode=True)
+
             if self.automation_manager.should_re_equip_shovel():
                 self.automation_manager.re_equip_shovel()
 
@@ -891,7 +908,7 @@ class DigTool:
             should_process_zones = frame_skip_counter % process_every_nth_frame == 0
 
             capture_start = time.perf_counter()
-            screenshot = self.cam.grab(region=(tuple(self.game_area)))
+            screenshot = self.cam.get_latest_frame()
             capture_time = time.perf_counter() - capture_start
             
             if screenshot is None:
@@ -1193,78 +1210,73 @@ class DigTool:
                     'automation_status': self.automation_manager.get_current_status(),
                     'sell_count': self.automation_manager.sell_count,
                     'target_engaged': self.target_engaged,
-                    'line_detected': line_pos != -1
+                    'line_detected': line_pos != -1,
+                    'benchmark_fps': self.benchmark_fps,
                 }
                 try:
                     self.results_queue.put_nowait((preview_img, final_mask, overlay_info))
                 except queue.Full:
                     pass
 
-            elapsed = time.perf_counter() - start_time
-
             # Benchmarking
+            now = time.time()
+            frame_time = frame_start_time - self.last_frame_time
+            self.last_frame_time = frame_start_time
 
-            # self.frame_times.append(elapsed)
-            # now = time.time()
-            # if now - self.last_report_time >= self.report_interval:
-            #     if self.frame_times:
-            #         avg_time = sum(self.frame_times) / len(self.frame_times)
-            #         avg_fps = 1.0 / avg_time if avg_time > 0 else 0
-            #         print(f"[Benchmark] Avg FPS: {avg_fps:.2f}, Avg frame time: {avg_time*1000:.2f} ms over {len(self.frame_times)} frames")
-            #         self.frame_times.clear()
-            #     self.last_report_time = now
-            
-            if screenshot_delay > elapsed: time.sleep(screenshot_delay - elapsed)
+            self.frame_times.append(frame_time)
+
+            if now - self.last_report_time >= self.report_interval:
+                if self.frame_times:
+                    avg_frame_time = sum(self.frame_times) / len(self.frame_times)
+                    self.benchmark_fps = int(1.0 / avg_frame_time) if avg_frame_time > 0 else 0
+                    # logger.debug(f"Benchmark: {self.benchmark_fps} FPS (avg frame time: {avg_frame_time*1000:.2f}ms)")
+                    self.frame_times.clear()
+                self.last_report_time = now
 
     def run(self):
         self.root.mainloop()
 
-    def manual_latency_measurement(self):
-        def measure_in_background():
-            try:
-                self.root.after(0, lambda: self.main_window.latency_status_label.config(
-                    text="Measuring...", fg='orange'))
+    # def manual_latency_measurement(self):
+    #     def measure_in_background():
+    #         try:
+    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
+    #                 text="Measuring...", fg='orange'))
                 
-                measured_latency = self.measure_system_latency()
+    #             measured_latency = self.measure_system_latency()
                 
-                self._cached_latency = measured_latency
-                if 'system_latency' in self.param_vars:
-                    self.param_vars['system_latency'].set(measured_latency)
+    #             self._cached_latency = measured_latency
+    #             if 'system_latency' in self.param_vars:
+    #                 self.param_vars['system_latency'].set(measured_latency)
                 
-                self.root.after(0, lambda: self.main_window.latency_status_label.config(
-                    text=f"Measured: {measured_latency}ms", fg='green'))
+    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
+    #                 text=f"Measured: {measured_latency}ms", fg='green'))
                 
-                self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
+    #             self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
                 
-                logger.info(f"Manual latency measurement completed: {measured_latency}ms")
+    #             logger.info(f"Manual latency measurement completed: {measured_latency}ms")
                 
-            except Exception as e:
-                logger.error(f"Error in manual latency measurement: {e}")
-                self.root.after(0, lambda: self.main_window.latency_status_label.config(
-                    text="Error measuring", fg='red'))
-                self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
+    #         except Exception as e:
+    #             logger.error(f"Error in manual latency measurement: {e}")
+    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
+    #                 text="Error measuring", fg='red'))
+    #             self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
         
-        threading.Thread(target=measure_in_background, daemon=True).start()
+    #     threading.Thread(target=measure_in_background, daemon=True).start()
 
     def perform_initial_latency_measurement(self):
-        if 'system_latency' in self.param_vars:
-            try:
-                value = self.param_vars['system_latency'].get()
-                if value == 'auto' or (isinstance(value, str) and value.strip().lower() == 'auto'):
-                    logger.info("Performing initial system latency measurement...")
-                    measured_latency = self.measure_system_latency()
-                    self._cached_latency = measured_latency
-                    self.param_vars['system_latency'].set(measured_latency)
-                    logger.info(f"System latency measured: {measured_latency}ms")
-                    return measured_latency
-            except Exception as e:
-                logger.warning(f"Could not measure system latency automatically: {e}")
+        try:
+            logger.info("Performing initial system latency measurement...")
+            measured_latency = self.measure_system_latency()
+            self._cached_latency = measured_latency
+            logger.info(f"System latency measured: {measured_latency}ms")
+            return measured_latency
+        except Exception as e:
+            logger.warning(f"Could not measure system latency automatically: {e}")
 
-                default_latency = 50
-                self._cached_latency = default_latency
-                self.param_vars['system_latency'].set(default_latency)
-                return default_latency
-        return None
+            default_latency = 50
+            self._cached_latency = default_latency
+            self.param_vars['system_latency'].set(default_latency)
+            return default_latency
 
     def get_cached_system_latency(self):
         if hasattr(self, '_cached_latency') and hasattr(self, '_latency_measurement_time'):
@@ -1293,6 +1305,7 @@ class DigTool:
             return measured_latency
         
         return self._cached_latency
+
 
 
 if __name__ == "__main__":
