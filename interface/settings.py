@@ -555,7 +555,6 @@ class SettingsManager:
 
                 filename = os.path.basename(filepath)
                 self.dig_tool.update_status(f"Settings loaded from {filename} - See details window")
-                self.dig_tool.trigger_game_area_changed()
 
             except json.JSONDecodeError:
                 feedback.show_error("Invalid JSON", "The selected file contains invalid JSON data")
@@ -633,7 +632,6 @@ class SettingsManager:
                 feedback.operation_complete(success=True)
 
                 self.dig_tool.update_status("Settings reset to defaults - See details window")
-                self.dig_tool.trigger_game_area_changed()
 
             except Exception as e:
                 feedback.show_error("Reset Failed", str(e))

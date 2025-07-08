@@ -154,72 +154,6 @@ def send_click():
     else:
         return send_click_win32api()
 
-
-class ScreenCapture:
-    def __init__(self):
-        self.hwnd = win32gui.GetDesktopWindow()
-        self.hwindc = None
-        self.srcdc = None
-        self.memdc = None
-        self.bmp = None
-        self._initialized = False
-        self._last_bbox = None
-        self._last_width = 0
-        self._last_height = 0
-
-    def _initialize_dc(self, width, height):
-        try:
-            self.hwindc = win32gui.GetWindowDC(self.hwnd)
-            self.srcdc = win32ui.CreateDCFromHandle(self.hwindc)
-            self.memdc = self.srcdc.CreateCompatibleDC()
-            self.bmp = win32ui.CreateBitmap()
-            self.bmp.CreateCompatibleBitmap(self.srcdc, width, height)
-            self.memdc.SelectObject(self.bmp)
-            self._initialized = True
-            self._last_width = width
-            self._last_height = height
-        except Exception:
-            self._cleanup()
-            return False
-        return True
-
-    def _cleanup(self):
-        try:
-            if self.srcdc: self.srcdc.DeleteDC()
-            if self.memdc: self.memdc.DeleteDC()
-            if self.hwindc: win32gui.ReleaseDC(self.hwnd, self.hwindc)
-            if self.bmp: win32gui.DeleteObject(self.bmp.GetHandle())
-        except Exception:
-            pass
-        self._initialized = False
-
-    def capture(self, bbox=None):
-        if not bbox: return None
-        left, top, right, bottom = bbox
-        width, height = right - left, bottom - top
-        if width <= 0 or height <= 0: return None
-
-        if (self._last_bbox != bbox or not self._initialized or
-                width != self._last_width or height != self._last_height):
-            self._cleanup()
-            self._last_bbox = bbox
-
-        if not self._initialized:
-            if not self._initialize_dc(width, height): return None
-
-        try:
-            self.memdc.BitBlt((0, 0), (width, height), self.srcdc, (left, top), win32con.SRCCOPY)
-            signedIntsArray = self.bmp.GetBitmapBits(True)
-            img = np.frombuffer(signedIntsArray, dtype='uint8').reshape((height, width, 4))
-            return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        except Exception:
-            self._cleanup()
-            return None
-
-    def close(self):
-        self._cleanup()
-
-
 def get_window_list():
     windows = []
 
@@ -284,38 +218,6 @@ def find_window_by_title(title_pattern, exact_match=False):
                 return window
 
     return None
-
-
-def capture_window(hwnd):
-    try:
-        rect = win32gui.GetWindowRect(hwnd)
-        width = rect[2] - rect[0]
-        height = rect[3] - rect[1]
-
-        hwindc = win32gui.GetWindowDC(hwnd)
-        srcdc = win32ui.CreateDCFromHandle(hwindc)
-        memdc = srcdc.CreateCompatibleDC()
-        bmp = win32ui.CreateBitmap()
-        bmp.CreateCompatibleBitmap(srcdc, width, height)
-        memdc.SelectObject(bmp)
-
-        memdc.BitBlt((0, 0), (width, height), srcdc, (0, 0), win32con.SRCCOPY)
-
-        signedIntsArray = bmp.GetBitmapBits(True)
-        img = np.frombuffer(signedIntsArray, dtype='uint8').reshape((height, width, 4))
-        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-        srcdc.DeleteDC()
-        memdc.DeleteDC()
-        win32gui.ReleaseDC(hwnd, hwindc)
-        win32gui.DeleteObject(bmp.GetHandle())
-
-        return img
-
-    except Exception as e:
-        logger.error(f"Window capture failed: {e}")
-        return None
-
 
 def get_screen_resolution():
     try:
@@ -532,29 +434,25 @@ class PerformanceMonitor:
         return avg_frame_time * 1000
 
 
-def measure_system_latency(game_area=None):
+def measure_system_latency(game_area=None, cam=None):
     try:
         pipeline_measurements = []
         screenshot_measurements = []
         click_measurements = []
         
         test_iterations = 10
-        
         test_region = game_area or (100, 100, 300, 200)
-
-        cam = bettercam.create(output_color="BGR")
-        if not cam.is_capturing:
-            cam.start(region=(tuple(test_region)), target_fps=240, video_mode=True)
+        region_key = "measure_latency"
 
         for _ in range(5):
-            cam.get_latest_frame()
+            cam.capture(bbox=game_area, region_key=region_key)
         
         for i in range(test_iterations):
             pipeline_start = time.perf_counter()
             
             screenshot_start = time.perf_counter()
             try:
-                screenshot = cam.get_latest_frame()
+                screenshot = cam.capture(bbox=game_area, region_key=region_key)   
                 if screenshot is not None:
                     img_array = screenshot
                 else:
@@ -598,8 +496,6 @@ def measure_system_latency(game_area=None):
             click_measurements.append(click_latency)
             
             time.sleep(0.005)
-        
-        # cam.stop()
 
         for _ in range(test_iterations):
             click_start = time.perf_counter()
@@ -628,7 +524,7 @@ def measure_system_latency(game_area=None):
             else:
                 trimmed = measurements
             return sum(trimmed) / len(trimmed) if trimmed else measurements[0]
-        
+
         pipeline_latency = robust_average(pipeline_measurements)
         screenshot_latency = robust_average(screenshot_measurements)
         click_latency = robust_average(click_measurements)

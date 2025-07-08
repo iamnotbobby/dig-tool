@@ -23,7 +23,6 @@ import threading
 import time
 import json
 from PIL import Image, ImageTk
-import bettercam
 import keyboard
 import queue
 
@@ -32,6 +31,7 @@ from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from interface.custom_pattern_window import CustomPatternWindow
 from utils.system_utils import send_click, check_display_scale, measure_system_latency
+from utils.screen_capture import ScreenCapture
 from utils.debug_logger import logger, save_debug_screenshot, log_click_debug
 from core.detection import find_line_position, VelocityCalculator, get_hsv_bounds
 from core.automation import AutomationManager, perform_click_action
@@ -68,20 +68,18 @@ class DigTool:
         self.custom_pattern_window = None
 
         set_dig_tool_instance(self)
-        
-        self.root.after(500, self.perform_initial_latency_measurement)
 
         self.game_area = None
-        self.game_area_changed = False
         self.cursor_position = None
         self.running = False
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
 
-        logger.info(bettercam.device_info())
-        logger.info(bettercam.output_info())
-        self.cam = bettercam.create(output_color="BGR")
+        self.cam = ScreenCapture()
+        self.region_key = "main_game"
+
+        self.root.after(500, self.perform_initial_latency_measurement)
 
         self.click_count = 0
         self.dig_count = 0
@@ -198,7 +196,7 @@ class DigTool:
                 return self._measured_latency
         
         game_area = getattr(self, 'game_area', None)
-        self._measured_latency = measure_system_latency(game_area)
+        self._measured_latency = measure_system_latency(game_area, self.cam)
         self._latency_measurement_time = time.time()
         return self._measured_latency
 
@@ -244,8 +242,9 @@ class DigTool:
         else:
             try:
                 keyboard.unhook_all()
-                self.cam.stop()
-                self.cam.release()
+                #self.cam.stop()
+                #self.cam.release()
+                self.cam.close()
             except Exception as e:
                 logger.error(f"Error during final cleanup: {e}")
             finally:
@@ -297,9 +296,6 @@ class DigTool:
         if self.main_loop_thread is None:
             self.main_loop_thread = threading.Thread(target=self.run_main_loop, daemon=True)
             self.main_loop_thread.start()
-
-    def trigger_game_area_changed(self):
-        self.game_area_changed = True
 
     def hotkey_listener(self):
         logger.info("Hotkey listener thread started")
@@ -415,33 +411,7 @@ class DigTool:
             self.overlay_enabled = False
             self.overlay = None
 
-    def get_param(self, key):
-        if key == 'system_latency':
-            if key in self.param_vars:
-                value = self.param_vars[key].get()
-                # Don't auto-measure during runtime, use cached value
-                if value == 'auto' or (isinstance(value, str) and value.strip().lower() == 'auto'):
-                    # If we have a cached value, use it instead of measuring again
-                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
-                        return self._cached_latency
-                    # Otherwise return a default to avoid blocking the operation
-                    return 50
-                elif isinstance(value, str) and value.strip() == "":
-                    # If we have a cached value, use it
-                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
-                        return self._cached_latency
-                    return 50
-                try:
-                    return int(value)
-                except:
-                    if hasattr(self, '_cached_latency') and self._cached_latency is not None:
-                        return self._cached_latency
-                    return 50
-            else:
-                if hasattr(self, '_cached_latency') and self._cached_latency is not None:
-                    return self._cached_latency
-                return 50
-        
+    def get_param(self, key):        
         if key in self.param_vars:
             try:
                 value = self.param_vars[key].get()
@@ -554,7 +524,6 @@ class DigTool:
         x1, y1 = self.drag_start;
         x2, y2 = event.x_root, event.y_root
         self.game_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
-        self.game_area_changed = True
         self.selection_overlay.destroy()
         self.root.deiconify()
         self.update_status("Game area set. Press Start to begin.")
@@ -892,14 +861,8 @@ class DigTool:
             self.velocity_calculator.update_fps(game_fps)
 
             if self.game_area is None:
-                time.sleep(screenshot_delay)
+                time.sleep(0.01)
                 continue
-
-            if self.game_area_changed:
-                self.game_area_changed = False
-                if self.cam.is_capturing:
-                    self.cam.stop()
-                self.cam.start(region=(tuple(self.game_area)), target_fps=self.get_param('screenshot_fps'), video_mode=True)
 
             if self.automation_manager.should_re_equip_shovel():
                 self.automation_manager.re_equip_shovel()
@@ -907,9 +870,7 @@ class DigTool:
             frame_skip_counter += 1
             should_process_zones = frame_skip_counter % process_every_nth_frame == 0
 
-            capture_start = time.perf_counter()
-            screenshot = self.cam.get_latest_frame()
-            capture_time = time.perf_counter() - capture_start
+            screenshot = self.cam.capture(bbox=self.game_area, region_key=self.region_key)
             
             if screenshot is None:
                 time.sleep(screenshot_delay)
@@ -1236,33 +1197,6 @@ class DigTool:
     def run(self):
         self.root.mainloop()
 
-    # def manual_latency_measurement(self):
-    #     def measure_in_background():
-    #         try:
-    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
-    #                 text="Measuring...", fg='orange'))
-                
-    #             measured_latency = self.measure_system_latency()
-                
-    #             self._cached_latency = measured_latency
-    #             if 'system_latency' in self.param_vars:
-    #                 self.param_vars['system_latency'].set(measured_latency)
-                
-    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
-    #                 text=f"Measured: {measured_latency}ms", fg='green'))
-                
-    #             self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
-                
-    #             logger.info(f"Manual latency measurement completed: {measured_latency}ms")
-                
-    #         except Exception as e:
-    #             logger.error(f"Error in manual latency measurement: {e}")
-    #             self.root.after(0, lambda: self.main_window.latency_status_label.config(
-    #                 text="Error measuring", fg='red'))
-    #             self.root.after(3000, lambda: self.main_window.latency_status_label.config(text=""))
-        
-    #     threading.Thread(target=measure_in_background, daemon=True).start()
-
     def perform_initial_latency_measurement(self):
         try:
             logger.info("Performing initial system latency measurement...")
@@ -1275,7 +1209,6 @@ class DigTool:
 
             default_latency = 50
             self._cached_latency = default_latency
-            self.param_vars['system_latency'].set(default_latency)
             return default_latency
 
     def get_cached_system_latency(self):

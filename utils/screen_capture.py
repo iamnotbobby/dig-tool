@@ -140,25 +140,3 @@ class ScreenCapture:
         
         reduced_bbox = (new_left, new_top, new_right, new_bottom)
         return self.capture(reduced_bbox, region_key="region")
-
-    def capture_diff(self, bbox=None, last_screenshot=None, change_threshold=0.1):
-        if last_screenshot is None:
-            return self.capture(bbox)
-            
-        left, top, right, bottom = bbox
-        sample_width, sample_height = min(100, right - left), min(100, bottom - top)
-        sample_bbox = (left, top, left + sample_width, top + sample_height)
-        
-        sample = self.capture(sample_bbox, region_key="sample")
-        if sample is None:
-            return self.capture(bbox)
-            
-        if hasattr(self, '_last_sample') and self._last_sample is not None:
-            diff = cv2.absdiff(sample, self._last_sample)
-            change_amount = np.mean(diff) / 255.0
-            
-            if change_amount < change_threshold:
-                return last_screenshot
-        
-        self._last_sample = sample.copy()
-        return self.capture(bbox)
