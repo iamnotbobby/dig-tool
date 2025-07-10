@@ -1,7 +1,15 @@
 import tkinter as tk
 from tkinter import Label, Button, Frame, Checkbutton, ttk
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DND_AVAILABLE = True
+except ImportError:
+    DND_AVAILABLE = False
+    DND_FILES = None
 from interface.components import CollapsiblePane, AccordionManager, Tooltip
 from utils.debug_logger import logger
+import os
+import json
 
 
 class DisabledTooltip:
@@ -205,24 +213,16 @@ class MainWindow:
                 self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
 
     def validate_velocity_toggle(self, *args):
-        """Update dependent widgets when velocity-based width is toggled"""
-        # Schedule the update for the next idle cycle to ensure UI is ready
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def validate_otsu_toggle(self, *args):
-        """Update dependent widgets when Otsu detection is toggled"""
-        # Ensure mutual exclusion with color picker
         if self.dig_tool.param_vars['use_otsu_detection'].get():
             self.dig_tool.param_vars['use_color_picker_detection'].set(False)
-        # Schedule the update for the next idle cycle to ensure UI is ready
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def validate_color_picker_toggle(self, *args):
-        """Update dependent widgets when Color Picker detection is toggled"""
-        # Ensure mutual exclusion with Otsu
         if self.dig_tool.param_vars['use_color_picker_detection'].get():
             self.dig_tool.param_vars['use_otsu_detection'].set(False)
-        # Schedule the update for the next idle cycle to ensure UI is ready
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def validate_auto_sell_toggle(self, *args):
@@ -238,43 +238,48 @@ class MainWindow:
         return hasattr(self.dig_tool, 'cursor_position') and self.dig_tool.cursor_position is not None
 
     def pick_color_from_screen(self):
-        """Pick a color from the screen using mouse cursor"""
         import time
         from core.detection import rgb_to_hsv_single
         
-        # Hide the main window temporarily
         self.dig_tool.root.withdraw()
         
         try:
-            # Create a temporary overlay for instructions
             overlay = tk.Toplevel()
             overlay.attributes('-topmost', True)
             overlay.attributes('-alpha', 0.8)
             overlay.configure(bg='black')
             overlay.overrideredirect(True)
             
-            # Position the overlay at the top of the screen
             overlay.geometry("400x60+{}+10".format((overlay.winfo_screenwidth() - 400) // 2))
             
             instruction_label = tk.Label(overlay, text="Move mouse to desired color and click\nPress ESC to cancel", 
                                        font=("Arial", 12), bg='black', fg='white', justify='center')
             instruction_label.pack(expand=True)
             
-            overlay.update()
+            def on_escape_key(event):
+                nonlocal picked_color
+                picked_color = "CANCELLED"
+
+            overlay.focus_set()
+            overlay.bind('<Key-Escape>', on_escape_key)
+            overlay.bind('<KeyPress-Escape>', on_escape_key)
+            overlay.bind('<Escape>', on_escape_key)
             
-            # Wait for mouse click or ESC
+            overlay.grab_set()
+            overlay.update()
+            overlay.focus_force()
+            
             picked_color = None
             
             def on_click(x, y, button, pressed):
                 nonlocal picked_color
                 if pressed and button == mouse.Button.left:
                     try:
-                        # Get pixel color at mouse position
                         import pyautogui
                         screenshot = pyautogui.screenshot()
                         pixel_color = screenshot.getpixel((x, y))
                         picked_color = "#{:02x}{:02x}{:02x}".format(*pixel_color)
-                        return False  # Stop listener
+                        return False 
                     except Exception as e:
                         print(f"Error getting pixel color: {e}")
                         return False
@@ -285,46 +290,58 @@ class MainWindow:
                 try:
                     if key == keyboard.Key.esc:
                         picked_color = "CANCELLED"
-                        return False  # Stop listener
+                        return False  
                 except AttributeError:
                     pass
+                except Exception as e:
+                    print(f"Key event error: {e}")
                 return True
             
-            # Import mouse and keyboard listeners
+            mouse_listener = None
+            key_listener = None
             try:
                 from pynput import mouse, keyboard
                 
-                # Start listeners
                 mouse_listener = mouse.Listener(on_click=on_click)
                 key_listener = keyboard.Listener(on_key=on_key)
                 
                 mouse_listener.start()
                 key_listener.start()
                 
-                # Wait for color to be picked
                 while picked_color is None:
-                    time.sleep(0.1)
-                    overlay.update()
-                
-                # Stop listeners
-                mouse_listener.stop()
-                key_listener.stop()
+                    time.sleep(0.05)
+                    try:
+                        overlay.update()
+                        if overlay.winfo_exists():
+                            overlay.focus_force()
+                    except tk.TclError:
+                        picked_color = "CANCELLED"
+                        break
                 
             except ImportError:
                 self.dig_tool.update_status("Error: pynput library required for color picking. Install with: pip install pynput")
                 picked_color = "CANCELLED"
+            finally:
+                try:
+                    if mouse_listener:
+                        mouse_listener.stop()
+                    if key_listener:
+                        key_listener.stop()
+                except:
+                    pass  
             
-            # Clean up overlay
-            overlay.destroy()
+            try:
+                if overlay.winfo_exists():
+                    overlay.grab_release()
+                overlay.destroy()
+            except tk.TclError:
+                pass 
             
-            # Show main window again
             self.dig_tool.root.deiconify()
             
             if picked_color and picked_color != "CANCELLED":
-                # Update the parameter
                 self.dig_tool.param_vars['picked_color_rgb'].set(picked_color)
                 
-                # Update the color display
                 if hasattr(self, 'picked_color_display') and self.picked_color_display:
                     self.picked_color_display.config(bg=picked_color, text=picked_color)
                 
@@ -333,14 +350,12 @@ class MainWindow:
                 self.dig_tool.update_status("Color picking cancelled")
                 
         except Exception as e:
-            # Ensure main window is shown again
             self.dig_tool.root.deiconify()
             self.dig_tool.update_status(f"Error picking color: {e}")
 
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
 
-        # Check if auto walk was just disabled - if so, cleanup any stuck keys
         if self._prev_auto_walk_enabled and not auto_walk_enabled:
             try:
                 if hasattr(self.dig_tool, 'automation_manager') and self.dig_tool.automation_manager:
@@ -349,7 +364,6 @@ class MainWindow:
             except Exception as e:
                 logger.error(f"Error during key cleanup when auto walk disabled: {e}")
         
-        # Update the previous state
         self._prev_auto_walk_enabled = auto_walk_enabled
 
         if self.auto_shovel_checkbox:
@@ -380,17 +394,14 @@ class MainWindow:
         for widget in self.cursor_dependent_widgets:
             widget.config(state='normal' if cursor_enabled and has_cursor_pos else 'disabled')
 
-        # Handle velocity-based width dependencies
         velocity_enabled = self.dig_tool.param_vars.get('velocity_based_width_enabled', tk.BooleanVar()).get()
         for widget in self.velocity_dependent_widgets:
             widget.config(state='normal' if velocity_enabled else 'disabled')
 
-        # Handle Otsu detection dependencies
         otsu_enabled = self.dig_tool.param_vars.get('use_otsu_detection', tk.BooleanVar()).get()
         for widget in self.otsu_dependent_widgets:
             widget.config(state='normal' if otsu_enabled else 'disabled')
 
-        # Handle Color Picker detection dependencies
         color_picker_enabled = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
         for widget in self.color_picker_dependent_widgets:
             widget.config(state='normal' if color_picker_enabled else 'disabled')
@@ -951,3 +962,55 @@ class MainWindow:
         self.dig_tool.update_area_info()
         self.dig_tool.update_sell_info()
         self.dig_tool.update_cursor_info()
+        
+        self.setup_drag_drop()
+
+    def setup_drag_drop(self):
+        if not DND_AVAILABLE:
+            logger.info("tkinterdnd2 not available, drag and drop disabled")
+            return
+            
+        try:
+            self.dig_tool.root.drop_target_register(DND_FILES)
+            self.dig_tool.root.dnd_bind('<<Drop>>', self.on_drop)
+            logger.info("Drag and drop functionality enabled")
+        except Exception as e:
+            logger.warning(f"Could not set up drag and drop: {e}")
+    
+    def on_drop(self, event):
+        try:
+            files = event.data.split()
+            if not files:
+                return
+            
+            file_path = files[0].strip('{}') 
+            
+            if not file_path.lower().endswith('.json'):
+                self.dig_tool.update_status("Error: Only JSON files are supported for drag and drop")
+                return
+  
+            if not os.path.exists(file_path):
+                self.dig_tool.update_status("Error: Dropped file does not exist")
+                return
+            
+            try:
+                with open(file_path, 'r') as f:
+                    settings_data = json.load(f)
+                
+                if not isinstance(settings_data, dict):
+                    self.dig_tool.update_status("Error: Invalid settings file format")
+                    return
+                
+                if hasattr(self.dig_tool, 'settings_manager'):
+                    self.dig_tool.settings_manager.import_settings_from_file(file_path)
+                else:
+                    self.dig_tool.update_status("Error: Settings manager not available")
+                    
+            except json.JSONDecodeError:
+                self.dig_tool.update_status("Error: Invalid JSON file")
+            except Exception as e:
+                self.dig_tool.update_status(f"Error importing settings: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error in drag and drop handler: {e}")
+            self.dig_tool.update_status("Error: Failed to process dropped file")

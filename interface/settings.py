@@ -15,10 +15,8 @@ class SettingsManager:
     def __init__(self, dig_tool_instance):
         self.dig_tool = dig_tool_instance
 
-        # Settings directory setup with fallback
         self._setup_settings_directory()
 
-        # Create settings directory if it doesn't exist
         self._ensure_settings_directory()
 
         self.default_params = {
@@ -38,6 +36,7 @@ class SettingsManager:
             "max_zone_width_percent": 80,
             "target_fps": 120,
             "line_detection_offset": 5.0,
+            "system_latency": "auto",
             "main_on_top": True,
             "preview_on_top": True,
             "debug_on_top": True,
@@ -1295,3 +1294,192 @@ class SettingsManager:
 
         except Exception as e:
             logger.error(f"Failed to save auto-walk patterns: {e}")
+
+    def import_settings_from_file(self, filepath):
+        feedback = SettingsFeedbackWindow(self.dig_tool.root, "Importing Settings")
+        feedback.show_window()
+
+        def import_process():
+            try:
+                feedback.update_progress(10, "Reading settings file...")
+                
+                with open(filepath, "r") as f:
+                    settings = json.load(f)
+
+                if not isinstance(settings, dict):
+                    feedback.show_error("Invalid File", "Settings file format is invalid")
+                    return False
+
+                feedback.update_progress(20, "Validating settings structure...")
+                
+                feedback.add_section("PARAMETERS")
+                params_updated = 0
+                params_data = settings.get("parameters", settings.get("params", {})) 
+                
+                total_params = len(params_data)
+                for i, (key, value) in enumerate(params_data.items()):
+                    if key in self.default_params:
+                        try:
+                            param_type = self.get_param_type(key)
+                            if param_type == tk.BooleanVar:
+                                converted_value = bool(value)
+                            elif param_type == tk.IntVar:
+                                converted_value = int(value)
+                            elif param_type == tk.DoubleVar:
+                                converted_value = float(value)
+                            else:
+                                converted_value = str(value)
+
+                            if self.validate_param_value(key, converted_value):
+                                if key in self.dig_tool.param_vars:
+                                    old_value = self.dig_tool.param_vars[key].get()
+                                    self.dig_tool.param_vars[key].set(converted_value)
+                                    feedback.add_change_entry(
+                                        key, str(old_value), str(converted_value), "success"
+                                    )
+                                    params_updated += 1
+                            else:
+                                feedback.add_change_entry(
+                                    key, "", "Invalid value", "warning"
+                                )
+                        except Exception as e:
+                            feedback.add_change_entry(
+                                key, "", f"ERROR: {str(e)}", "error"
+                            )
+                    else:
+                        feedback.add_change_entry(
+                            key, "", "Unknown parameter", "warning"
+                        )
+                    
+                    progress = 20 + (i * 30 / max(total_params, 1))
+                    feedback.update_progress(progress)
+
+                feedback.add_section("KEYBINDS")
+                keybinds_updated = 0
+                keybinds_data = settings.get("keybinds", {})
+                
+                total_keybinds = len(keybinds_data)
+                for i, (key, value) in enumerate(keybinds_data.items()):
+                    if key in self.default_keybinds and isinstance(value, str):
+                        if key in self.dig_tool.keybind_vars:
+                            old_value = self.dig_tool.keybind_vars[key].get()
+                            self.dig_tool.keybind_vars[key].set(value)
+                            feedback.add_change_entry(key, old_value, value, "success")
+                            keybinds_updated += 1
+                        else:
+                            feedback.add_change_entry(key, "", "Keybind var not found", "warning")
+                    else:
+                        feedback.add_change_entry(key, "", "Invalid keybind", "warning")
+                    
+                    progress = 50 + (i * 20 / max(total_keybinds, 1))
+                    feedback.update_progress(progress)
+
+                feedback.add_section("CONFIGURATION")
+                feedback.update_progress(70, "Loading configuration settings...")
+                
+                if "game_area" in settings and self.validate_game_area(settings["game_area"]):
+                    old_area = self.dig_tool.game_area
+                    self.dig_tool.game_area = tuple(settings["game_area"])
+                    self.dig_tool.update_area_info()
+                    if hasattr(self.dig_tool, "preview_btn"):
+                        self.dig_tool.preview_btn.config(state=tk.NORMAL)
+                    if hasattr(self.dig_tool, "debug_btn"):
+                        self.dig_tool.debug_btn.config(state=tk.NORMAL)
+                    if (
+                        not self.dig_tool.main_loop_thread
+                        or not self.dig_tool.main_loop_thread.is_alive()
+                    ):
+                        if hasattr(self.dig_tool, "start_threads"):
+                            self.dig_tool.start_threads()
+                    
+                    feedback.add_change_entry(
+                        "Game Area",
+                        str(old_area) if old_area else "None",
+                        str(self.dig_tool.game_area),
+                        "success",
+                    )
+                else:
+                    feedback.add_text("✗ Game Area: Not found or invalid", "warning")
+
+                if "sell_button_position" in settings and self.validate_position(settings["sell_button_position"]):
+                    old_pos = getattr(self.dig_tool.automation_manager, "sell_button_position", None)
+                    self.dig_tool.automation_manager.sell_button_position = tuple(settings["sell_button_position"])
+                    self.dig_tool.update_sell_info()
+                    
+                    feedback.add_change_entry(
+                        "Sell Button",
+                        str(old_pos) if old_pos else "None",
+                        str(tuple(settings["sell_button_position"])),
+                        "success",
+                    )
+                else:
+                    feedback.add_text("✗ Sell Button: Not found or invalid", "warning")
+
+                if "cursor_position" in settings and self.validate_position(settings["cursor_position"]):
+                    old_pos = getattr(self.dig_tool, "cursor_position", None)
+                    self.dig_tool.cursor_position = tuple(settings["cursor_position"])
+                    self.dig_tool.update_cursor_info()
+                    
+                    feedback.add_change_entry(
+                        "Cursor Position",
+                        str(old_pos) if old_pos else "None",
+                        str(tuple(settings["cursor_position"])),
+                        "success",
+                    )
+                else:
+                    feedback.add_text("✗ Cursor Position: Not found or invalid", "warning")
+
+                if "walk_pattern" in settings and hasattr(self.dig_tool, "walk_pattern_var"):
+                    try:
+                        pattern = settings["walk_pattern"]
+                        old_pattern = self.dig_tool.walk_pattern_var.get()
+                        if (
+                            hasattr(self.dig_tool.automation_manager, "walk_patterns")
+                            and pattern in self.dig_tool.automation_manager.walk_patterns
+                        ):
+                            self.dig_tool.walk_pattern_var.set(pattern)
+                            feedback.add_change_entry(
+                                "Walk Pattern", old_pattern, pattern, "success"
+                            )
+                        else:
+                            feedback.add_text(
+                                f"✗ Walk Pattern: Unknown pattern '{pattern}'", "warning"
+                            )
+                    except Exception:
+                        feedback.add_text("✗ Walk Pattern: Invalid data", "warning")
+                else:
+                    feedback.add_text("✗ Walk Pattern: Not found", "warning")
+
+                feedback.update_progress(90, "Finalizing...")
+                
+                self.update_setting_states()
+                
+                if hasattr(self.dig_tool, 'apply_keybinds'):
+                    self.dig_tool.apply_keybinds()
+
+                feedback.update_progress(100, "Import completed successfully!")
+                
+                total_success = params_updated + keybinds_updated
+                feedback.add_section("COMPLETION")
+                feedback.add_text(f"✓ Parameters imported: {params_updated}", "success")
+                feedback.add_text(f"✓ Keybinds imported: {keybinds_updated}", "success")
+                feedback.add_text(f"✓ Total items imported: {total_success}", "info")
+                
+                feedback.operation_complete(success=True)
+                
+                filename = os.path.basename(filepath)
+                self.dig_tool.update_status(f"Settings imported from {filename} - See details window")
+                
+                return True
+
+            except json.JSONDecodeError:
+                feedback.show_error("Invalid JSON", "The selected file contains invalid JSON data")
+                return False
+            except Exception as e:
+                feedback.show_error("Import Failed", str(e))
+                logger.error(f"Error importing settings from file: {e}")
+                return False
+
+        threading.Thread(target=import_process, daemon=True).start()
+
+        return True

@@ -39,7 +39,8 @@ jobs:
          
       - name: Install Dependencies
         run: |
-          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller bettercam
+          pip install -r requirements.txt
+          pip install pyinstaller
       
       - name: Generate executable name with version
         id: exe_name
@@ -54,7 +55,7 @@ jobs:
          
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --add-binary="assets/AutoHotkey64.exe;."  --collect-all=ahk --hidden-import=ahk --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
          
       - name: Get executable info and generate checksums
         id: get_exe_info
@@ -78,8 +79,7 @@ jobs:
 
           # Verification Instructions:
           # Windows: certutil -hashfile $exeName SHA256
-          # Linux/Mac: sha256sum $exeName
-          # PowerShell: Get-FileHash -Path $exeName -Algorithm SHA256
+          # Linux/Mac: sha25 Get-FileHash -Path $exeName -Algorithm SHA256
           "@
           
           $checksumContent | Out-File -FilePath "dist/CHECKSUMS.txt" -Encoding UTF8
@@ -115,7 +115,8 @@ jobs:
             }
             "verification" = @{
               "github_actions_url" = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-              "commit_url" = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+              "commit_url" =6sum $exeName
+          # PowerShell: "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
             }
           }
           

@@ -25,6 +25,11 @@ import cv2
 import numpy as np
 import tkinter as tk
 from tkinter import Label, Frame, TclError
+try:
+    from tkinterdnd2 import TkinterDnD
+    DND_AVAILABLE = True
+except ImportError:
+    DND_AVAILABLE = False
 import threading
 import time
 from PIL import Image, ImageTk
@@ -35,7 +40,8 @@ from interface.components import GameOverlay, AutoWalkOverlay
 from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from interface.custom_pattern_window import CustomPatternWindow
-from utils.debug_logger import logger, save_debug_screenshot, log_click_debug, measure_system_latency
+from utils.debug_logger import logger, save_debug_screenshot, log_click_debug
+from utils.screen_capture import ScreenCapture
 from core.detection import (
     find_line_position,
     VelocityCalculator,
@@ -57,7 +63,10 @@ class DigTool:
     def __init__(self):
         logger.enable_logging_for_startup(30)
 
-        self.root = tk.Tk()
+        if DND_AVAILABLE:
+            self.root = TkinterDnD.Tk()
+        else:
+            self.root = tk.Tk()
         self.root.title("Dig Tool")
 
         self.root.wm_iconbitmap(
@@ -258,12 +267,7 @@ class DigTool:
             self._latency_measurement_time = 0
 
         new_latency = self.measure_system_latency()
-
         self._cached_latency = new_latency
-
-        if "system_latency" in self.param_vars:
-            self.param_vars["system_latency"].set(new_latency)
-
         return new_latency
 
     def ensure_debug_dir(self):
@@ -535,41 +539,8 @@ class DigTool:
 
     def get_param(self, key):
         if key == "system_latency":
-            if key in self.param_vars:
-                value = self.param_vars[key].get()
-                if value == "auto" or (
-                    isinstance(value, str) and value.strip().lower() == "auto"
-                ):
-                    if (
-                        hasattr(self, "_cached_latency")
-                        and self._cached_latency is not None
-                    ):
-                        return self._cached_latency
-                    return 50
-                elif isinstance(value, str) and value.strip() == "":
-                    if (
-                        hasattr(self, "_cached_latency")
-                        and self._cached_latency is not None
-                    ):
-                        return self._cached_latency
-                    return 50
-                try:
-                    return int(value)
-                except:
-                    if (
-                        hasattr(self, "_cached_latency")
-                        and self._cached_latency is not None
-                    ):
-                        return self._cached_latency
-                    return 50
-            else:
-                if (
-                    hasattr(self, "_cached_latency")
-                    and self._cached_latency is not None
-                ):
-                    return self._cached_latency
-                return 50
-
+            return self.get_cached_system_latency()
+        
         if key in self.param_vars:
             try:
                 value = self.param_vars[key].get()
@@ -1048,12 +1019,15 @@ class DigTool:
                 return
 
             self.running = True
-            self.update_status("Bot Started...")
+            self.update_status("Bot Started... (3s startup delay)")
             self.click_count = 0
             self.dig_count = 0
             self.velocity_calculator.reset()
             self.automation_manager.walk_pattern_index = 0
             self.automation_manager.sell_count = 0
+            
+            self.startup_time = time.time() * 1000 
+            self._startup_grace_ended = False
 
             self.automation_manager.shiftlock_state = {
                 "shift": False,
@@ -1225,6 +1199,15 @@ class DigTool:
             frame_start_time = time.perf_counter()
             self._update_time_cache()
             current_time_ms = self._current_time_ms_cache
+            
+            startup_grace_period = 3000 
+            if (hasattr(self, 'startup_time') and 
+                hasattr(self, '_startup_grace_ended') and 
+                not self._startup_grace_ended and 
+                (current_time_ms - self.startup_time) > startup_grace_period):
+                self._startup_grace_ended = True
+                if self.running:
+                    self.update_status("Bot Running...")
 
             self._memory_cleanup_counter += 1
             if self._memory_cleanup_counter % 300 == 0:
@@ -1809,6 +1792,9 @@ class DigTool:
                 should_allow_clicking = self.target_engaged
 
             post_click_blindness = self.get_param("post_click_blindness")
+            
+            startup_grace_period = 3000  
+            is_past_startup_grace = not hasattr(self, 'startup_time') or (current_time_ms - self.startup_time) > startup_grace_period
 
             if (
                 self.running
@@ -1816,6 +1802,7 @@ class DigTool:
                 and current_time_ms >= self.blind_until
                 and sweet_spot_center is not None
                 and not self.click_lock.locked()
+                and is_past_startup_grace 
             ):
 
                 should_click, click_delay, prediction_used, confidence = (
@@ -2013,7 +2000,7 @@ class DigTool:
                     # logger.debug(f"Benchmark: {self.benchmark_fps} FPS (avg frame time: {avg_frame_time*1000:.2f}ms)")
                     self.frame_times.clear()
                 self.last_report_time = now
-            elapsed = time.perf_counter() - start_time
+            elapsed = time.perf_counter() - frame_start_time
 
             if screenshot_delay > elapsed:
                 time.sleep(screenshot_delay - elapsed)
@@ -2021,72 +2008,18 @@ class DigTool:
     def run(self):
         self.root.mainloop()
         
-    def manual_latency_measurement(self):
-        def measure_in_background():
-            try:
-                self.root.after(
-                    0,
-                    lambda: self.main_window.latency_status_label.config(
-                        text="Measuring...", fg="orange"
-                    ),
-                )
-
-                measured_latency = self.measure_system_latency()
-
-                self._cached_latency = measured_latency
-                if "system_latency" in self.param_vars:
-                    self.param_vars["system_latency"].set(measured_latency)
-
-                self.root.after(
-                    0,
-                    lambda: self.main_window.latency_status_label.config(
-                        text=f"Measured: {measured_latency}ms", fg="green"
-                    ),
-                )
-
-                self.root.after(
-                    3000, lambda: self.main_window.latency_status_label.config(text="")
-                )
-
-                logger.info(
-                    f"Manual latency measurement completed: {measured_latency}ms"
-                )
-
-            except Exception as e:
-                logger.error(f"Error in manual latency measurement: {e}")
-                self.root.after(
-                    0,
-                    lambda: self.main_window.latency_status_label.config(
-                        text="Error measuring", fg="red"
-                    ),
-                )
-                self.root.after(
-                    3000, lambda: self.main_window.latency_status_label.config(text="")
-                )
-
-        threading.Thread(target=measure_in_background, daemon=True).start()
-
     def perform_initial_latency_measurement(self):
-        if "system_latency" in self.param_vars:
-            try:
-                value = self.param_vars["system_latency"].get()
-                if value == "auto" or (
-                    isinstance(value, str) and value.strip().lower() == "auto"
-                ):
-                    logger.info("Performing initial system latency measurement...")
-                    measured_latency = self.measure_system_latency()
-                    self._cached_latency = measured_latency
-                    self.param_vars["system_latency"].set(measured_latency)
-                    logger.info(f"System latency measured: {measured_latency}ms")
-                    return measured_latency
-            except Exception as e:
-                logger.warning(f"Could not measure system latency automatically: {e}")
-
-                default_latency = 50
-                self._cached_latency = default_latency
-                self.param_vars["system_latency"].set(default_latency)
-                return default_latency
-        return None
+        try:
+            logger.info("Performing initial system latency measurement...")
+            measured_latency = self.measure_system_latency()
+            self._cached_latency = measured_latency
+            logger.info(f"System latency measured: {measured_latency}ms")
+            return measured_latency
+        except Exception as e:
+            logger.warning(f"Could not measure system latency automatically: {e}")
+            default_latency = 50
+            self._cached_latency = default_latency
+            return default_latency
 
     def get_cached_system_latency(self):
         if hasattr(self, "_cached_latency") and hasattr(
@@ -2095,16 +2028,6 @@ class DigTool:
             if time.time() - self._latency_measurement_time < 300:
                 return self._cached_latency
 
-        if "system_latency" in self.param_vars:
-            try:
-                value = self.param_vars["system_latency"].get()
-                if isinstance(value, (int, float)) and value > 0:
-                    self._cached_latency = int(value)
-                    self._latency_measurement_time = time.time()
-                    return self._cached_latency
-            except:
-                pass
-
         if not hasattr(self, "_cached_latency") or not hasattr(
             self, "_latency_measurement_time"
         ):
@@ -2112,18 +2035,9 @@ class DigTool:
             measured_latency = self.measure_system_latency()
             self._cached_latency = measured_latency
             self._latency_measurement_time = time.time()
-
-            if "system_latency" in self.param_vars:
-                self.param_vars["system_latency"].set(measured_latency)
-
             return measured_latency
 
         return self._cached_latency
-
-    def get_cached_system_latency(self):
-        if not hasattr(self, "_cached_system_latency"):
-            self._cached_system_latency = 50.0
-        return self._cached_system_latency
 
     def _initialize_default_param_vars(self):
         for key, default_value in self.settings_manager.default_params.items():

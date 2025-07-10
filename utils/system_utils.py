@@ -7,7 +7,6 @@ import os
 import sys
 import time
 import ctypes
-import bettercam
 import tkinter as tk
 from tkinter import messagebox
 from utils.debug_logger import logger
@@ -23,6 +22,7 @@ def check_dependencies():
         "pynput": "pynput",
         "requests": "requests",
         "autoit": "pyautoit",
+        "mss": "mss",
     }
     missing_packages = []
     for module, package in required_packages.items():
@@ -157,81 +157,6 @@ def send_click():
     else:
         return send_click_win32api()
 
-class ScreenCapture:
-    def __init__(self):
-        self.hwnd = win32gui.GetDesktopWindow()
-        self.hwindc = None
-        self.srcdc = None
-        self.memdc = None
-        self.bmp = None
-        self._initialized = False
-        self._last_bbox = None
-        self._last_width = 0
-        self._last_height = 0
-
-    def _initialize_dc(self, width, height):
-        try:
-            self.hwindc = win32gui.GetWindowDC(self.hwnd)
-            self.srcdc = win32ui.CreateDCFromHandle(self.hwindc)
-            self.memdc = self.srcdc.CreateCompatibleDC()
-            self.bmp = win32ui.CreateBitmap()
-            self.bmp.CreateCompatibleBitmap(self.srcdc, width, height)
-            self.memdc.SelectObject(self.bmp)
-            self._initialized = True
-            self._last_width = width
-            self._last_height = height
-        except Exception:
-            self._cleanup()
-            return False
-        return True
-
-    def _cleanup(self):
-        try:
-            if self.srcdc:
-                self.srcdc.DeleteDC()
-            if self.memdc:
-                self.memdc.DeleteDC()
-            if self.hwindc:
-                win32gui.ReleaseDC(self.hwnd, self.hwindc)
-            if self.bmp:
-                win32gui.DeleteObject(self.bmp.GetHandle())
-        except Exception:
-            pass
-        self._initialized = False
-
-    def capture(self, bbox=None):
-        if not bbox:
-            return None
-        left, top, right, bottom = bbox
-        width, height = right - left, bottom - top
-        if width <= 0 or height <= 0:
-            return None
-        if (
-            self._last_bbox != bbox
-            or not self._initialized
-            or width != self._last_width
-            or height != self._last_height
-        ):
-            self._cleanup()
-            self._last_bbox = bbox
-        if not self._initialized:
-            if not self._initialize_dc(width, height):
-                return None
-        try:
-            self.memdc.BitBlt(
-                (0, 0), (width, height), self.srcdc, (left, top), win32con.SRCCOPY
-            )
-            signedIntsArray = self.bmp.GetBitmapBits(True)
-            img = np.frombuffer(signedIntsArray, dtype="uint8").reshape(
-                (height, width, 4)
-            )
-            return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        except Exception:
-            self._cleanup()
-            return None
-
-    def close(self):
-        self._cleanup()
 
 def get_window_list():
     windows = []
@@ -530,10 +455,10 @@ class PerformanceMonitor:
 
 def measure_system_latency(game_area=None, cam=None):
     try:
-        pipeline_measurements = []
         screenshot_measurements = []
+        processing_measurements = []
         click_measurements = []
-        test_iterations = 10
+        test_iterations = 15
         
         if game_area:
             x1, y1, x2, y2 = game_area
@@ -545,66 +470,49 @@ def measure_system_latency(game_area=None, cam=None):
         from utils.screen_capture import ScreenCapture
 
         test_screen_grabber = ScreenCapture()
-        for _ in range(5):
+        
+        for _ in range(3):
             test_screen_grabber.capture(bbox=test_region, region_key="latency_warmup")
-            time.sleep(0.002)
+            time.sleep(0.001)
         test_screen_grabber.clear_cache()
         
         for i in range(test_iterations):
-            pipeline_start = time.perf_counter()
             screenshot_start = time.perf_counter()
             try:
                 screenshot = test_screen_grabber.capture(
                     bbox=test_region, region_key=f"latency_test_{i}"
                 )
-                if screenshot is not None:
-                    img_array = screenshot
-                else:
+                if screenshot is None:
                     continue
-            except:
-                try:
-                    import PIL.ImageGrab
-
-                    screenshot = PIL.ImageGrab.grab(bbox=test_region)
-                    img_array = np.array(screenshot)
-                except:
-                    continue
-            screenshot_time = time.perf_counter()
-            try:
-                if len(img_array.shape) == 3:
-                    hsv = cv2.cvtColor(img_array, cv2.COLOR_BGR2HSV)
-                    saturation = hsv[:, :, 1]
-                    _, mask = cv2.threshold(saturation, 100, 255, cv2.THRESH_BINARY)
-            except:
-                time.sleep(0.001)
-            processing_time = time.perf_counter()
-            click_start = time.perf_counter()
-            try:
-                current_pos = win32gui.GetCursorPos()
-                test_x, test_y = current_pos[0], current_pos[1]
-            except:
-                pass
-            click_time = time.perf_counter()
-            screenshot_latency = (screenshot_time - screenshot_start) * 1000
-            processing_latency = (processing_time - screenshot_time) * 1000
-            click_latency = (click_time - click_start) * 1000
-            total_pipeline = (click_time - pipeline_start) * 1000
-            pipeline_measurements.append(total_pipeline)
-            screenshot_measurements.append(screenshot_latency)
-            click_measurements.append(click_latency)
-            time.sleep(0.005)
+                    
+                screenshot_time = time.perf_counter()
+                screenshot_latency = (screenshot_time - screenshot_start) * 1000
+                screenshot_measurements.append(screenshot_latency)
+                
+                processing_start = time.perf_counter()
+                if len(screenshot.shape) == 3:
+                    gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+                    _, mask = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+                processing_time = time.perf_counter()
+                processing_latency = (processing_time - processing_start) * 1000
+                processing_measurements.append(processing_latency)
+                
+            except Exception:
+                continue
+            
+            time.sleep(0.002)
         
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             try:
-                current_pos = win32gui.GetCursorPos()
-                test_x, test_y = current_pos[0], current_pos[1]
-            except:
+                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            except Exception:
                 continue
             click_end = time.perf_counter()
-            actual_click_latency = (click_end - click_start) * 1000
-            click_measurements.append(actual_click_latency)
-            time.sleep(0.01)
+            click_latency = (click_end - click_start) * 1000
+            click_measurements.append(click_latency)
+            time.sleep(0.005)
         
         test_screen_grabber.close()
 
@@ -612,47 +520,56 @@ def measure_system_latency(game_area=None, cam=None):
             if not measurements:
                 return 0
             measurements.sort()
-            if len(measurements) >= 6:
-                trim_count = max(1, len(measurements) // 6)
+            if len(measurements) >= 10:
+                trim_count = max(1, len(measurements) // 10)
                 trimmed = measurements[trim_count:-trim_count]
-            elif len(measurements) >= 3:
+            elif len(measurements) >= 5:
                 trimmed = measurements[1:-1]
             else:
                 trimmed = measurements
-            return sum(trimmed) / len(trimmed) if trimmed else measurements[0]
+            return sum(trimmed) / len(trimmed) if trimmed else 0
 
-        pipeline_latency = robust_average(pipeline_measurements)
-        screenshot_latency = robust_average(screenshot_measurements)
-        click_latency = robust_average(click_measurements)
-        calibration_factor = 1.35
-        calibrated_pipeline = pipeline_latency * calibration_factor
-        calibrated_screenshot = screenshot_latency * calibration_factor
-        total_latency = calibrated_pipeline
+        avg_screenshot = robust_average(screenshot_measurements)
+        avg_processing = robust_average(processing_measurements)
+        avg_click = robust_average(click_measurements)
+        
+        base_latency = avg_screenshot + avg_processing + avg_click
+        
         try:
-            try:
-                device = win32api.EnumDisplaySettings(None, -1)
-                refresh_rate = device.DisplayFrequency
-            except:
-                refresh_rate = 60
-            if refresh_rate >= 240:
-                display_latency = 4.17
-            elif refresh_rate >= 165:
-                display_latency = 6.06
-            elif refresh_rate >= 144:
-                display_latency = 6.94
-            elif refresh_rate >= 120:
-                display_latency = 8.33
-            elif refresh_rate >= 75:
-                display_latency = 13.33
-            else:
-                display_latency = 16.67
+            device = win32api.EnumDisplaySettings(None, -1)
+            refresh_rate = device.DisplayFrequency
         except:
-            display_latency = 8.33
-        system_overhead = 3.0
-        total_latency += display_latency + system_overhead
-        safety_margin = total_latency * 0.15
+            refresh_rate = 60
+            
+        if refresh_rate >= 240:
+            display_latency = 2.08  # ~4.17ms / 2 (average frame time)
+        elif refresh_rate >= 165:
+            display_latency = 3.03  # ~6.06ms / 2
+        elif refresh_rate >= 144:
+            display_latency = 3.47  # ~6.94ms / 2
+        elif refresh_rate >= 120:
+            display_latency = 4.17  # ~8.33ms / 2
+        elif refresh_rate >= 75:
+            display_latency = 6.67  # ~13.33ms / 2
+        else:
+            display_latency = 8.33  # ~16.67ms / 2
+        
+        # System overhead (thread switching, OS scheduling)
+        system_overhead = 2.0
+        
+        total_latency = base_latency + display_latency + system_overhead
+        
+        # Add a small safety margin (5%)
+        safety_margin = total_latency * 0.05
         final_latency = total_latency + safety_margin
 
-        return max(5, min(150, int(final_latency)))
-    except Exception:
-        return 35
+        # Ensure reasonable bounds
+        result = max(3, min(100, int(final_latency)))
+        
+        logger.debug(f"Latency measurement: screenshot={avg_screenshot:.1f}ms, processing={avg_processing:.1f}ms, click={avg_click:.1f}ms, display={display_latency:.1f}ms, total={result}ms")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"System latency measurement failed: {e}")
+        return 25

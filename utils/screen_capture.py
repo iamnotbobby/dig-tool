@@ -80,12 +80,14 @@ class ScreenCapture:
             raw_data = np.frombuffer(screenshot.bgra, dtype=np.uint8)
             if raw_data.size == width * height * 4:
                 bgra_view = raw_data.reshape((height, width, 4))
-                self._reuse_array[:, :, 0] = bgra_view[:, :, 2]
-                self._reuse_array[:, :, 1] = bgra_view[:, :, 1]
-                self._reuse_array[:, :, 2] = bgra_view[:, :, 0]
+                # MSS returns BGRA, OpenCV expects BGR, so map: B->B, G->G, R->R
+                self._reuse_array[:, :, 0] = bgra_view[:, :, 0]  # B->B
+                self._reuse_array[:, :, 1] = bgra_view[:, :, 1]  # G->G
+                self._reuse_array[:, :, 2] = bgra_view[:, :, 2]  # R->R
             else:
                 img_data = np.frombuffer(screenshot.rgb, dtype=np.uint8)
                 img_rgb = img_data.reshape((height, width, 3))
+                # Convert RGB to BGR for OpenCV
                 np.copyto(self._reuse_array, img_rgb[:, :, ::-1])
             return self._reuse_array
         except Exception as e:
