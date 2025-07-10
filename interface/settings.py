@@ -70,6 +70,7 @@ class SettingsManager:
             "milestone_interval": 100,
             "use_custom_cursor": False,
             "shovel_equip_mode": "double",
+            "include_screenshot_in_discord": False
         }
 
         self.param_descriptions = {
@@ -121,6 +122,7 @@ class SettingsManager:
             "target_fps": "Your game's FPS for prediction calculations. Higher FPS = more precise predictions. Does not affect screenshot rate.",
             "use_custom_cursor": "Move cursor to set position before clicking when enabled. Cannot be used with Auto-Walk.",
             "shovel_equip_mode": "Whether to press the shovel slot key once ('single') or twice ('double') when re-equipping.",
+            "include_screenshot_in_discord": "When enabled, screenshots of your game will be included in Discord milestone notifications."
         }
 
         self.default_keybinds = {
