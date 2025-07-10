@@ -1088,8 +1088,9 @@ class DigTool:
     def _cleanup_click_threads(self):
         self._click_thread_pool = [t for t in self._click_thread_pool if t.is_alive()]
 
-    def perform_click(self):
+    def perform_click(self, delay=0):
         perform_click_action(
+            delay,
             self.running,
             self.get_param("use_custom_cursor"),
             self.cursor_position,
@@ -1167,8 +1168,6 @@ class DigTool:
             self._last_time_update = now
 
     def run_main_loop(self):
-        high_performance_mode = True
-
         screenshot_fps = self.get_param("screenshot_fps") or 240
         process_every_nth_frame = 1
 
@@ -1199,7 +1198,7 @@ class DigTool:
             self._update_time_cache()
             current_time_ms = self._current_time_ms_cache
             
-            startup_grace_period = 3000 
+            startup_grace_period = 100 
             if (hasattr(self, 'startup_time') and 
                 hasattr(self, '_startup_grace_ended') and 
                 not self._startup_grace_ended and 
@@ -1737,7 +1736,7 @@ class DigTool:
                         if not self.click_lock.locked():
                             self.click_lock.acquire()
                             threading.Thread(
-                                target=self.perform_click, args=(0,)
+                                target=self.perform_click, args=(click_delay,)
                             ).start()
                             auto_walk_state = "wait_for_target"
                             wait_for_target_start = current_time_ms
@@ -1792,7 +1791,7 @@ class DigTool:
 
             post_click_blindness = self.get_param("post_click_blindness")
             
-            startup_grace_period = 3000  
+            startup_grace_period = 100  
             is_past_startup_grace = not hasattr(self, 'startup_time') or (current_time_ms - self.startup_time) > startup_grace_period
 
             if (
