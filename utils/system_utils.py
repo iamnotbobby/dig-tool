@@ -8,7 +8,6 @@ import sys
 import ctypes
 import tkinter as tk
 from tkinter import messagebox
-import autoit
 from utils.debug_logger import logger
 
 
@@ -124,17 +123,12 @@ def set_dig_tool_instance(instance):
 
 def send_click():
     try:
-        autoit.mouse_click("left")
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
         return True
     except Exception as e:
-        logger.error(f"AutoIT click failed: {e}")
-        try:
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-            return True
-        except Exception as e2:
-            logger.error(f"Win32API fallback click failed: {e2}")
-            return False
+        logger.error(f"Win32API click failed: {e}")
+        return False
 
 
 
