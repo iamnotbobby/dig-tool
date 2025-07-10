@@ -115,7 +115,7 @@ jobs:
             }
             "verification" = @{
               "github_actions_url" = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-              "commit_url" = "commit_url" = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+              "commit_url" = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
             }
           }
           
