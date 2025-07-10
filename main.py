@@ -1318,7 +1318,15 @@ class DigTool:
                                 rgb_color = int(picked_color, 16)
 
                                 target_hsv = rgb_to_hsv_single(rgb_color)
-                                color_tolerance = int(self.get_param("color_tolerance"))
+                                
+                                color_tolerance_param = self.get_param("color_tolerance")
+                                try:
+                                    if isinstance(color_tolerance_param, str):
+                                        color_tolerance = int(float(color_tolerance_param.strip())) if color_tolerance_param.strip() else 30
+                                    else:
+                                        color_tolerance = int(color_tolerance_param) if color_tolerance_param is not None else 30
+                                except (ValueError, TypeError):
+                                    color_tolerance = 30
 
                                 final_mask = detect_by_color_picker(
                                     hsv, target_hsv, color_tolerance
@@ -1330,6 +1338,7 @@ class DigTool:
                                     "target_hsv": f"H:{target_hsv[0]} S:{target_hsv[1]} V:{target_hsv[2]}",
                                 }
                             except (ValueError, TypeError) as e:
+                                logger.warning(f"Color picker detection failed: {e}")
                                 saturation = hsv[:, :, 1]
                                 cv2.threshold(
                                     saturation,
