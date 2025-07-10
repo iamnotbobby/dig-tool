@@ -123,55 +123,12 @@ def set_dig_tool_instance(instance):
 
 def send_click():
     try:
-        user32 = ctypes.windll.user32
-        INPUT_MOUSE = 0
-        MOUSEEVENTF_LEFTDOWN = 0x0002
-        MOUSEEVENTF_LEFTUP = 0x0004
-
-        class MOUSEINPUT(ctypes.Structure):
-            _fields_ = [
-                ("dx", ctypes.c_long),
-                ("dy", ctypes.c_long),
-                ("mouseData", ctypes.wintypes.DWORD),
-                ("dwFlags", ctypes.wintypes.DWORD),
-                ("time", ctypes.wintypes.DWORD),
-                ("dwExtraInfo", ctypes.POINTER(ctypes.wintypes.ULONG)),
-            ]
-
-        class INPUT(ctypes.Structure):
-            class _INPUT(ctypes.Union):
-                _fields_ = [("mi", MOUSEINPUT)]
-
-            _anonymous_ = ("_input",)
-            _fields_ = [("type", ctypes.wintypes.DWORD), ("_input", _INPUT)]
-
-        input_down = INPUT()
-        input_down.type = INPUT_MOUSE
-        input_down.mi.dx = 0
-        input_down.mi.dy = 0
-        input_down.mi.mouseData = 0
-        input_down.mi.dwFlags = MOUSEEVENTF_LEFTDOWN
-        input_down.mi.time = 0
-        input_down.mi.dwExtraInfo = None
-        input_up = INPUT()
-        input_up.type = INPUT_MOUSE
-        input_up.mi.dx = 0
-        input_up.mi.dy = 0
-        input_up.mi.mouseData = 0
-        input_up.mi.dwFlags = MOUSEEVENTF_LEFTUP
-        input_up.mi.time = 0
-        input_up.mi.dwExtraInfo = None
-        inputs = (INPUT * 2)(input_down, input_up)
-        user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
         return True
     except Exception as e:
-        try:
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-            return True
-        except Exception as e2:
-            logger.error(f"Win32API click failed: {e}, {e2}")
-            return False
+        logger.error(f"Win32API click failed: {e}")
+        return False
 
 
 
