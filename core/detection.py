@@ -475,7 +475,7 @@ def calculate_velocity_based_sweet_spot_width(
     return max(5.0, min(50.0, dynamic_width_percent))
 
 
-def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
+def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_detailed_logging=False):
     """
     Detection method using a user-picked color with tolerance.
 
@@ -483,6 +483,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
         hsv: HSV image array
         target_color_hsv: Target color in HSV format [H, S, V]
         color_tolerance: Tolerance for color matching (default: 30)
+        enable_detailed_logging: Whether to log detailed debug information (default: False)
 
     Returns:
         Binary mask with detected regions matching the target color
@@ -500,7 +501,8 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
         
         color_tolerance = max(1, min(90, int(color_tolerance)))
         
-        logger.debug(f"Color picker detection: Target HSV={target_color_hsv}, Tolerance={color_tolerance}")
+        if enable_detailed_logging:
+            logger.debug(f"Color picker detection: Target HSV={target_color_hsv}, Tolerance={color_tolerance}")
         
         lower_bound = np.array(
             [
@@ -520,7 +522,8 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
             dtype=np.uint8,
         )
 
-        logger.debug(f"HSV bounds: Lower={lower_bound}, Upper={upper_bound}")
+        if enable_detailed_logging:
+            logger.debug(f"HSV bounds: Lower={lower_bound}, Upper={upper_bound}")
 
         if target_color_hsv[0] - color_tolerance < 0:
             mask1 = cv2.inRange(
@@ -544,7 +547,8 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
                 np.array([179, upper_bound[1], upper_bound[2]], dtype=np.uint8),
             )
             mask = cv2.bitwise_or(mask1, mask2)
-            logger.debug("Applied hue wraparound (low)")
+            if enable_detailed_logging:
+                logger.debug("Applied hue wraparound (low)")
         elif target_color_hsv[0] + color_tolerance > 179:
             mask1 = cv2.inRange(
                 hsv,
@@ -564,16 +568,19 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
                 ),
             )
             mask = cv2.bitwise_or(mask1, mask2)
-            logger.debug("Applied hue wraparound (high)")
+            if enable_detailed_logging:
+                logger.debug("Applied hue wraparound (high)")
         else:
             mask = cv2.inRange(hsv, lower_bound, upper_bound)
-            logger.debug("Applied normal HSV range")
+            if enable_detailed_logging:
+                logger.debug("Applied normal HSV range")
 
         detected_pixels = np.sum(mask > 0)
         total_pixels = mask.shape[0] * mask.shape[1]
         detection_percent = (detected_pixels / total_pixels) * 100
         
-        logger.debug(f"Detection result: {detected_pixels}/{total_pixels} pixels ({detection_percent:.1f}%)")
+        if enable_detailed_logging:
+            logger.debug(f"Detection result: {detected_pixels}/{total_pixels} pixels ({detection_percent:.1f}%)")
         
         return mask
         
@@ -598,9 +605,6 @@ def rgb_to_hsv_single(rgb_color):
 
         rgb_array = np.array([[[b, g, r]]], dtype=np.uint8)
         hsv_array = cv2.cvtColor(rgb_array, cv2.COLOR_BGR2HSV)
-
-        from utils.debug_logger import logger
-        logger.debug(f"RGB->HSV conversion: RGB({r},{g},{b}) -> HSV({hsv_array[0,0,0]},{hsv_array[0,0,1]},{hsv_array[0,0,2]})")
 
         return hsv_array[0, 0]
     

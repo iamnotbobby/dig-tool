@@ -1104,21 +1104,21 @@ class MainWindow:
             picked_color = self.dig_tool.param_vars.get('picked_color_rgb', tk.StringVar()).get()
             color_tolerance = self.dig_tool.param_vars.get('color_tolerance', tk.DoubleVar()).get()
             
-            print(f"=== Color Parameter Test ===")
-            print(f"use_color_picker_detection: {use_color_picker}")
-            print(f"picked_color_rgb: '{picked_color}'")
-            print(f"color_tolerance: {color_tolerance}")
+            logger.info(f"=== Color Parameter Test ===")
+            logger.info(f"use_color_picker_detection: {use_color_picker}")
+            logger.info(f"picked_color_rgb: '{picked_color}'")
+            logger.info(f"color_tolerance: {color_tolerance}")
             
             picked_via_get_param = self.dig_tool.get_param('picked_color_rgb')
-            print(f"Via get_param: '{picked_via_get_param}'")
+            logger.info(f"Via get_param: '{picked_via_get_param}'")
             
             test_color = "#00FF00"  
             self.dig_tool.param_vars['picked_color_rgb'].set(test_color)
             after_set = self.dig_tool.get_param('picked_color_rgb')
-            print(f"After setting {test_color}: '{after_set}'")
+            logger.info(f"After setting {test_color}: '{after_set}'")
             
             self.dig_tool.update_status(f"Color test complete - current: {after_set}")
             
         except Exception as e:
-            print(f"Error in color test: {e}")
+            logger.error(f"Error in color test: {e}")
             self.dig_tool.update_status(f"Color test error: {e}")
