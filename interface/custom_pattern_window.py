@@ -736,7 +736,7 @@ class CustomPatternWindow:
                 success, message = self.automation_manager.save_pattern(self._current_pattern_name, self._current_pattern)
                 if success:
                     self._show_preview_pattern_blocks(self._current_pattern)
-                    self.window.after(10, lambda: self._ensure_pattern_selected(self._current_pattern_name))
+                    self._safe_ui_update(lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
                     dialog.destroy()
                 else:
                     tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
@@ -755,7 +755,7 @@ class CustomPatternWindow:
                     success, message = self.automation_manager.save_pattern(self._current_pattern_name, self._current_pattern)
                     if success:
                         self._show_preview_pattern_blocks(self._current_pattern)
-                        self.window.after(10, lambda: self._ensure_pattern_selected(self._current_pattern_name))
+                        self._safe_ui_update(lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
                         dialog.destroy()
                     else:
                         tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
@@ -915,8 +915,17 @@ class CustomPatternWindow:
         self.window.after_idle(lambda: self._refresh_pattern_display(pattern))
 
     def _animate_block_entrance(self, frame, target_width, target_height):
-        current_width = frame.winfo_reqwidth()
-        current_height = frame.winfo_reqheight()
+        try:
+            if not frame.winfo_exists():
+                return
+        except tk.TclError:
+            return
+            
+        try:
+            current_width = frame.winfo_reqwidth()
+            current_height = frame.winfo_reqheight()
+        except tk.TclError:
+            return
         
         if current_width < target_width or current_height < target_height:
             width_step = max(1, (target_width - current_width) // 3)
@@ -925,10 +934,17 @@ class CustomPatternWindow:
             new_width = min(current_width + width_step, target_width)
             new_height = min(current_height + height_step, target_height)
             
-            frame.config(width=new_width, height=new_height)
+            try:
+                frame.config(width=new_width, height=new_height)
+            except tk.TclError:
+                return
             
             if new_width < target_width or new_height < target_height:
-                self.window.after(30, lambda: self._animate_block_entrance(frame, target_width, target_height))
+                try:
+                    if self.window.winfo_exists():
+                        self.window.after(30, lambda: self._animate_block_entrance(frame, target_width, target_height))
+                except tk.TclError:
+                    return
 
     def _display_recorded_pattern_blocks(self, pattern, is_recording=False):
         if not pattern:
@@ -987,9 +1003,9 @@ class CustomPatternWindow:
         self._update_recorded_canvas_scroll_region()
         
         if is_recording:
-            self.window.after(10, self._auto_scroll_to_latest)
+            self._safe_ui_update(self._auto_scroll_to_latest, 10)
         else:
-            self.window.after(10, lambda: self.recorded_pattern_canvas.yview_moveto(0.0))
+            self._safe_ui_update(lambda: self.recorded_pattern_canvas.yview_moveto(0.0), 10)
 
     def _update_recorded_canvas_scroll_region(self):
         self.recorded_pattern_frame.update_idletasks()
@@ -1035,11 +1051,7 @@ class CustomPatternWindow:
                 return
 
             pattern_data = {
-                'name': pattern_name,
-                'pattern': pattern_info[pattern_name]['pattern'],
-                'type': 'custom',
-                'exported_from': 'Dig Tool Custom Patterns',
-                'version': '1.0'
+                pattern_name: pattern_info[pattern_name]['pattern']
             }
 
             filepath = filedialog.asksaveasfilename(
@@ -1089,8 +1101,10 @@ class CustomPatternWindow:
                 data = json.load(f)
 
             if is_single_pattern(data):
+                logger.debug(f"Importing single pattern with metadata format: {data.get('name', 'unknown')}")
                 self._import_single_pattern(data)
             else:
+                logger.debug(f"Importing multiple patterns format with {len(data)} patterns")
                 self._import_multiple_patterns(data)
 
         except json.JSONDecodeError:
@@ -1172,7 +1186,6 @@ class CustomPatternWindow:
             for pattern_name, pattern in patterns_data.items():
                 try:
                     if isinstance(pattern, list):
-                     
                         success, result = process_pattern_steps(pattern)
                         if not success:
                             errors.append(f"{pattern_name}: {result}")
@@ -1180,7 +1193,35 @@ class CustomPatternWindow:
                         
                         cleaned_pattern = result
                         
+                        existing_patterns = self.automation_manager.get_pattern_list()
+                        if pattern_name in existing_patterns:
+                            errors.append(f"{pattern_name}: Pattern already exists (skipped)")
+                            continue
+                        
                         if cleaned_pattern:  
+                            success, message = self.automation_manager.save_pattern(pattern_name, cleaned_pattern)
+                            if success:
+                                loaded_count += 1
+                            else:
+                                errors.append(f"{pattern_name}: {message}")
+                    elif isinstance(pattern, dict) and "pattern" in pattern:
+                        if not self._validate_pattern_data(pattern, lambda msg: errors.append(f"{pattern_name}: {msg}")):
+                            continue
+                            
+                        raw_pattern = pattern['pattern']
+                        success, result = process_pattern_steps(raw_pattern)
+                        if not success:
+                            errors.append(f"{pattern_name}: {result}")
+                            continue
+                        
+                        cleaned_pattern = result
+                        
+                        existing_patterns = self.automation_manager.get_pattern_list()
+                        if pattern_name in existing_patterns:
+                            errors.append(f"{pattern_name}: Pattern already exists (skipped)")
+                            continue
+                        
+                        if cleaned_pattern:
                             success, message = self.automation_manager.save_pattern(pattern_name, cleaned_pattern)
                             if success:
                                 loaded_count += 1
@@ -2184,5 +2225,5 @@ class CustomPatternWindow:
             else:
                 self.unsaved_changes_label.config(text="✓ Saved", foreground="green")
            
-                self.window.after(2000, lambda: self.unsaved_changes_label.config(text=""))
+                self._safe_ui_update(lambda: self.unsaved_changes_label.config(text=""), 2000)
 
