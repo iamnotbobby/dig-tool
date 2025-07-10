@@ -131,6 +131,7 @@ class ScreenCapture:
             new_top = max(top, center_y - 100)
             new_bottom = min(bottom, new_top + 200)
         reduced_bbox = (new_left, new_top, new_right, new_bottom)
+        
         return self.capture(reduced_bbox, region_key="region")
 
     def capture_diff(self, bbox=None, last_screenshot=None, change_threshold=0.1):

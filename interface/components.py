@@ -296,6 +296,9 @@ class GameOverlay:
             anchor="center",
         )
         self.latency_label.grid(row=1, column=1, sticky="ew", padx=5, pady=1)
+        
+        # self.benchmark_label = Label(stats_frame, text="BENCH: 0 FPS", fg='maroon1', bg='black', font=('Consolas', 9))
+        # self.benchmark_label.grid(row=2, column=0, sticky='w')
 
         key_frame = Frame(self.overlay, bg="black", pady=5)
         key_frame.pack(padx=15, fill="x")
@@ -307,6 +310,7 @@ class GameOverlay:
             bg="black",
             font=("Consolas", 8),
         )
+        
         self.toggle_bot_label.pack(side=tk.LEFT, expand=True)
 
         self.toggle_gui_label = Label(
@@ -397,9 +401,10 @@ class GameOverlay:
             locked_color = kwargs.get("locked_color_hex")
             if locked_color:
                 self.color_swatch_overlay_label.config(bg=locked_color)
-
+                
             dig_count = kwargs.get("dig_count", 0)
             click_count = kwargs.get("click_count", 0)
+            # self.benchmark_label.config(text=f"BENCH: {benchmark_fps:<5} FPS")
 
             self.dig_label.config(text=f"DIGS: {dig_count}")
             self.clicks_label.config(text=f"CLICKS: {click_count}")

@@ -28,7 +28,6 @@ from tkinter import Label, Frame, TclError
 import threading
 import time
 from PIL import Image, ImageTk
-import bettercam
 import keyboard
 import queue
 
@@ -36,7 +35,7 @@ from interface.components import GameOverlay, AutoWalkOverlay
 from interface.main_window import MainWindow
 from interface.settings import SettingsManager
 from interface.custom_pattern_window import CustomPatternWindow
-from utils.debug_logger import logger, save_debug_screenshot, log_click_debug
+from utils.debug_logger import logger, save_debug_screenshot, log_click_debug, measure_system_latency
 from core.detection import (
     find_line_position,
     VelocityCalculator,
@@ -99,16 +98,15 @@ class DigTool:
         self.root.after_idle(lambda: self._check_and_enable_buttons())
 
         set_dig_tool_instance(self)
-
         self.root.after(500, self.perform_initial_latency_measurement)
-
         self.running = False
         self.preview_active = True
         self.overlay = None
         self.overlay_enabled = False
         self.autowalk_overlay = None
         self.autowalk_overlay_enabled = False
-        self.cam = bettercam.create(output_color="BGR")
+        self.cam = ScreenCapture()
+        self.region_key = "main_game"
         self.click_count = 0
         self.dig_count = 0
         self.click_lock = threading.Lock()
@@ -159,9 +157,11 @@ class DigTool:
         self._max_click_threads = 3
 
         # Benchmarking
-        # self.frame_times = []
-        # self.last_report_time = time.time()
-        # self.report_interval = 1
+        self.report_interval = 1
+        self.frame_times = []
+        self.last_report_time = time.time()
+        self.last_frame_time = time.perf_counter()
+        self.benchmark_fps = 0
 
         self.main_window.create_ui()
 
@@ -246,9 +246,10 @@ class DigTool:
         ):
             if time.time() - self._latency_measurement_time < 30:
                 return self._measured_latency
-
+              
         game_area = getattr(self, "game_area", None)
-        self._measured_latency = measure_system_latency(game_area)
+        self._measured_latency = measure_system_latency(game_area, self.cam)
+
         self._latency_measurement_time = time.time()
         return self._measured_latency
 
@@ -322,8 +323,7 @@ class DigTool:
             pass
 
         try:
-            self.cam.stop()
-            self.cam.release()
+          self.cam.close()
         except:
             pass
 
@@ -1222,7 +1222,7 @@ class DigTool:
         frame_skip_counter = 0
 
         while self.preview_active:
-            start_time = time.perf_counter()
+            frame_start_time = time.perf_counter()
             self._update_time_cache()
             current_time_ms = self._current_time_ms_cache
 
@@ -1236,7 +1236,7 @@ class DigTool:
             self.velocity_calculator.update_fps(game_fps)
 
             if self.game_area is None:
-                time.sleep(screenshot_delay)
+                time.sleep(0.01)
                 continue
 
             if self.running and self.automation_manager.should_re_equip_shovel():
@@ -1246,7 +1246,7 @@ class DigTool:
             should_process_zones = frame_skip_counter % process_every_nth_frame == 0
 
             capture_start = time.perf_counter()
-            screenshot = self.cam.grab(region=(tuple(self.game_area)))
+            screenshot = self.cam.capture(bbox=self.game_area, region_key=self.region_key)
             capture_time = time.perf_counter() - capture_start
 
             if screenshot is None:
@@ -1985,6 +1985,7 @@ class DigTool:
                     "sell_count": self.automation_manager.sell_count,
                     "target_engaged": self.target_engaged,
                     "line_detected": line_pos != -1,
+                    # 'benchmark_fps': self.benchmark_fps,
                     "detection_info": (
                         detection_info
                         if "detection_info" in locals()
@@ -1998,6 +1999,20 @@ class DigTool:
                 except queue.Full:
                     pass
 
+             # Benchmarking
+            now = time.time()
+            frame_time = frame_start_time - self.last_frame_time
+            self.last_frame_time = frame_start_time
+
+            self.frame_times.append(frame_time)
+
+            if now - self.last_report_time >= self.report_interval:
+                if self.frame_times:
+                    avg_frame_time = sum(self.frame_times) / len(self.frame_times)
+                    self.benchmark_fps = int(1.0 / avg_frame_time) if avg_frame_time > 0 else 0
+                    # logger.debug(f"Benchmark: {self.benchmark_fps} FPS (avg frame time: {avg_frame_time*1000:.2f}ms)")
+                    self.frame_times.clear()
+                self.last_report_time = now
             elapsed = time.perf_counter() - start_time
 
             if screenshot_delay > elapsed:
@@ -2005,7 +2020,7 @@ class DigTool:
 
     def run(self):
         self.root.mainloop()
-
+        
     def manual_latency_measurement(self):
         def measure_in_background():
             try:
@@ -2130,6 +2145,7 @@ class DigTool:
 
             if not self.main_loop_thread or not self.main_loop_thread.is_alive():
                 self.start_threads()
+
 
 
 if __name__ == "__main__":

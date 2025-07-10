@@ -1,6 +1,7 @@
 opencv-python
 numpy
 keyboard
+psutil
 pillow
 pywin32
 ahk

@@ -5,7 +5,9 @@ import numpy as np
 import win32gui, win32ui, win32con, win32api
 import os
 import sys
+import time
 import ctypes
+import bettercam
 import tkinter as tk
 from tkinter import messagebox
 from utils.debug_logger import logger
@@ -155,8 +157,6 @@ def send_click():
     else:
         return send_click_win32api()
 
-
-
 class ScreenCapture:
     def __init__(self):
         self.hwnd = win32gui.GetDesktopWindow()
@@ -232,7 +232,6 @@ class ScreenCapture:
 
     def close(self):
         self._cleanup()
-
 
 def get_window_list():
     windows = []
@@ -322,7 +321,6 @@ def capture_window(hwnd):
     except Exception as e:
         logger.error(f"Window capture failed: {e}")
         return None
-
 
 def get_screen_resolution():
     try:
@@ -530,18 +528,20 @@ class PerformanceMonitor:
         return avg_frame_time * 1000
 
 
-def measure_system_latency(game_area=None):
+def measure_system_latency(game_area=None, cam=None):
     try:
         pipeline_measurements = []
         screenshot_measurements = []
         click_measurements = []
         test_iterations = 10
+        
         if game_area:
             x1, y1, x2, y2 = game_area
             w, h = x2 - x1, y2 - y1
             test_region = (x1, y1, x1 + min(w, 200), y1 + min(h, 100))
         else:
             test_region = (100, 100, 300, 200)
+        
         from utils.screen_capture import ScreenCapture
 
         test_screen_grabber = ScreenCapture()
@@ -549,6 +549,7 @@ def measure_system_latency(game_area=None):
             test_screen_grabber.capture(bbox=test_region, region_key="latency_warmup")
             time.sleep(0.002)
         test_screen_grabber.clear_cache()
+        
         for i in range(test_iterations):
             pipeline_start = time.perf_counter()
             screenshot_start = time.perf_counter()
@@ -592,6 +593,7 @@ def measure_system_latency(game_area=None):
             screenshot_measurements.append(screenshot_latency)
             click_measurements.append(click_latency)
             time.sleep(0.005)
+        
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             try:
@@ -603,6 +605,7 @@ def measure_system_latency(game_area=None):
             actual_click_latency = (click_end - click_start) * 1000
             click_measurements.append(actual_click_latency)
             time.sleep(0.01)
+        
         test_screen_grabber.close()
 
         def robust_average(measurements):
@@ -649,6 +652,7 @@ def measure_system_latency(game_area=None):
         total_latency += display_latency + system_overhead
         safety_margin = total_latency * 0.15
         final_latency = total_latency + safety_margin
+
         return max(5, min(150, int(final_latency)))
     except Exception:
         return 35
