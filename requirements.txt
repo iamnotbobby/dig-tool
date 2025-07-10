@@ -11,3 +11,4 @@ pynput
 requests
 mss
 tkinterdnd2
+pyautogui

@@ -487,97 +487,124 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30):
     Returns:
         Binary mask with detected regions matching the target color
     """
-    # Create mask for the target color with tolerance
-    lower_bound = np.array(
-        [
-            max(0, target_color_hsv[0] - color_tolerance),
-            max(0, target_color_hsv[1] - color_tolerance),
-            max(0, target_color_hsv[2] - color_tolerance),
-        ],
-        dtype=np.uint8,
-    )
+    try:
+        from utils.debug_logger import logger
+        
+        if hsv is None or hsv.size == 0:
+            logger.error("detect_by_color_picker: Empty HSV image")
+            return np.zeros((10, 10), dtype=np.uint8)
+            
+        if target_color_hsv is None or len(target_color_hsv) < 3:
+            logger.error(f"detect_by_color_picker: Invalid target HSV: {target_color_hsv}")
+            return np.zeros(hsv.shape[:2], dtype=np.uint8)
+        
+        color_tolerance = max(1, min(90, int(color_tolerance)))
+        
+        logger.debug(f"Color picker detection: Target HSV={target_color_hsv}, Tolerance={color_tolerance}")
+        
+        lower_bound = np.array(
+            [
+                max(0, target_color_hsv[0] - color_tolerance),
+                max(0, target_color_hsv[1] - color_tolerance),
+                max(0, target_color_hsv[2] - color_tolerance),
+            ],
+            dtype=np.uint8,
+        )
 
-    upper_bound = np.array(
-        [
-            min(179, target_color_hsv[0] + color_tolerance),
-            min(255, target_color_hsv[1] + color_tolerance),
-            min(255, target_color_hsv[2] + color_tolerance),
-        ],
-        dtype=np.uint8,
-    )
+        upper_bound = np.array(
+            [
+                min(179, target_color_hsv[0] + color_tolerance),
+                min(255, target_color_hsv[1] + color_tolerance),
+                min(255, target_color_hsv[2] + color_tolerance),
+            ],
+            dtype=np.uint8,
+        )
 
-    # Handle hue wraparound (red color case)
-    if target_color_hsv[0] - color_tolerance < 0:
-        # Split into two ranges for hue wraparound
-        mask1 = cv2.inRange(
-            hsv,
-            np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
-            np.array(
-                [target_color_hsv[0] + color_tolerance, upper_bound[1], upper_bound[2]],
-                dtype=np.uint8,
-            ),
-        )
-        mask2 = cv2.inRange(
-            hsv,
-            np.array(
-                [
-                    180 + target_color_hsv[0] - color_tolerance,
-                    lower_bound[1],
-                    lower_bound[2],
-                ],
-                dtype=np.uint8,
-            ),
-            np.array([179, upper_bound[1], upper_bound[2]], dtype=np.uint8),
-        )
-        mask = cv2.bitwise_or(mask1, mask2)
-    elif target_color_hsv[0] + color_tolerance > 179:
-        # Split into two ranges for hue wraparound
-        mask1 = cv2.inRange(
-            hsv,
-            np.array([lower_bound[0], lower_bound[1], lower_bound[2]], dtype=np.uint8),
-            np.array([179, upper_bound[1], upper_bound[2]], dtype=np.uint8),
-        )
-        mask2 = cv2.inRange(
-            hsv,
-            np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
-            np.array(
-                [
-                    target_color_hsv[0] + color_tolerance - 180,
-                    upper_bound[1],
-                    upper_bound[2],
-                ],
-                dtype=np.uint8,
-            ),
-        )
-        mask = cv2.bitwise_or(mask1, mask2)
-    else:
-        # Normal case - no hue wraparound
-        mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        logger.debug(f"HSV bounds: Lower={lower_bound}, Upper={upper_bound}")
 
-    return mask
+        if target_color_hsv[0] - color_tolerance < 0:
+            mask1 = cv2.inRange(
+                hsv,
+                np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
+                np.array(
+                    [target_color_hsv[0] + color_tolerance, upper_bound[1], upper_bound[2]],
+                    dtype=np.uint8,
+                ),
+            )
+            mask2 = cv2.inRange(
+                hsv,
+                np.array(
+                    [
+                        180 + target_color_hsv[0] - color_tolerance,
+                        lower_bound[1],
+                        lower_bound[2],
+                    ],
+                    dtype=np.uint8,
+                ),
+                np.array([179, upper_bound[1], upper_bound[2]], dtype=np.uint8),
+            )
+            mask = cv2.bitwise_or(mask1, mask2)
+            logger.debug("Applied hue wraparound (low)")
+        elif target_color_hsv[0] + color_tolerance > 179:
+            mask1 = cv2.inRange(
+                hsv,
+                np.array([lower_bound[0], lower_bound[1], lower_bound[2]], dtype=np.uint8),
+                np.array([179, upper_bound[1], upper_bound[2]], dtype=np.uint8),
+            )
+            mask2 = cv2.inRange(
+                hsv,
+                np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
+                np.array(
+                    [
+                        target_color_hsv[0] + color_tolerance - 180,
+                        upper_bound[1],
+                        upper_bound[2],
+                    ],
+                    dtype=np.uint8,
+                ),
+            )
+            mask = cv2.bitwise_or(mask1, mask2)
+            logger.debug("Applied hue wraparound (high)")
+        else:
+            mask = cv2.inRange(hsv, lower_bound, upper_bound)
+            logger.debug("Applied normal HSV range")
+
+        detected_pixels = np.sum(mask > 0)
+        total_pixels = mask.shape[0] * mask.shape[1]
+        detection_percent = (detected_pixels / total_pixels) * 100
+        
+        logger.debug(f"Detection result: {detected_pixels}/{total_pixels} pixels ({detection_percent:.1f}%)")
+        
+        return mask
+        
+    except Exception as e:
+        from utils.debug_logger import logger
+        logger.error(f"detect_by_color_picker failed: {e}")
+        return np.zeros(hsv.shape[:2] if hsv is not None else (10, 10), dtype=np.uint8)
 
 
 def rgb_to_hsv_single(rgb_color):
-    """
-    Convert a single RGB color to HSV format for OpenCV.
+    try:
+        if isinstance(rgb_color, int):
+            r = (rgb_color >> 16) & 0xFF
+            g = (rgb_color >> 8) & 0xFF
+            b = rgb_color & 0xFF
+        else:
+            r, g, b = rgb_color
 
-    Args:
-        rgb_color: RGB color as [R, G, B] or 0xRRGGBB format
+        r = max(0, min(255, int(r)))
+        g = max(0, min(255, int(g)))
+        b = max(0, min(255, int(b)))
 
-    Returns:
-        HSV color as [H, S, V] in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
-    """
-    if isinstance(rgb_color, int):
-        # Convert from 0xRRGGBB format
-        r = (rgb_color >> 16) & 0xFF
-        g = (rgb_color >> 8) & 0xFF
-        b = rgb_color & 0xFF
-    else:
-        # Assume it's already [R, G, B]
-        r, g, b = rgb_color
+        rgb_array = np.array([[[b, g, r]]], dtype=np.uint8)
+        hsv_array = cv2.cvtColor(rgb_array, cv2.COLOR_BGR2HSV)
 
-    # Create a 1x1 RGB image
-    rgb_array = np.array([[[b, g, r]]], dtype=np.uint8)
-    hsv_array = cv2.cvtColor(rgb_array, cv2.COLOR_BGR2HSV)
+        from utils.debug_logger import logger
+        logger.debug(f"RGB->HSV conversion: RGB({r},{g},{b}) -> HSV({hsv_array[0,0,0]},{hsv_array[0,0,1]},{hsv_array[0,0,2]})")
 
-    return hsv_array[0, 0]
+        return hsv_array[0, 0]
+    
+    except Exception as e:
+        from utils.debug_logger import logger
+        logger.error(f"rgb_to_hsv_single conversion failed: {e}, input: {rgb_color}")
+        return np.array([0, 0, 0], dtype=np.uint8)

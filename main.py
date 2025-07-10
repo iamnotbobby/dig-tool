@@ -1313,11 +1313,19 @@ class DigTool:
                         if picked_color and picked_color.strip() and picked_color != "":
                             try:
                                 picked_color = picked_color.strip()
+                                logger.debug(f"Color picker: Processing color '{picked_color}'")
+                                
                                 if picked_color.startswith("#"):
                                     picked_color = picked_color[1:]
+                                    
+                                if len(picked_color) != 6:
+                                    raise ValueError(f"Invalid hex color length: {len(picked_color)}")
+                                    
                                 rgb_color = int(picked_color, 16)
+                                logger.debug(f"Color picker: RGB int = 0x{rgb_color:06x}")
 
                                 target_hsv = rgb_to_hsv_single(rgb_color)
+                                logger.debug(f"Color picker: Target HSV = {target_hsv}")
                                 
                                 color_tolerance_param = self.get_param("color_tolerance")
                                 try:
@@ -1327,18 +1335,26 @@ class DigTool:
                                         color_tolerance = int(color_tolerance_param) if color_tolerance_param is not None else 30
                                 except (ValueError, TypeError):
                                     color_tolerance = 30
+                                
+                                logger.debug(f"Color picker: Using tolerance = {color_tolerance}")
 
                                 final_mask = detect_by_color_picker(
                                     hsv, target_hsv, color_tolerance
                                 )
+                                
+                                detected_pixels = np.sum(final_mask > 0) if final_mask is not None else 0
+                                logger.debug(f"Color picker: Detected {detected_pixels} pixels")
+                                
                                 detection_info = {
                                     "method": "Color Picker",
                                     "target_color": f"#{picked_color}",
                                     "tolerance": color_tolerance,
                                     "target_hsv": f"H:{target_hsv[0]} S:{target_hsv[1]} V:{target_hsv[2]}",
+                                    "detected_pixels": detected_pixels,
                                 }
                             except (ValueError, TypeError) as e:
                                 logger.warning(f"Color picker detection failed: {e}")
+                                logger.debug(f"Falling back to saturation detection")
                                 saturation = hsv[:, :, 1]
                                 cv2.threshold(
                                     saturation,

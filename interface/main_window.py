@@ -321,6 +321,9 @@ class MainWindow:
                     screenshot = pyautogui.screenshot(region=(min_x, min_y, area_width, area_height))
                     screenshot_array = np.array(screenshot)
                     
+                    logger.debug(f"Screenshot shape: {screenshot_array.shape}, dtype: {screenshot_array.dtype}")
+                    logger.debug(f"Sample pixel [0,0]: {screenshot_array[0, 0] if screenshot_array.size > 0 else 'Empty'}")
+                    
                     sample_step = max(1, min(area_width, area_height) // 20)
                     colors = []
                     
@@ -328,17 +331,39 @@ class MainWindow:
                         for x in range(0, area_width, sample_step):
                             if y < screenshot_array.shape[0] and x < screenshot_array.shape[1]:
                                 pixel_color = screenshot_array[y, x]
-                                colors.append(pixel_color[:3])  # RGB only
+                                if len(pixel_color) >= 3:
+                                    rgb = [int(pixel_color[0]), int(pixel_color[1]), int(pixel_color[2])]
+                                    colors.append(rgb)
+                    
+                    logger.debug(f"Sampled {len(colors)} color points")
                     
                     if colors:
-                        colors_array = np.array(colors)
+                        colors_array = np.array(colors, dtype=np.float64)
                         median_color = np.median(colors_array, axis=0).astype(int)
-                        picked_color = "#{:02x}{:02x}{:02x}".format(*median_color)
+                        
+                        median_color = np.clip(median_color, 0, 255)
+                        
+                        picked_color = "#{:02x}{:02x}{:02x}".format(
+                            int(median_color[0]), int(median_color[1]), int(median_color[2])
+                        )
+                        
+                        logger.debug(f"Median color RGB: {median_color}")
+                        logger.debug(f"Final hex color: {picked_color}")
+                        
+                        try:
+                            hex_clean = picked_color[1:]
+                            rgb_int = int(hex_clean, 16)
+                            test_hsv = rgb_to_hsv_single(rgb_int)
+                            logger.debug(f"Converted to HSV: H={test_hsv[0]}, S={test_hsv[1]}, V={test_hsv[2]}")
+                        except Exception as conv_e:
+                            logger.debug(f"HSV conversion test failed: {conv_e}")
+                            
                     else:
+                        logger.debug("No colors sampled")
                         picked_color = "CANCELLED"
                         
                 except Exception as e:
-                    print(f"Error sampling area: {e}")
+                    logger.error(f"Error sampling area: {e}")
                     picked_color = "CANCELLED"
             
             def on_escape_key(event):
@@ -376,33 +401,33 @@ class MainWindow:
             
             self.dig_tool.root.deiconify()
             
-            print(f"Debug: picked_color = {picked_color!r}") 
+            logger.debug(f"picked_color = {picked_color!r}") 
             
             if picked_color and picked_color != "CANCELLED":
-                print(f"Debug: Setting picked_color_rgb to {picked_color}")  
+                logger.debug(f"Setting picked_color_rgb to {picked_color}")  
                 try:
                     self.dig_tool.param_vars['picked_color_rgb'].set(picked_color)
-                    print(f"Debug: Parameter set successfully")
+                    logger.debug(f"Parameter set successfully")
                     
                     retrieved_color = self.dig_tool.param_vars['picked_color_rgb'].get()
-                    print(f"Debug: Retrieved color after setting: {retrieved_color}")
+                    logger.debug(f"Retrieved color after setting: {retrieved_color}")
                     
                     self.dig_tool.param_vars['use_color_picker_detection'].set(True)
-                    print("Debug: Enabled color picker detection")  
+                    logger.debug("Enabled color picker detection")  
                     
                     if hasattr(self, 'picked_color_display') and self.picked_color_display:
                         self.picked_color_display.config(bg=picked_color, text=picked_color)
-                        print("Debug: Updated color display widget")
+                        logger.debug("Updated color display widget")
                     else:
-                        print("Debug: Color display widget not found")
+                        logger.debug("Color display widget not found")
                     
                     self.dig_tool.update_status(f"Area sampled - Color: {picked_color}")
                     
                 except Exception as e:
-                    print(f"Debug: Error setting parameter: {e}")
+                    logger.error(f"Error setting parameter: {e}")
                     self.dig_tool.update_status(f"Error setting color: {e}")
             else:
-                print(f"Debug: Color sampling was cancelled or failed") 
+                logger.debug(f"Color sampling was cancelled or failed") 
                 self.dig_tool.update_status("Color sampling cancelled")
                 
         except Exception as e:
