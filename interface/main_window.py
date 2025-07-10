@@ -246,21 +246,108 @@ class MainWindow:
         try:
             overlay = tk.Toplevel()
             overlay.attributes('-topmost', True)
-            overlay.attributes('-alpha', 0.8)
+            overlay.attributes('-alpha', 0.1)  # Very transparent
             overlay.configure(bg='black')
             overlay.overrideredirect(True)
+            overlay.geometry(f"{overlay.winfo_screenwidth()}x{overlay.winfo_screenheight()}+0+0")
             
-            overlay.geometry("400x60+{}+10".format((overlay.winfo_screenwidth() - 400) // 2))
+            instruction_frame = tk.Frame(overlay, bg='black')
+            instruction_frame.place(relx=0.5, rely=0.1, anchor='center')
             
-            instruction_label = tk.Label(overlay, text="Move mouse to desired color and click\nPress ESC to cancel", 
-                                       font=("Arial", 12), bg='black', fg='white', justify='center')
-            instruction_label.pack(expand=True)
+            instruction_label = tk.Label(instruction_frame, 
+                                       text="Drag to select an area to sample colors from\nPress ESC to cancel", 
+                                       font=("Arial", 16, "bold"), bg='black', fg='white', justify='center')
+            instruction_label.pack(pady=10)
+            
+            start_pos = None
+            selection_rect = None
+            is_dragging = False
+            
+            def on_button_press(event):
+                nonlocal start_pos, selection_rect, is_dragging
+                start_pos = (event.x_root, event.y_root)
+                is_dragging = True
+                
+                if selection_rect:
+                    selection_rect.destroy()
+                selection_rect = tk.Frame(overlay, bg=overlay.cget('bg'), highlightthickness=2, highlightbackground='lime', highlightcolor='lime')
+                selection_rect.place(x=event.x, y=event.y, width=1, height=1)
+            
+            def on_motion(event):
+                nonlocal start_pos, selection_rect, is_dragging
+                if not is_dragging or not start_pos or not selection_rect:
+                    return
+                
+                x2, y2 = event.x_root, event.y_root
+                
+                overlay_x = overlay.winfo_rootx()
+                overlay_y = overlay.winfo_rooty()
+                
+                rect_x = min(x1, x2) - overlay_x
+                rect_y = min(y1, y2) - overlay_y
+                rect_w = abs(x2 - x1)
+                rect_h = abs(y2 - y1)
+                
+                selection_rect.place(x=rect_x, y=rect_y, width=rect_w, height=rect_h)
+            
+            def on_button_release(event):
+                nonlocal start_pos, selection_rect, is_dragging, picked_color
+                if not is_dragging or not start_pos:
+                    return
+                
+                is_dragging = False
+                
+                x1, y1 = start_pos
+                x2, y2 = event.x_root, event.y_root
+                
+                min_x, max_x = min(x1, x2), max(x1, x2)
+                min_y, max_y = min(y1, y2), max(y1, y2)
+                
+                area_width = max_x - min_x
+                area_height = max_y - min_y
+                
+                if area_width < 10 or area_height < 10:
+                    picked_color = "CANCELLED"
+                    return
+                
+                try:
+                    overlay.withdraw()
+                    time.sleep(0.1)
+                    
+                    import pyautogui
+                    import numpy as np
+                    
+                    screenshot = pyautogui.screenshot(region=(min_x, min_y, area_width, area_height))
+                    screenshot_array = np.array(screenshot)
+                    
+                    sample_step = max(1, min(area_width, area_height) // 20)
+                    colors = []
+                    
+                    for y in range(0, area_height, sample_step):
+                        for x in range(0, area_width, sample_step):
+                            if y < screenshot_array.shape[0] and x < screenshot_array.shape[1]:
+                                pixel_color = screenshot_array[y, x]
+                                colors.append(pixel_color[:3])  # RGB only
+                    
+                    if colors:
+                        colors_array = np.array(colors)
+                        median_color = np.median(colors_array, axis=0).astype(int)
+                        picked_color = "#{:02x}{:02x}{:02x}".format(*median_color)
+                    else:
+                        picked_color = "CANCELLED"
+                        
+                except Exception as e:
+                    print(f"Error sampling area: {e}")
+                    picked_color = "CANCELLED"
             
             def on_escape_key(event):
                 nonlocal picked_color
                 picked_color = "CANCELLED"
 
             overlay.focus_set()
+            overlay.bind('<Button-1>', on_button_press)
+            overlay.bind('<B1-Motion>', on_motion)
+            overlay.bind('<ButtonRelease-1>', on_button_release)
             overlay.bind('<Key-Escape>', on_escape_key)
             overlay.bind('<KeyPress-Escape>', on_escape_key)
             overlay.bind('<Escape>', on_escape_key)
@@ -271,64 +358,15 @@ class MainWindow:
             
             picked_color = None
             
-            def on_click(x, y, button, pressed):
-                nonlocal picked_color
-                if pressed and button == mouse.Button.left:
-                    try:
-                        import pyautogui
-                        screenshot = pyautogui.screenshot()
-                        pixel_color = screenshot.getpixel((x, y))
-                        picked_color = "#{:02x}{:02x}{:02x}".format(*pixel_color)
-                        return False 
-                    except Exception as e:
-                        print(f"Error getting pixel color: {e}")
-                        return False
-                return True
-            
-            def on_key(key):
-                nonlocal picked_color
+            while picked_color is None:
+                time.sleep(0.05)
                 try:
-                    if key == keyboard.Key.esc:
-                        picked_color = "CANCELLED"
-                        return False  
-                except AttributeError:
-                    pass
-                except Exception as e:
-                    print(f"Key event error: {e}")
-                return True
-            
-            mouse_listener = None
-            key_listener = None
-            try:
-                from pynput import mouse, keyboard
-                
-                mouse_listener = mouse.Listener(on_click=on_click)
-                key_listener = keyboard.Listener(on_key=on_key)
-                
-                mouse_listener.start()
-                key_listener.start()
-                
-                while picked_color is None:
-                    time.sleep(0.05)
-                    try:
-                        overlay.update()
-                        if overlay.winfo_exists():
-                            overlay.focus_force()
-                    except tk.TclError:
-                        picked_color = "CANCELLED"
-                        break
-                
-            except ImportError:
-                self.dig_tool.update_status("Error: pynput library required for color picking. Install with: pip install pynput")
-                picked_color = "CANCELLED"
-            finally:
-                try:
-                    if mouse_listener:
-                        mouse_listener.stop()
-                    if key_listener:
-                        key_listener.stop()
-                except:
-                    pass  
+                    overlay.update()
+                    if overlay.winfo_exists():
+                        overlay.focus_force()
+                except tk.TclError:
+                    picked_color = "CANCELLED"
+                    break
             
             try:
                 if overlay.winfo_exists():
@@ -345,13 +383,13 @@ class MainWindow:
                 if hasattr(self, 'picked_color_display') and self.picked_color_display:
                     self.picked_color_display.config(bg=picked_color, text=picked_color)
                 
-                self.dig_tool.update_status(f"Color picked: {picked_color}")
+                self.dig_tool.update_status(f"Area sampled - Color: {picked_color}")
             else:
-                self.dig_tool.update_status("Color picking cancelled")
+                self.dig_tool.update_status("Color sampling cancelled")
                 
         except Exception as e:
             self.dig_tool.root.deiconify()
-            self.dig_tool.update_status(f"Error picking color: {e}")
+            self.dig_tool.update_status(f"Error sampling colors: {e}")
 
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
@@ -719,11 +757,11 @@ class MainWindow:
         color_frame = Frame(color_picker_subsection.content)
         color_frame.pack(fill='x', padx=5, pady=2)
         
-        Label(color_frame, text="Picked Color:", font=("Segoe UI", 9)).pack(side='left', padx=(0, 5))
+        Label(color_frame, text="Sampled Color:", font=("Segoe UI", 9)).pack(side='left', padx=(0, 5))
         self.picked_color_display = Label(color_frame, text="None", bg='lightgray', relief='solid', bd=1, width=10)
         self.picked_color_display.pack(side='left', padx=(0, 5))
         
-        self.pick_color_btn = Button(color_frame, text="Pick Color", command=self.pick_color_from_screen)
+        self.pick_color_btn = Button(color_frame, text="Sample Area", command=self.pick_color_from_screen)
         self.pick_color_btn.pack(side='left', padx=(5, 0))
         self.color_picker_dependent_widgets.append(self.pick_color_btn)
         

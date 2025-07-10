@@ -109,7 +109,7 @@ class SettingsManager:
             "otsu_area_percentile": "Minimum area as percentage of image size when using adaptive area filtering.",
             # Color picker detection help text
             "use_color_picker_detection": "Use a specific color picked from the screen. Click 'Pick Color' to select a target color.",
-            "picked_color_rgb": "The RGB color value picked from the screen (automatically set when using Pick Color button).",
+            "picked_color_rgb": "The RGB color value sampled from a screen area (automatically set when using Sample Area button).",
             "color_tolerance": "Tolerance for color matching. Higher values = more colors will match, lower = more precise matching.",
             "initial_walkspeed_decrease": "Additional walkspeed decrease factor (0.0-1.0) added on top of the formula. Higher = slower movement.",
             "user_id": "Discord user ID for notifications (optional - leave blank for no ping).",
