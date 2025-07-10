@@ -278,6 +278,7 @@ class MainWindow:
                 if not is_dragging or not start_pos or not selection_rect:
                     return
                 
+                x1, y1 = start_pos
                 x2, y2 = event.x_root, event.y_root
                 
                 overlay_x = overlay.winfo_rootx()
