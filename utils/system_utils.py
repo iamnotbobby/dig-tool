@@ -121,7 +121,7 @@ def set_dig_tool_instance(instance):
     _dig_tool_instance = instance
 
 
-def send_click_win32api():
+def send_click():
     try:
         user32 = ctypes.windll.user32
         INPUT_MOUSE = 0
@@ -173,9 +173,6 @@ def send_click_win32api():
             logger.error(f"Win32API click failed: {e}, {e2}")
             return False
 
-
-def send_click():
-    send_click_win32api()
 
 
 class ScreenCapture:
