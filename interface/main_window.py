@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import Label, Button, Frame, Checkbutton, ttk
 from interface.components import CollapsiblePane, AccordionManager, Tooltip
+from utils.debug_logger import logger
 
 
 class DisabledTooltip:
@@ -148,9 +149,13 @@ class MainWindow:
         self.auto_shovel_checkbox = None
         self.auto_sell_checkbox = None
         self.use_cursor_checkbox = None
+        self._prev_auto_walk_enabled = False  # Track previous auto walk state for key cleanup
         self.shovel_dependent_widgets = []
         self.sell_dependent_widgets = []
         self.cursor_dependent_widgets = []
+        self.velocity_dependent_widgets = []
+        self.otsu_dependent_widgets = []
+        self.color_picker_dependent_widgets = []
         self.disabled_tooltips = []
         self.status_tooltips = []
 
@@ -199,6 +204,27 @@ class MainWindow:
                 self.dig_tool.param_vars['use_custom_cursor'].set(False)
                 self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
 
+    def validate_velocity_toggle(self, *args):
+        """Update dependent widgets when velocity-based width is toggled"""
+        # Schedule the update for the next idle cycle to ensure UI is ready
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
+    def validate_otsu_toggle(self, *args):
+        """Update dependent widgets when Otsu detection is toggled"""
+        # Ensure mutual exclusion with color picker
+        if self.dig_tool.param_vars['use_otsu_detection'].get():
+            self.dig_tool.param_vars['use_color_picker_detection'].set(False)
+        # Schedule the update for the next idle cycle to ensure UI is ready
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
+    def validate_color_picker_toggle(self, *args):
+        """Update dependent widgets when Color Picker detection is toggled"""
+        # Ensure mutual exclusion with Otsu
+        if self.dig_tool.param_vars['use_color_picker_detection'].get():
+            self.dig_tool.param_vars['use_otsu_detection'].set(False)
+        # Schedule the update for the next idle cycle to ensure UI is ready
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
     def validate_auto_sell_toggle(self, *args):
         if not self.dig_tool.automation_manager.sell_button_position:
             if self.dig_tool.param_vars['auto_sell_enabled'].get():
@@ -211,33 +237,120 @@ class MainWindow:
     def is_cursor_position_set(self):
         return hasattr(self.dig_tool, 'cursor_position') and self.dig_tool.cursor_position is not None
 
-    def test_click_method(self):
-        import threading
-        threading.Thread(target=self._test_click_method_with_delay, daemon=True).start()
-
-    def _test_click_method_with_delay(self):
+    def pick_color_from_screen(self):
+        """Pick a color from the screen using mouse cursor"""
         import time
-        method = self.dig_tool.get_param('click_method')
+        from core.detection import rgb_to_hsv_single
+        
+        # Hide the main window temporarily
+        self.dig_tool.root.withdraw()
+        
+        try:
+            # Create a temporary overlay for instructions
+            overlay = tk.Toplevel()
+            overlay.attributes('-topmost', True)
+            overlay.attributes('-alpha', 0.8)
+            overlay.configure(bg='black')
+            overlay.overrideredirect(True)
+            
+            # Position the overlay at the top of the screen
+            overlay.geometry("400x60+{}+10".format((overlay.winfo_screenwidth() - 400) // 2))
+            
+            instruction_label = tk.Label(overlay, text="Move mouse to desired color and click\nPress ESC to cancel", 
+                                       font=("Arial", 12), bg='black', fg='white', justify='center')
+            instruction_label.pack(expand=True)
+            
+            overlay.update()
+            
+            # Wait for mouse click or ESC
+            picked_color = None
+            
+            def on_click(x, y, button, pressed):
+                nonlocal picked_color
+                if pressed and button == mouse.Button.left:
+                    try:
+                        # Get pixel color at mouse position
+                        import pyautogui
+                        screenshot = pyautogui.screenshot()
+                        pixel_color = screenshot.getpixel((x, y))
+                        picked_color = "#{:02x}{:02x}{:02x}".format(*pixel_color)
+                        return False  # Stop listener
+                    except Exception as e:
+                        print(f"Error getting pixel color: {e}")
+                        return False
+                return True
+            
+            def on_key(key):
+                nonlocal picked_color
+                try:
+                    if key == keyboard.Key.esc:
+                        picked_color = "CANCELLED"
+                        return False  # Stop listener
+                except AttributeError:
+                    pass
+                return True
+            
+            # Import mouse and keyboard listeners
+            try:
+                from pynput import mouse, keyboard
+                
+                # Start listeners
+                mouse_listener = mouse.Listener(on_click=on_click)
+                key_listener = keyboard.Listener(on_key=on_key)
+                
+                mouse_listener.start()
+                key_listener.start()
+                
+                # Wait for color to be picked
+                while picked_color is None:
+                    time.sleep(0.1)
+                    overlay.update()
+                
+                # Stop listeners
+                mouse_listener.stop()
+                key_listener.stop()
+                
+            except ImportError:
+                self.dig_tool.update_status("Error: pynput library required for color picking. Install with: pip install pynput")
+                picked_color = "CANCELLED"
+            
+            # Clean up overlay
+            overlay.destroy()
+            
+            # Show main window again
+            self.dig_tool.root.deiconify()
+            
+            if picked_color and picked_color != "CANCELLED":
+                # Update the parameter
+                self.dig_tool.param_vars['picked_color_rgb'].set(picked_color)
+                
+                # Update the color display
+                if hasattr(self, 'picked_color_display') and self.picked_color_display:
+                    self.picked_color_display.config(bg=picked_color, text=picked_color)
+                
+                self.dig_tool.update_status(f"Color picked: {picked_color}")
+            else:
+                self.dig_tool.update_status("Color picking cancelled")
+                
+        except Exception as e:
+            # Ensure main window is shown again
+            self.dig_tool.root.deiconify()
+            self.dig_tool.update_status(f"Error picking color: {e}")
 
-        for i in range(3, 0, -1):
-            self.dig_tool.root.after(0, lambda count=i, m=method:
-            self.dig_tool.update_status(f"Testing {m.upper()} click in {count} seconds..."))
-            time.sleep(1.0)
-
-        self.dig_tool.root.after(0, lambda m=method:
-        self.dig_tool.update_status(f"Performing {m.upper()} test click..."))
-
-        from utils.system_utils import send_click
-        success = send_click()
-
-        if success:
-            self.dig_tool.root.after(0, lambda m=method:
-            self.dig_tool.update_status(f"{m.upper()} test click completed successfully!"))
-        else:
-            self.dig_tool.root.after(0, lambda m=method:
-            self.dig_tool.update_status(f"{m.upper()} test click failed!"))
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+
+        # Check if auto walk was just disabled - if so, cleanup any stuck keys
+        if self._prev_auto_walk_enabled and not auto_walk_enabled:
+            try:
+                if hasattr(self.dig_tool, 'automation_manager') and self.dig_tool.automation_manager:
+                    self.dig_tool.automation_manager.cleanup_stuck_keys()
+                    logger.debug("Key cleanup triggered when auto walk was disabled")
+            except Exception as e:
+                logger.error(f"Error during key cleanup when auto walk disabled: {e}")
+        
+        # Update the previous state
+        self._prev_auto_walk_enabled = auto_walk_enabled
 
         if self.auto_shovel_checkbox:
             if auto_walk_enabled:
@@ -267,6 +380,21 @@ class MainWindow:
         for widget in self.cursor_dependent_widgets:
             widget.config(state='normal' if cursor_enabled and has_cursor_pos else 'disabled')
 
+        # Handle velocity-based width dependencies
+        velocity_enabled = self.dig_tool.param_vars.get('velocity_based_width_enabled', tk.BooleanVar()).get()
+        for widget in self.velocity_dependent_widgets:
+            widget.config(state='normal' if velocity_enabled else 'disabled')
+
+        # Handle Otsu detection dependencies
+        otsu_enabled = self.dig_tool.param_vars.get('use_otsu_detection', tk.BooleanVar()).get()
+        for widget in self.otsu_dependent_widgets:
+            widget.config(state='normal' if otsu_enabled else 'disabled')
+
+        # Handle Color Picker detection dependencies
+        color_picker_enabled = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
+        for widget in self.color_picker_dependent_widgets:
+            widget.config(state='normal' if color_picker_enabled else 'disabled')
+
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
                 if tooltip.widget_type == 'shovel':
@@ -275,6 +403,8 @@ class MainWindow:
                     tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
                 elif tooltip.widget_type == 'cursor':
                     tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first")
+                elif tooltip.widget_type == 'velocity':
+                    tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first")
 
     def create_ui(self):
         BG_COLOR = "#f0f0f0"  # Light gray main background
@@ -374,7 +504,7 @@ class MainWindow:
         panes_config = [
             ("Detection", "#e8f4f8"),  # Light blue - detection settings
             ("Behavior", FRAME_BG),  # White - behavior settings
-            ("Auto-Sell", "#fff8e8"),  # Light yellow - auto-sell settings
+            ("Auto-Walk", "#e8f0ff"),  # Light blue-purple - auto-walk settings
             ("Discord", "#f8e8f8"),  # Light pink - discord settings
             ("Window", "#f8f0e8"),  # Light orange - window settings
             ("Debug", "#f8e8e8"),  # Light red - debug settings
@@ -562,50 +692,105 @@ class MainWindow:
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Height (%):", 'min_zone_height_percent',
                                 "Saturation Threshold:", 'saturation_threshold')
 
+        # Otsu Detection Settings (Collapsible)
+        otsu_subsection = CollapsibleSubsection(panes['detection'].sub_frame, "Otsu Detection (Alternative Method)",
+                                               "#fff0e6")  # Light orange for alternative detection
+        create_checkbox_param(otsu_subsection.content, "Use Otsu Detection", 'use_otsu_detection',
+                              validation_callback=self.validate_otsu_toggle)
+        create_checkbox_param(otsu_subsection.content, "Adaptive Area Filtering", 'otsu_adaptive_area',
+                              self.otsu_dependent_widgets, 'otsu')
+        create_dual_param_entry(otsu_subsection.content, "Min Area (pixels):", 'otsu_min_area',
+                               "Max Area (pixels):", 'otsu_max_area',
+                               self.otsu_dependent_widgets, 'otsu')
+        create_dual_param_entry(otsu_subsection.content, "Morph Kernel Size:", 'otsu_morph_kernel_size',
+                               "Area Percentile:", 'otsu_area_percentile',
+                               self.otsu_dependent_widgets, 'otsu')
+
+        # Color Picker Detection Settings (Collapsible)
+        color_picker_subsection = CollapsibleSubsection(panes['detection'].sub_frame, "Color Picker Detection (Simple Method)",
+                                                        "#f0f0f0")  # Use consistent light gray background
+        create_checkbox_param(color_picker_subsection.content, "Use Color Picker Detection", 'use_color_picker_detection',
+                              validation_callback=self.validate_color_picker_toggle)
+        
+        # Color display and pick button frame
+        color_frame = Frame(color_picker_subsection.content)
+        color_frame.pack(fill='x', padx=5, pady=2)
+        
+        Label(color_frame, text="Picked Color:", font=("Segoe UI", 9)).pack(side='left', padx=(0, 5))
+        self.picked_color_display = Label(color_frame, text="None", bg='lightgray', relief='solid', bd=1, width=10)
+        self.picked_color_display.pack(side='left', padx=(0, 5))
+        
+        self.pick_color_btn = Button(color_frame, text="Pick Color", command=self.pick_color_from_screen)
+        self.pick_color_btn.pack(side='left', padx=(5, 0))
+        self.color_picker_dependent_widgets.append(self.pick_color_btn)
+        
+        create_param_entry(color_picker_subsection.content, "Color Tolerance:", 'color_tolerance',
+                          self.color_picker_dependent_widgets, 'color_picker')
+
         create_param_entry(panes['behavior'].sub_frame, "Zone Smoothing:", 'zone_smoothing_factor')
         create_param_entry(panes['behavior'].sub_frame, "Target Width (%):", 'sweet_spot_width_percent')
+        create_checkbox_param(panes['behavior'].sub_frame, "Enable Velocity-Based Width", 'velocity_based_width_enabled',
+                              validation_callback=self.validate_velocity_toggle)
+        create_param_entry(panes['behavior'].sub_frame, "Velocity Width Multiplier:", 'velocity_width_multiplier', 
+                          self.velocity_dependent_widgets, 'velocity')
+        create_param_entry(panes['behavior'].sub_frame, "Max Velocity Factor:", 'velocity_max_factor',
+                          self.velocity_dependent_widgets, 'velocity')
         create_param_entry(panes['behavior'].sub_frame, "Line Exclusion Radius:", 'line_exclusion_radius')
         create_param_entry(panes['behavior'].sub_frame, "Post-Click Blindness (ms):", 'post_click_blindness')
 
         pred_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Prediction Settings",
                                                 "#e8f5e8")  # Light green for predictions
         create_checkbox_param(pred_subsection.content, "Enable Prediction", 'prediction_enabled')
-        # create_param_entry(pred_subsection.content, "System Latency (ms):", 'system_latency')
-        
-        # Manual latency measurement button
-        # latency_button_frame = Frame(pred_subsection.content)
-        # latency_button_frame.pack(fill='x', pady=2)
-        
-        # latency_measure_btn = ttk.Button(latency_button_frame, text="Measure Latency", 
-        #                                 command=lambda: self.dig_tool.manual_latency_measurement())
-        # latency_measure_btn.pack(side='left', padx=(0, 5))
-        
-        # Tooltip(latency_measure_btn, "Manually measure system latency. This will test your system's input/display latency and update the System Latency setting.")
-        
-        # self.latency_status_label = Label(latency_button_frame, text="", fg='gray', font=('Segoe UI', 8))
-        # self.latency_status_label.pack(side='left', padx=(5, 0))
         
         create_param_entry(pred_subsection.content, "Game FPS:", 'target_fps')
         create_param_entry(pred_subsection.content, "Prediction Confidence:", 'prediction_confidence_threshold')
 
-        walk_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Auto-Walk Settings",
-                                                "#e8f0ff")  # Light blue for auto-walk
-        auto_walk_check = create_checkbox_param(walk_subsection.content, "Enable Auto-Walk", 'auto_walk_enabled')
-        create_param_entry(walk_subsection.content, "Walk Duration (ms):", 'walk_duration')
+        cursor_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Cursor Settings",
+                                                  "#fff0e8")  # Light orange for cursor settings
+        self.use_cursor_checkbox = create_checkbox_param(cursor_subsection.content, "Use Custom Cursor Position",
+                                                         'use_custom_cursor',
+                                                         widget_type='cursor',
+                                                         validation_callback=self.validate_cursor_position_toggle)
 
-        pattern_frame = Frame(walk_subsection.content, bg="#e8f0ff")  # Light blue background
+        create_section_button(cursor_subsection.content, "Set Cursor Position",
+                              self.dig_tool.start_cursor_position_selection,
+                              self.cursor_dependent_widgets, 'cursor')
+
+        # ===== AUTO-WALK PANE =====
+        auto_walk_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled')
+        create_param_entry(panes['auto_walk'].sub_frame, "Key Duration (ms):", 'walk_duration')
+        
+        # Decreased Walkspeed settings
+        dynamic_walkspeed_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Decreased Walkspeed", 'dynamic_walkspeed_enabled')
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Item Count:", 'initial_item_count')
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Walkspeed Decrease:", 'initial_walkspeed_decrease')
+        
+        # Auto Walk Overlay button
+        overlay_button_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")
+        overlay_button_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
+        
+        autowalk_overlay_btn = Button(overlay_button_frame, text="Open Auto Walk Overlay", 
+                                     command=self.dig_tool.toggle_autowalk_overlay,
+                                     font=(FONT_FAMILY, 9), bg='#d4e6f1', fg='#2c3e50', 
+                                     relief='solid', borderwidth=1, pady=4)
+        autowalk_overlay_btn.pack(fill='x')
+        
+        Tooltip(autowalk_overlay_btn, "Open a separate overlay window showing detailed auto walk information, walkspeed calculations, and status")
+
+        pattern_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")  # Light blue background
         pattern_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
 
         Label(pattern_frame, text="Walk Pattern:", font=(FONT_FAMILY, 9), bg="#e8f0ff", fg=TEXT_COLOR,
               width=LABEL_WIDTH, anchor='w').pack(side='left')
 
-        self.dig_tool.walk_pattern_var = tk.StringVar(value="circle")
+        self.dig_tool.walk_pattern_var = tk.StringVar(value="_KC_Nugget_v1")
+        self.dig_tool.walk_pattern_var.trace_add('write', self.dig_tool.on_walk_pattern_changed)
         self.walk_pattern_combo = ttk.Combobox(pattern_frame, textvariable=self.dig_tool.walk_pattern_var,
                                                values=list(self.dig_tool.automation_manager.get_pattern_list().keys()),
                                                state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9))
         self.walk_pattern_combo.pack(side='right', ipady=3)
 
-        custom_pattern_frame = Frame(walk_subsection.content, bg="#e8f0ff")  # Light blue background
+        custom_pattern_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")  # Light blue background
         custom_pattern_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
 
         custom_pattern_btn = Button(custom_pattern_frame, text="Manage Custom Patterns",
@@ -620,7 +805,7 @@ class MainWindow:
                                      pady=4)  # Blue button
         refresh_pattern_btn.pack(side='left', expand=True, fill='x', padx=2)
 
-        shovel_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Shovel Management",
+        shovel_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Shovel Management",
                                                   "#ffe8e8")  # Light red for shovel management
         self.auto_shovel_checkbox = create_checkbox_param(shovel_subsection.content, "Enable Auto-Shovel",
                                                           'auto_shovel_enabled', widget_type='shovel')
@@ -635,24 +820,31 @@ class MainWindow:
                               self.dig_tool.automation_manager.test_shovel_equip,
                               self.shovel_dependent_widgets, 'shovel')
 
-        cursor_subsection = CollapsibleSubsection(panes['behavior'].sub_frame, "Cursor Settings",
-                                                  "#fff0e8")  # Light orange for cursor settings
-        self.use_cursor_checkbox = create_checkbox_param(cursor_subsection.content, "Use Custom Cursor Position",
-                                                         'use_custom_cursor',
-                                                         widget_type='cursor',
-                                                         validation_callback=self.validate_cursor_position_toggle)
-
-        self.auto_sell_checkbox = create_checkbox_param(panes['auto_sell'].sub_frame, "Enable Auto-Sell",
+        # Auto-Sell subsection within Auto-Walk pane
+        auto_sell_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Auto-Sell Settings",
+                                                    "#fff8e8")  # Light yellow for auto-sell
+        self.auto_sell_checkbox = create_checkbox_param(auto_sell_subsection.content, "Enable Auto-Sell",
                                                         'auto_sell_enabled',
                                                         widget_type='sell',
                                                         validation_callback=self.validate_auto_sell_toggle)
-        create_dual_param_entry(panes['auto_sell'].sub_frame, "Sell Every X Digs:", 'sell_every_x_digs',
+        create_dual_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
                                 "Sell Delay (ms):", 'sell_delay',
                                 self.sell_dependent_widgets, 'sell')
 
+        create_section_button(auto_sell_subsection.content, "Set Sell Button Position",
+                              self.dig_tool.start_sell_button_selection,
+                              self.sell_dependent_widgets, 'sell')
+
+        create_section_button(auto_sell_subsection.content, "Test Sell Click",
+                              self.dig_tool.test_sell_button_click,
+                              self.sell_dependent_widgets, 'sell')
+
+        # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
+        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
+                              'include_screenshot_in_discord')
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", self.dig_tool.test_discord_ping)
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
@@ -664,16 +856,13 @@ class MainWindow:
 
         create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
         create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
-        create_dropdown_param(panes['debug'].sub_frame, "Click Method:", 'click_method', ["win32api", "ahk"])
         create_section_button(panes['debug'].sub_frame, "Show Debug Console", self.dig_tool.show_debug_console)
-        create_section_button(panes['debug'].sub_frame, "Test Sell Click", self.dig_tool.test_sell_button_click)
-        create_section_button(panes['debug'].sub_frame, "Test Click Method", self.test_click_method)
 
         def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=parent.cget('bg'))
             frame.pack(fill='x', pady=BUTTON_PADY, padx=PARAM_PADX)
 
-            label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=parent.cget('bg'), fg=TEXT_COLOR, width=18,
+            label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=parent.cget('bg'), fg=TEXT_COLOR, width=22,
                           anchor='w')
             label.pack(side='left')
 
@@ -719,17 +908,23 @@ class MainWindow:
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Bot:", 'toggle_bot')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle GUI:", 'toggle_gui')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto Walk Overlay:", 'toggle_autowalk_overlay')
 
-        create_checkbox_param(panes['settings'].sub_frame, "Include Discord Info in Settings",
-                              'include_discord_in_settings')
+        # Settings info button
+        settings_info_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
+        settings_info_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
+        Button(settings_info_frame, text="Open Settings Folder", command=self.dig_tool.show_settings_info,
+               font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR, relief='solid', borderwidth=1, pady=4).pack(
+            expand=True, fill=tk.X)
+        Tooltip(settings_info_frame.winfo_children()[0], "Open the settings folder in Windows Explorer to view or manage your settings files.")
 
         save_load_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
         save_load_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
 
-        Button(save_load_frame, text="Save Settings", command=self.dig_tool.settings_manager.save_settings,
+        Button(save_load_frame, text="Export Settings", command=self.dig_tool.settings_manager.export_settings,
                font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR, relief='solid', borderwidth=1, pady=4).pack(
             side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        Button(save_load_frame, text="Load Settings", command=self.dig_tool.settings_manager.load_settings,
+        Button(save_load_frame, text="Import Settings", command=self.dig_tool.settings_manager.import_settings,
                font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR, relief='solid', borderwidth=1, pady=4).pack(
             side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
@@ -743,7 +938,12 @@ class MainWindow:
         self.dig_tool.param_vars['auto_shovel_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['auto_sell_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_custom_cursor'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['use_otsu_detection'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
 
+        # Initialize previous auto walk state
+        self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+        
         self.update_dependent_widgets_state()
 
         self.dig_tool.update_main_button_text()
