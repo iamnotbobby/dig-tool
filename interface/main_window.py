@@ -239,6 +239,8 @@ class MainWindow:
 
     def pick_color_from_screen(self):
         import time
+        import pyautogui
+        import numpy as np
         from core.detection import rgb_to_hsv_single
         
         self.dig_tool.root.withdraw()
@@ -262,6 +264,7 @@ class MainWindow:
             start_pos = None
             selection_rect = None
             is_dragging = False
+            picked_color = None
             
             def on_button_press(event):
                 nonlocal start_pos, selection_rect, is_dragging
@@ -315,9 +318,6 @@ class MainWindow:
                     overlay.withdraw()
                     time.sleep(0.1)
                     
-                    import pyautogui
-                    import numpy as np
-                    
                     screenshot = pyautogui.screenshot(region=(min_x, min_y, area_width, area_height))
                     screenshot_array = np.array(screenshot)
                     
@@ -357,8 +357,6 @@ class MainWindow:
             overlay.update()
             overlay.focus_force()
             
-            picked_color = None
-            
             while picked_color is None:
                 time.sleep(0.05)
                 try:
@@ -378,14 +376,33 @@ class MainWindow:
             
             self.dig_tool.root.deiconify()
             
+            print(f"Debug: picked_color = {picked_color!r}") 
+            
             if picked_color and picked_color != "CANCELLED":
-                self.dig_tool.param_vars['picked_color_rgb'].set(picked_color)
-                
-                if hasattr(self, 'picked_color_display') and self.picked_color_display:
-                    self.picked_color_display.config(bg=picked_color, text=picked_color)
-                
-                self.dig_tool.update_status(f"Area sampled - Color: {picked_color}")
+                print(f"Debug: Setting picked_color_rgb to {picked_color}")  
+                try:
+                    self.dig_tool.param_vars['picked_color_rgb'].set(picked_color)
+                    print(f"Debug: Parameter set successfully")
+                    
+                    retrieved_color = self.dig_tool.param_vars['picked_color_rgb'].get()
+                    print(f"Debug: Retrieved color after setting: {retrieved_color}")
+                    
+                    self.dig_tool.param_vars['use_color_picker_detection'].set(True)
+                    print("Debug: Enabled color picker detection")  
+                    
+                    if hasattr(self, 'picked_color_display') and self.picked_color_display:
+                        self.picked_color_display.config(bg=picked_color, text=picked_color)
+                        print("Debug: Updated color display widget")
+                    else:
+                        print("Debug: Color display widget not found")
+                    
+                    self.dig_tool.update_status(f"Area sampled - Color: {picked_color}")
+                    
+                except Exception as e:
+                    print(f"Debug: Error setting parameter: {e}")
+                    self.dig_tool.update_status(f"Error setting color: {e}")
             else:
+                print(f"Debug: Color sampling was cancelled or failed") 
                 self.dig_tool.update_status("Color sampling cancelled")
                 
         except Exception as e:
@@ -754,6 +771,12 @@ class MainWindow:
         create_checkbox_param(color_picker_subsection.content, "Use Color Picker Detection", 'use_color_picker_detection',
                               validation_callback=self.validate_color_picker_toggle)
         
+        # Initialize the picked_color_rgb parameter if it doesn't exist
+        if 'picked_color_rgb' not in self.dig_tool.param_vars:
+            default_color = self.dig_tool.settings_manager.get_default_value('picked_color_rgb')
+            self.dig_tool.param_vars['picked_color_rgb'] = tk.StringVar(value=default_color)
+            self.dig_tool.last_known_good_params['picked_color_rgb'] = default_color
+        
         # Color display and pick button frame
         color_frame = Frame(color_picker_subsection.content)
         color_frame.pack(fill='x', padx=5, pady=2)
@@ -765,6 +788,10 @@ class MainWindow:
         self.pick_color_btn = Button(color_frame, text="Sample Area", command=self.pick_color_from_screen)
         self.pick_color_btn.pack(side='left', padx=(5, 0))
         self.color_picker_dependent_widgets.append(self.pick_color_btn)
+        
+        test_color_btn = Button(color_frame, text="Test", command=self.test_color_param)
+        test_color_btn.pack(side='left', padx=(5, 0))
+        self.color_picker_dependent_widgets.append(test_color_btn)
         
         create_param_entry(color_picker_subsection.content, "Color Tolerance:", 'color_tolerance',
                           self.color_picker_dependent_widgets, 'color_picker')
@@ -1045,3 +1072,28 @@ class MainWindow:
         except Exception as e:
             logger.error(f"Error in drag and drop handler: {e}")
             self.dig_tool.update_status("Error: Failed to process dropped file")
+
+    def test_color_param(self):
+        try:
+            use_color_picker = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
+            picked_color = self.dig_tool.param_vars.get('picked_color_rgb', tk.StringVar()).get()
+            color_tolerance = self.dig_tool.param_vars.get('color_tolerance', tk.DoubleVar()).get()
+            
+            print(f"=== Color Parameter Test ===")
+            print(f"use_color_picker_detection: {use_color_picker}")
+            print(f"picked_color_rgb: '{picked_color}'")
+            print(f"color_tolerance: {color_tolerance}")
+            
+            picked_via_get_param = self.dig_tool.get_param('picked_color_rgb')
+            print(f"Via get_param: '{picked_via_get_param}'")
+            
+            test_color = "#00FF00"  
+            self.dig_tool.param_vars['picked_color_rgb'].set(test_color)
+            after_set = self.dig_tool.get_param('picked_color_rgb')
+            print(f"After setting {test_color}: '{after_set}'")
+            
+            self.dig_tool.update_status(f"Color test complete - current: {after_set}")
+            
+        except Exception as e:
+            print(f"Error in color test: {e}")
+            self.dig_tool.update_status(f"Color test error: {e}")
