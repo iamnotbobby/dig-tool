@@ -1549,7 +1549,11 @@ class DigTool:
                     ):
                         adaptive_smoothing = min(zone_smoothing_factor + 0.2, 1.0)
                     else:
-                        adaptive_smoothing = max(zone_smoothing_factor - 0.1, 0.1)
+                        # respect user's settings here
+                        if zone_smoothing_factor <= 0.01:
+                            adaptive_smoothing = zone_smoothing_factor
+                        else:
+                            adaptive_smoothing = max(zone_smoothing_factor - 0.1, 0.1)
 
                     self.smoothed_zone_x = (
                         adaptive_smoothing * raw_zone_x
