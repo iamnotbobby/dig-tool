@@ -1019,7 +1019,7 @@ class DigTool:
                 return
 
             self.running = True
-            self.update_status("Bot Started... (3s startup delay)")
+            self.update_status("Bot Started...")
             self.click_count = 0
             self.dig_count = 0
             self.velocity_calculator.reset()
@@ -1192,6 +1192,7 @@ class DigTool:
         cached_line_area = None
         cached_hsv_area = None
         frame_skip_counter = 0
+        click_delay = 0  # UnboundLocalError
 
         while self.preview_active:
             frame_start_time = time.perf_counter()

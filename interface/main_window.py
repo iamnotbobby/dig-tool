@@ -355,14 +355,6 @@ class MainWindow:
 
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
-
-        if self._prev_auto_walk_enabled and not auto_walk_enabled:
-            try:
-                if hasattr(self.dig_tool, 'automation_manager') and self.dig_tool.automation_manager:
-                    self.dig_tool.automation_manager.cleanup_stuck_keys()
-                    logger.debug("Key cleanup triggered when auto walk was disabled")
-            except Exception as e:
-                logger.error(f"Error during key cleanup when auto walk disabled: {e}")
         
         self._prev_auto_walk_enabled = auto_walk_enabled
 
