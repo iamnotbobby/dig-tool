@@ -1,13 +1,11 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
-import threading
 import time
 from datetime import datetime
 from enum import Enum
 import queue
 import os
 import cv2
-import numpy as np
 
 
 def save_debug_screenshot(
@@ -16,10 +14,6 @@ def save_debug_screenshot(
     sweet_spot_start,
     sweet_spot_end,
     zone_y2_cached,
-    velocity,
-    acceleration,
-    prediction_used,
-    confidence,
     click_count,
     debug_dir,
     smoothed_zone_x,

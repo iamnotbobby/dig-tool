@@ -55,8 +55,8 @@ jobs:
          
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --collect-all=tkinterdnd2 --collect-all=pywin32 --collect-all=PIL --hidden-import=opencv-python --hidden-import=numpy --hidden-import=keyboard --hidden-import=psutil --hidden-import=PIL --hidden-import=pywin32 --hidden-import=win32timezone --hidden-import=win32com --hidden-import=pythoncom --hidden-import=win32api --hidden-import=nuitka --hidden-import=PyAutoIt --hidden-import=PyInstaller --hidden-import=pynput --hidden-import=requests --hidden-import=mss --hidden-import=tkinterdnd2 --distpath=dist --workpath=build --specpath=. --clean main.py
-
+          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+         
       - name: Get executable info and generate checksums
         id: get_exe_info
         run: |

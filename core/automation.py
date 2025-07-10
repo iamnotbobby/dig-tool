@@ -12,11 +12,8 @@ from utils.system_utils import send_click
 
 
 def perform_click_action(
-    delay, running, use_custom_cursor, cursor_position, click_lock
+    running, use_custom_cursor, cursor_position, click_lock
 ):
-    if delay > 0:
-        time.sleep(delay)
-
     if not running:
         return
 

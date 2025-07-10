@@ -1088,9 +1088,8 @@ class DigTool:
     def _cleanup_click_threads(self):
         self._click_thread_pool = [t for t in self._click_thread_pool if t.is_alive()]
 
-    def perform_click(self, delay=0):
+    def perform_click(self):
         perform_click_action(
-            delay,
             self.running,
             self.get_param("use_custom_cursor"),
             self.cursor_position,
