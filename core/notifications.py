@@ -18,7 +18,7 @@ class DiscordNotifier:
         if not self.webhook_url:
             logger.warning("Discord webhook URL not set!")
             return False
-        
+          
         if include_screenshot:
             screenshot = ImageGrab.grab()
 
@@ -28,7 +28,6 @@ class DiscordNotifier:
 
         try:
             content = f"<@{user_id}>" if user_id else ""
-
             embed = {
                 "title": "Dig Tool Notification",
                 "description": message,
@@ -66,28 +65,29 @@ class DiscordNotifier:
             else:
                 logger.error(f"Discord notification failed: {response.status_code}")
                 return False
-
+              
         except Exception as e:
             logger.error(f"Error sending Discord notification: {e}")
             return False
 
     def send_startup_notification(self, user_id=None):
         """Send notification when bot starts"""
-        return self.send_notification("🟢 Bot started and ready!", user_id, 0x00ff00)
+        return self.send_notification("🟢 Bot started and ready!", user_id, 0x00FF00)
 
     def send_shutdown_notification(self, user_id=None):
         """Send notification when bot stops"""
-        return self.send_notification("🔴 Bot stopped.", user_id, 0xff0000)
+        return self.send_notification("🔴 Bot stopped.", user_id, 0xFF0000)
 
     def send_milestone_notification(self, digs, clicks, user_id=None, include_screenshot=False):
         """Send notification for milestones"""
         message = f"📊 Milestone reached!\n**Digs:** {digs}\n**Clicks:** {clicks}"
         return self.send_notification(message, user_id, 0x0099ff, include_screenshot)
 
+
     def send_error_notification(self, error_message, user_id=None):
         """Send notification for errors"""
         message = f"⚠️ Error occurred: {error_message}"
-        return self.send_notification(message, user_id, 0xff9900)
+        return self.send_notification(message, user_id, 0xFF9900)
 
     def test_webhook(self, user_id=None, include_screenshot=False):
         """Test the webhook connection"""

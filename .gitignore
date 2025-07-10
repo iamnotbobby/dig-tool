@@ -10,3 +10,4 @@ build
 DigTool.Spec
 custom_patterns.json
 .vscode
+.prettierrc

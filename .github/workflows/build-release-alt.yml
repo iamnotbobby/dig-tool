@@ -39,7 +39,7 @@ jobs:
          
       - name: Install Dependencies
         run: |
-          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller ahk
+          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller bettercam
       
       - name: Generate executable name with version
         id: exe_name
