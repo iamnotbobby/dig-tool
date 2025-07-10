@@ -121,7 +121,7 @@ def set_dig_tool_instance(instance):
     _dig_tool_instance = instance
 
 
-def send_click():
+def send_click_win32api():
     try:
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
@@ -129,6 +129,31 @@ def send_click():
     except Exception as e:
         logger.error(f"Win32API click failed: {e}")
         return False
+
+
+def send_click_ahk():  # NON-FUNC FOR NOW
+    return send_click_win32api()
+
+
+def send_click():
+    global _dig_tool_instance
+    
+    if _dig_tool_instance:
+        try:
+            click_method = _dig_tool_instance.get_param('click_method')
+        except:
+            click_method = 'win32api'
+    else:
+        click_method = 'win32api'
+    
+    if click_method == 'ahk':
+        success = send_click_ahk()
+        if not success:
+            logger.warning("AHK click failed, falling back to Win32API")
+            success = send_click_win32api()
+        return success
+    else:
+        return send_click_win32api()
 
 
 
