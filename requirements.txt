@@ -1,14 +1,11 @@
 opencv-python
 numpy
 keyboard
-psutil
 pillow
 pywin32
+ahk
 nuitka
 PyAutoIt
 PyInstaller
 pynput
 requests
-mss
-tkinterdnd2
-pyautogui
