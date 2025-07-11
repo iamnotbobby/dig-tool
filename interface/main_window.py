@@ -916,22 +916,35 @@ class MainWindow:
 
         # Auto-Sell subsection within Auto-Walk pane
         auto_sell_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Auto-Sell Settings",
-                                                    "#fff8e8")  # Light yellow for auto-sell
+                                                    "#fff8e8")
         self.auto_sell_checkbox = create_checkbox_param(auto_sell_subsection.content, "Enable Auto-Sell",
                                                         'auto_sell_enabled',
                                                         widget_type='sell',
                                                         validation_callback=self.validate_auto_sell_toggle)
+        
+        create_dropdown_param(auto_sell_subsection.content, "Auto-Sell Method:", 'auto_sell_method',
+                             ['button_click', 'ui_navigation'],
+                             self.sell_dependent_widgets, 'sell')
+        
         create_dual_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
                                 "Sell Delay (ms):", 'sell_delay',
                                 self.sell_dependent_widgets, 'sell')
 
-        create_section_button(auto_sell_subsection.content, "Set Sell Button Position",
-                              self.dig_tool.start_sell_button_selection,
-                              self.sell_dependent_widgets, 'sell')
-
-        create_section_button(auto_sell_subsection.content, "Test Sell Click",
+        self.test_sell_button = create_section_button(auto_sell_subsection.content, "Test Sell Click",
                               self.dig_tool.test_sell_button_click,
                               self.sell_dependent_widgets, 'sell')
+        
+        def update_test_button_text(*args):
+            method = self.dig_tool.param_vars.get('auto_sell_method', tk.StringVar()).get()
+            if method == "button_click":
+                self.test_sell_button.config(text="Test Sell Click")
+            elif method == "ui_navigation":
+                self.test_sell_button.config(text="Test UI Navigation")
+            else:
+                self.test_sell_button.config(text="Test Sell")
+        
+        self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
+        update_test_button_text()
 
         # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
