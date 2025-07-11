@@ -138,17 +138,37 @@ jobs:
           $notes = ""
          
           if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
-            $notes += "**BETA RELEASE** - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
+            $notes += "## Beta Release Notice`n`n"
+            $notes += "This is a beta release intended for testing and feedback. Please report any issues or bugs you encounter.`n`n"
+            $notes += "### Support`n"
+            $notes += "- [Support Discord Server](https://discord.com/invite/mxE7dzXMGf)`n`n"
+          } else {
+            $notes += "### Support`n"
+            $notes += "- [Support Discord Server](https://discord.com/invite/mxE7dzXMGf)`n`n"
           }
          
           $customNotes = "${{ github.event.inputs.custom_notes }}"
           if ($customNotes -and $customNotes.Trim() -ne "") {
+            $notes += "## Release Notes`n`n"
             $notes += "$customNotes`n`n"
           }
           
-          $notes += "<details>`n<summary>Integrity Verification</summary>`n`n"
-          $notes += "**SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
-          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
+          $notes += "### Download Information`n"
+          $notes += "- **Executable:** ${{ steps.get_exe_info.outputs.exe_name }}`n"
+          $notes += "- **Size:** ${{ steps.get_exe_info.outputs.file_size }} MB`n`n"
+          
+          $notes += "<details>`n<summary>Security & Verification</summary>`n`n"
+          $notes += "**File Integrity Verification:**`n"
+          $notes += "``````n"
+          $notes += "SHA256: ${{ steps.get_exe_info.outputs.sha256_hash }}`n"
+          $notes += "``````n`n"
+          $notes += "**Verify the download:**`n"
+          $notes += "- Windows: ``certutil -hashfile ${{ steps.get_exe_info.outputs.exe_name }} SHA256```n"
+          $notes += "- Linux/Mac: ``sha256sum ${{ steps.get_exe_info.outputs.exe_name }}```n`n"
+          $notes += "**Build Information:**`n"
+          $notes += "- Build run: [View build logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
+          $notes += "- Source commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})`n"
+          $notes += "- Built with GitHub Actions on $(Get-Date -Format 'yyyy-MM-dd')`n"
           $notes += "</details>"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
