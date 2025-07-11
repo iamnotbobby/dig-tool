@@ -14,5 +14,5 @@ PyInstaller.__main__.run([
     '--workpath=build',
     '--specpath=.',
     '--collect-all=autoit',
-    '--clean',
+    '--clean'
 ])
