@@ -1062,11 +1062,29 @@ class MainWindow:
     
     def on_drop(self, event):
         try:
-            files = event.data.split()
-            if not files:
-                return
+            file_data = event.data.strip()
             
-            file_path = files[0].strip('{}') 
+            if file_data.startswith('{') and file_data.endswith('}'):
+                file_path = file_data.strip('{}')
+            else:
+                if file_data.startswith('"') and '"' in file_data[1:]:
+                    end_quote = file_data.find('"', 1)
+                    file_path = file_data[1:end_quote]
+                elif ' ' in file_data and not os.path.exists(file_data):
+                    words = file_data.split()
+                    for i in range(1, len(words) + 1):
+                        potential_path = ' '.join(words[:i])
+                        if os.path.exists(potential_path):
+                            file_path = potential_path
+                            break
+                    else:
+                        file_path = file_data
+                else:
+                    file_path = file_data
+            
+            if not file_path:
+                self.dig_tool.update_status("Error: No file path found in drag and drop data")
+                return
             
             if not file_path.lower().endswith('.json'):
                 self.dig_tool.update_status("Error: Only JSON files are supported for drag and drop")
