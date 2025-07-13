@@ -70,9 +70,9 @@ class DigTool:
         self.root.title("Dig Tool")
 
         self.root.wm_iconbitmap(
-            os.path.join(sys._MEIPASS, "dig-tool-beta/assets/icon.ico")
+            os.path.join(sys._MEIPASS, "assets/icon.ico")
             if hasattr(sys, "_MEIPASS")
-            else "dig-tool-beta/assets/icon.ico"
+            else "assets/icon.ico"
         )
 
         self.base_height = 570
