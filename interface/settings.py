@@ -57,6 +57,9 @@ class SettingsManager:
             "picked_color_rgb": "",  # RGB color in hex format (e.g., "#FF0000")
             "color_tolerance": 30,
             "auto_walk_enabled": False,
+            "ranged_auto_walk_enabled": False,
+            "walk_min_duration": 500,
+            "walk_max_duration": 1000,
             "walk_duration": 500,
             "dynamic_walkspeed_enabled": True,
             "initial_item_count": 0,
@@ -97,6 +100,9 @@ class SettingsManager:
             "sell_every_x_digs": "Number of digs before auto-selling items.",
             "sell_delay": "Delay in milliseconds before clicking the sell button.",
             "auto_walk_enabled": "Automatically move around while digging.",
+            "ranged_auto_walk_enabled": "Automatically move around in a range while digging.",
+            "walk_min_duration": "Min duration for range",
+            "walk_max_duration": "Max duration for range",
             "walk_duration": "Default duration to hold down key presses (milliseconds). Used as base duration unless custom durations are set for individual keys.",
             "dynamic_walkspeed_enabled": "Apply a mathematical formula to determine the decreased walkspeed after X items.",
             "initial_item_count": "Starting item count for walkspeed calculation. Useful if you already have items collected.",
@@ -174,7 +180,7 @@ class SettingsManager:
     def get_conflict_tooltip(self, setting_key):
         if setting_key == "use_custom_cursor":
             return "DISABLED: Cannot use Custom Cursor while Auto-Walk is enabled. Disable Auto-Walk first."
-        elif setting_key == "auto_walk_enabled":
+        elif setting_key in ("auto_walk_enabled", "ranged_auto_walk_enabled"):
             return "DISABLED: Cannot use Auto-Walk while Custom Cursor is enabled. Disable Custom Cursor first."
         return ""
 
@@ -183,14 +189,14 @@ class SettingsManager:
             return self.dig_tool.param_vars.get(
                 "auto_walk_enabled", tk.BooleanVar()
             ).get()
-        elif setting_key == "auto_walk_enabled":
+        elif setting_key in ("auto_walk_enabled", "ranged_auto_walk_enabled"):
             return self.dig_tool.param_vars.get(
                 "use_custom_cursor", tk.BooleanVar()
             ).get()
         return False
 
     def update_setting_states(self):
-        conflicting_settings = ["use_custom_cursor", "auto_walk_enabled"]
+        conflicting_settings = ["use_custom_cursor", "auto_walk_enabled", "ranged_auto_walk_enabled"]
 
         for setting_key in conflicting_settings:
             if (
@@ -219,7 +225,7 @@ class SettingsManager:
 
                 self.dig_tool.last_known_good_params[key] = value
 
-                if key in ["use_custom_cursor", "auto_walk_enabled"]:
+                if key in ["use_custom_cursor", "auto_walk_enabled", "ranged_auto_walk_enabled"]:
                     self.update_setting_states()
 
                 return value
@@ -296,6 +302,8 @@ class SettingsManager:
                 "sell_every_x_digs",
                 "sell_delay",
                 "walk_duration",
+                "walk_min_duration"
+                "walk_max_duration"
                 "milestone_interval",
                 "target_fps",
                 "screenshot_fps",
@@ -318,6 +326,8 @@ class SettingsManager:
                     "sell_every_x_digs",
                     "sell_delay",
                     "walk_duration",
+                    "walk_min_duration",
+                    "walk_max_duration",
                     "milestone_interval",
                     "otsu_min_area",
                     "otsu_morph_kernel_size",
@@ -361,6 +371,7 @@ class SettingsManager:
                 "debug_clicks_enabled",
                 "auto_sell_enabled",
                 "auto_walk_enabled",
+                "ranged_auto_walk_enabled",
                 "use_custom_cursor",
                 "auto_shovel_enabled",
                 "use_otsu_detection",

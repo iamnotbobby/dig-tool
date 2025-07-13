@@ -725,6 +725,76 @@ class MainWindow:
             if dependent_list is not None: dependent_list.append(check)
 
             return check
+        
+        def create_dual_checkbox_param(parent, text1, var_key1, text2, var_key2, dependent_list=None, widget_type=None):
+            frame = Frame(parent, bg=parent.cget('bg'))
+            frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
+
+            # Initialize BooleanVars if not already present
+            if var_key1 not in self.dig_tool.param_vars:
+                default_value1 = self.dig_tool.settings_manager.get_default_value(var_key1)
+                self.dig_tool.param_vars[var_key1] = tk.BooleanVar(value=default_value1)
+                self.dig_tool.last_known_good_params[var_key1] = default_value1
+
+            if var_key2 not in self.dig_tool.param_vars:
+                default_value2 = self.dig_tool.settings_manager.get_default_value(var_key2)
+                self.dig_tool.param_vars[var_key2] = tk.BooleanVar(value=default_value2)
+                self.dig_tool.last_known_good_params[var_key2] = default_value2
+
+            # Function to ensure only one checkbox is selected at a time
+            def toggle_exclusive(active_key, inactive_key):
+                if self.dig_tool.param_vars[active_key].get():
+                    self.dig_tool.param_vars[inactive_key].set(False)
+
+            # Left Checkbox Frame
+            left_frame = Frame(frame, bg=parent.cget('bg'))
+            left_frame.pack(side='left', expand=True, fill='x')
+
+            check1 = Checkbutton(
+                left_frame, text=text1, variable=self.dig_tool.param_vars[var_key1],
+                bg=parent.cget('bg'), fg=TEXT_COLOR, selectcolor=BG_COLOR,
+                activebackground=parent.cget('bg'), activeforeground=TEXT_COLOR,
+                font=(FONT_FAMILY, 9), anchor='w',
+                command=lambda: toggle_exclusive(var_key1, var_key2)
+            )
+            check1.pack(anchor='w', padx=5)
+
+            tooltip_text1 = self.dig_tool.settings_manager.get_description(var_key1)
+            if widget_type:
+                disabled_tooltip = DisabledTooltip(check1, "", tooltip_text1)
+                disabled_tooltip.widget_type = widget_type
+                self.disabled_tooltips.append(disabled_tooltip)
+            else:
+                Tooltip(check1, tooltip_text1)
+
+            if dependent_list is not None:
+                dependent_list.append(check1)
+
+            # Right Checkbox Frame
+            right_frame = Frame(frame, bg=parent.cget('bg'))
+            right_frame.pack(side='left', expand=True, fill='x')
+
+            check2 = Checkbutton(
+                right_frame, text=text2, variable=self.dig_tool.param_vars[var_key2],
+                bg=parent.cget('bg'), fg=TEXT_COLOR, selectcolor=BG_COLOR,
+                activebackground=parent.cget('bg'), activeforeground=TEXT_COLOR,
+                font=(FONT_FAMILY, 9), anchor='w',
+                command=lambda: toggle_exclusive(var_key2, var_key1)
+            )
+            check2.pack(anchor='w', padx=5)
+
+            tooltip_text2 = self.dig_tool.settings_manager.get_description(var_key2)
+            if widget_type:
+                disabled_tooltip = DisabledTooltip(check2, "", tooltip_text2)
+                disabled_tooltip.widget_type = widget_type
+                self.disabled_tooltips.append(disabled_tooltip)
+            else:
+                Tooltip(check2, tooltip_text2)
+
+            if dependent_list is not None:
+                dependent_list.append(check2)
+
+            return check1, check2
 
         def create_dropdown_param(parent, text, var_key, values, dependent_list=None, widget_type=None):
             frame = Frame(parent, bg=parent.cget('bg'))
@@ -851,8 +921,9 @@ class MainWindow:
                               self.cursor_dependent_widgets, 'cursor')
 
         # ===== AUTO-WALK PANE =====
-        auto_walk_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled')
+        auto_walk_check = create_dual_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled', "Enable Ranged Auto-Walk", 'ranged_auto_walk_enabled')
         create_param_entry(panes['auto_walk'].sub_frame, "Key Duration (ms):", 'walk_duration')
+        create_dual_param_entry(panes['auto_walk'].sub_frame, "Min Duration (ms):", 'walk_min_duration', "Max Duration (ms):", 'walk_max_duration')
         
         # Decreased Walkspeed settings
         dynamic_walkspeed_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Decreased Walkspeed", 'dynamic_walkspeed_enabled')

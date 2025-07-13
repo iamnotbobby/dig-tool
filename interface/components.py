@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 import cv2
 from utils.debug_logger import logger
 import math
+import random
 
 
 class Tooltip:
@@ -639,31 +640,39 @@ class AutoWalkOverlay:
             dig_count = kwargs.get("dig_count", 0)
             initial_items = self.parent.get_param("initial_item_count") or 0
             total_items = dig_count + initial_items
-
-            if self.parent.get_param("dynamic_walkspeed_enabled"):
-                formula_reduction = (
-                    self.parent.automation_manager.calculate_walkspeed_multiplier(
-                        total_items
+            if (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')):
+                if self.parent.get_param("dynamic_walkspeed_enabled"):
+                    formula_reduction = (
+                        self.parent.automation_manager.calculate_walkspeed_multiplier(
+                            total_items
+                        )
                     )
-                )
-                initial_decrease = (
-                    self.parent.get_param("initial_walkspeed_decrease") or 0.0
-                )
-                total_reduction = min(formula_reduction + initial_decrease, 0.99)
+                    initial_decrease = (
+                        self.parent.get_param("initial_walkspeed_decrease") or 0.0
+                    )
+                    total_reduction = min(formula_reduction + initial_decrease, 0.99)
 
-                decrease_percentage = total_reduction * 100
-                self.walkspeed_decrease_label.config(
-                    text=f"SLOWDOWN: {decrease_percentage:.1f}%"
-                )
+                    decrease_percentage = total_reduction * 100
+                    self.walkspeed_decrease_label.config(
+                        text=f"SLOWDOWN: {decrease_percentage:.1f}%"
+                    )
 
-                duration_multiplier = 1.0 + total_reduction
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
-                actual_duration = base_duration * duration_multiplier
-                self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s")
-            else:
-                self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%")
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
-                self.duration_label.config(text=f"DURATION: {base_duration:.3f}s")
+                    duration_multiplier = 1.0 + total_reduction
+                    if self.dig_tool.get_param('auto_walk_enabled'):
+                        base_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+                        print(f"[Auto Walk Enabled] Walk Duration:{base_duration}")
+                    elif self.dig_tool.get_param('ranged_auto_walk_enabled'):
+                        walk_min_duration = self.dig_tool.get_param('walk_min_duration')
+                        walk_max_duration = self.dig_tool.get_param('walk_max_duration')
+                        walk_range_duration = random.randint(walk_min_duration, walk_max_duration)
+                        base_duration = walk_range_duration / 1000
+                        print(f"[Ranged Auto Walk Enabled] Walk Duration:{base_duration}")
+                    actual_duration = base_duration * duration_multiplier
+                    self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s")
+                else:
+                    self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%")
+                    base_duration = self.parent.get_param("walk_duration") / 1000.0
+                    self.duration_label.config(text=f"DURATION: {base_duration:.3f}s")
 
             self.update_pattern_name()
 

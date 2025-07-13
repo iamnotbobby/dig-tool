@@ -9,6 +9,7 @@ from pynput.keyboard import Controller as KeyboardController, Key
 from utils.debug_logger import logger
 import ctypes
 from utils.system_utils import send_click
+import random
 
 
 def perform_click_action(
@@ -838,8 +839,16 @@ class AutomationManager:
                 if self.is_recording:
                     self.record_movement(direction)
                     logger.debug(f"Recorded movement during walk: {direction}")
-
-                walk_duration = self.dig_tool.get_param("walk_duration") / 1000.0
+                
+                if self.dig_tool.get_param('auto_walk_enabled'):
+                    walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+                    print(f"[Auto Walk Enabled] Walk Duration:{walk_duration}")
+                elif self.dig_tool.get_param('ranged_auto_walk_enabled'):
+                    walk_min_duration = self.dig_tool.get_param('walk_min_duration')
+                    walk_max_duration = self.dig_tool.get_param('walk_max_duration')
+                    walk_range_duration = random.randint(walk_min_duration, walk_max_duration)
+                    walk_duration = walk_range_duration / 1000
+                    print(f"[Ranged Auto Walk Enabled] Walk Duration:{walk_duration}")
 
                 if self.dig_tool.get_param("dynamic_walkspeed_enabled"):
                     base_duration = walk_duration
@@ -1513,7 +1522,15 @@ class AutomationManager:
                 if custom_duration is not None:
                     walk_duration = custom_duration / 1000.0
                 else:
-                    walk_duration = self.dig_tool.get_param("walk_duration") / 1000.0
+                    if self.dig_tool.get_param('auto_walk_enabled'):
+                        walk_duration = self.dig_tool.get_param('walk_duration') / 1000.0
+                        print(f"[Auto Walk Enabled] Walk Duration:{walk_duration}")
+                    elif self.dig_tool.get_param('ranged_auto_walk_enabled'):
+                        walk_min_duration = self.dig_tool.get_param('walk_min_duration')
+                        walk_max_duration = self.dig_tool.get_param('walk_max_duration')
+                        walk_range_duration = random.randint(walk_min_duration, walk_max_duration)
+                        walk_duration = walk_range_duration / 1000
+                        print(f"[Ranged Auto Walk Enabled] Walk Duration:{walk_duration}")
 
                 logger.info(
                     f"Preview step {i+1}/{len(pattern)}: {key} (duration: {walk_duration:.3f}s)"

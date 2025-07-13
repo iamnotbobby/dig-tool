@@ -70,9 +70,9 @@ class DigTool:
         self.root.title("Dig Tool")
 
         self.root.wm_iconbitmap(
-            os.path.join(sys._MEIPASS, "assets/icon.ico")
+            os.path.join(sys._MEIPASS, "dig-tool-beta/assets/icon.ico")
             if hasattr(sys, "_MEIPASS")
-            else "assets/icon.ico"
+            else "dig-tool-beta/assets/icon.ico"
         )
 
         self.base_height = 570
@@ -518,7 +518,7 @@ class DigTool:
     def _toggle_autowalk_overlay_thread_safe(self):
         try:
             if not self.autowalk_overlay_enabled:
-                if not self.get_param("auto_walk_enabled"):
+                if not (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')):
                     self.update_status(
                         "Auto Walk overlay requires Auto Walk to be enabled"
                     )
@@ -1641,7 +1641,7 @@ class DigTool:
 
             if (
                 self.running
-                and self.get_param("auto_walk_enabled")
+                and (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled'))
                 and not self.automation_manager.is_selling
             ):
                 if auto_walk_state == "move":
@@ -1748,6 +1748,7 @@ class DigTool:
                                 walk_duration = self.get_param("walk_duration")
 
                             move_completed_time = current_time_ms + walk_duration + 300
+                            print(f'[Auto Walk Enabled] Walk Duration:{self.get_param('walk_duration')}')
 
                 elif (
                     auto_walk_state == "click_to_start"
@@ -1802,7 +1803,7 @@ class DigTool:
                         target_disengaged_time = 0
 
             should_allow_clicking = True
-            if self.get_param("auto_walk_enabled"):
+            if (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')):
                 should_allow_clicking = (
                     auto_walk_state == "digging"
                     and not self.automation_manager.is_selling
@@ -1919,7 +1920,7 @@ class DigTool:
                         ).start()
 
             if (
-                self.get_param("auto_walk_enabled")
+                (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled'))
                 and auto_walk_state == "digging"
                 and target_disengaged_time > 0
                 and current_time_ms - target_disengaged_time > 1500
