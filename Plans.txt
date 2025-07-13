@@ -1,0 +1,11 @@
+Project Plans:
+KEY: (+) = done (-) = not done
+
+- Implement ranged walk duration feature with min and max parameters
+    + Add Min and Max to main_window (UI)
+    + Add Duel Check parameters
+    + Add Min, Max, and Ranged Walk to Settings
+    + Add min and max to automation.py
+        + added if and else statements to perfom_walk_step()
+
+- Add UI Color Grader

@@ -1,0 +1,80 @@
+name: Build and Release with Nuitka
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'v1.0'
+        required: true
+        default: 'v1.0'
+      release_name:
+        description: 'v1.0'
+        required: true
+        default: 'release v1.0'
+      release_notes:
+        description: 'release notes'
+        required: false
+        default: 'compiled with Nuitka'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+        if: hashFiles('requirements.txt') != ''
+
+      - name: Build Executable with Nuitka
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          nuitka-version: main
+          script-name: main.py
+          mode: onefile
+          enable-plugins: tk-inter
+          windows-console-mode: disable
+          windows-icon-from-ico: assets/icon.ico
+          lto: yes
+          include-module: ahk,jinja2
+          include-package-data: ahk,jinja2
+
+      - name: Get executable name
+        id: get_exe_name
+        run: |
+          $exeName = (Get-ChildItem -Path "build" -Filter "*.exe" | Select-Object -First 1).Name
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=build/$exeName" >> $env:GITHUB_OUTPUT
+        shell: powershell
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          release_name: ${{ github.event.inputs.release_name }}
+          body: ${{ github.event.inputs.release_notes }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.get_exe_name.outputs.exe_path }}
+          asset_name: ${{ steps.get_exe_name.outputs.exe_name }}
+          asset_content_type: application/octet-stream
