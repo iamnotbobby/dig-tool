@@ -435,8 +435,8 @@ class MainWindow:
             self.dig_tool.update_status(f"Error sampling colors: {e}")
 
     def update_dependent_widgets_state(self, *args):
-        auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
-        
+        auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get() or self.dig_tool.param_vars.get('ranged_auto_walk_enabled', tk.BooleanVar()).get()
+
         self._prev_auto_walk_enabled = auto_walk_enabled
 
         if self.auto_shovel_checkbox:
