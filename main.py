@@ -1560,18 +1560,19 @@ class DigTool:
                     position_change = abs(raw_zone_x - self.smoothed_zone_x)
                     width_change = abs(raw_zone_w - self.smoothed_zone_w)
 
-                    max_change_threshold = width * 0.1
-                    if (
-                        position_change > max_change_threshold
-                        or width_change > max_change_threshold
-                    ):
-                        adaptive_smoothing = min(zone_smoothing_factor + 0.2, 1.0)
+                    if zone_smoothing_factor >= 1.0:
+                        adaptive_smoothing = 1.0 
+                    elif zone_smoothing_factor <= 0.01:
+                        adaptive_smoothing = zone_smoothing_factor 
                     else:
-                        # respect user's settings here
-                        if zone_smoothing_factor <= 0.01:
-                            adaptive_smoothing = zone_smoothing_factor
+                        max_change_threshold = width * 0.1
+                        if (
+                            position_change > max_change_threshold
+                            or width_change > max_change_threshold
+                        ):
+                            adaptive_smoothing = min(zone_smoothing_factor + 0.1, 1.0)
                         else:
-                            adaptive_smoothing = max(zone_smoothing_factor - 0.1, 0.1)
+                            adaptive_smoothing = zone_smoothing_factor
 
                     self.smoothed_zone_x = (
                         adaptive_smoothing * raw_zone_x

@@ -736,7 +736,7 @@ class CustomPatternWindow:
                 success, message = self.automation_manager.save_pattern(self._current_pattern_name, self._current_pattern)
                 if success:
                     self._show_preview_pattern_blocks(self._current_pattern)
-                    self._safe_ui_update(lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
+                    safe_schedule_ui_update(self.window, lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
                     dialog.destroy()
                 else:
                     tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
@@ -755,7 +755,7 @@ class CustomPatternWindow:
                     success, message = self.automation_manager.save_pattern(self._current_pattern_name, self._current_pattern)
                     if success:
                         self._show_preview_pattern_blocks(self._current_pattern)
-                        self._safe_ui_update(lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
+                        safe_schedule_ui_update(self.window, lambda: self._ensure_pattern_selected(self._current_pattern_name), 10)
                         dialog.destroy()
                     else:
                         tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
@@ -1003,9 +1003,9 @@ class CustomPatternWindow:
         self._update_recorded_canvas_scroll_region()
         
         if is_recording:
-            self._safe_ui_update(self._auto_scroll_to_latest, 10)
+            safe_schedule_ui_update(self.window, self._auto_scroll_to_latest, 10)
         else:
-            self._safe_ui_update(lambda: self.recorded_pattern_canvas.yview_moveto(0.0), 10)
+            safe_schedule_ui_update(self.window, lambda: self.recorded_pattern_canvas.yview_moveto(0.0), 10)
 
     def _update_recorded_canvas_scroll_region(self):
         self.recorded_pattern_frame.update_idletasks()
@@ -2225,5 +2225,5 @@ class CustomPatternWindow:
             else:
                 self.unsaved_changes_label.config(text="✓ Saved", foreground="green")
            
-                self._safe_ui_update(lambda: self.unsaved_changes_label.config(text=""), 2000)
+                safe_schedule_ui_update(self.window, lambda: self.unsaved_changes_label.config(text=""), 2000)
 

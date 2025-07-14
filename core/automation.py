@@ -1061,7 +1061,14 @@ class AutomationManager:
         if self.is_selling:
             return False
 
-        if not self.sell_button_position:
+        auto_sell_method = self.dig_tool.get_param("auto_sell_method")
+        if auto_sell_method == "button_click":
+            if not self.sell_button_position:
+                return False
+        elif auto_sell_method == "ui_navigation":
+            pass
+        else:
+            logger.warning(f"Unknown auto_sell_method: {auto_sell_method}")
             return False
 
         return True
@@ -1076,7 +1083,17 @@ class AutomationManager:
             )
             return False
 
-        return auto_sell_enabled and self.sell_button_position is not None
+        if not auto_sell_enabled:
+            return False
+            
+        auto_sell_method = self.dig_tool.get_param("auto_sell_method")
+        if auto_sell_method == "button_click":
+            return self.sell_button_position is not None
+        elif auto_sell_method == "ui_navigation":
+            return True 
+        else:
+            logger.warning(f"Unknown auto_sell_method: {auto_sell_method}")
+            return False
 
     def autoit_click(self, x, y, retries=3):
         for attempt in range(retries):
@@ -1132,6 +1149,17 @@ class AutomationManager:
         return False
 
     def perform_auto_sell(self):
+        auto_sell_method = self.dig_tool.get_param("auto_sell_method")
+        
+        if auto_sell_method == "button_click":
+            return self._perform_auto_sell_button_click()
+        elif auto_sell_method == "ui_navigation":
+            return self._perform_auto_sell_ui_navigation()
+        else:
+            logger.error(f"Unknown auto_sell_method: {auto_sell_method}")
+            return False
+
+    def _perform_auto_sell_button_click(self):
         try:
             if self.is_selling:
                 logger.warning("Auto-sell already in progress, skipping")
@@ -1251,12 +1279,252 @@ class AutomationManager:
             logger.error(error_msg)
             self.dig_tool.update_status(f"Auto-sell failed: {e}")
 
-    def test_sell_button_click(self):
-        if not self.sell_button_position:
-            self.dig_tool.update_status("Sell button not set!")
-            return
+    def _perform_auto_sell_ui_navigation(self):
+        try:
+            if self.is_selling:
+                logger.warning("Auto-sell already in progress, skipping")
+                return False
 
-        threading.Thread(target=self._test_sell_click_with_delay, daemon=True).start()
+            if not self.dig_tool.get_param("auto_sell_enabled"):
+                logger.warning("Auto-sell aborted: Auto-sell is disabled")
+                return False
+
+            if not self.dig_tool.running:
+                logger.warning("Auto-sell aborted: Tool is not running")
+                return False
+
+            logger.info(f"Starting UI navigation auto-sell sequence #{self.sell_count + 1}")
+            self.is_selling = True
+            self.dig_tool.update_status("Auto-selling (UI Navigation)...")
+
+            time.sleep(0.1)
+
+            with self.walking_lock:
+                if not self.find_and_focus_roblox_window():
+                    logger.warning("Could not focus Roblox window for UI navigation auto-sell")
+                
+                disabled_shifts = self.disable_active_shifts_for_sell()
+                if disabled_shifts:
+                    logger.info(f"Disabled shift keys for auto-sell: {disabled_shifts}")
+                    time.sleep(0.2)
+
+                inventory_key = "g"
+                sell_sequence = "\\,down,up,enter,\\"
+                step_delay = 0.5  # 300ms
+                sell_wait = 3.0   # 5000ms
+                inventory_open_delay = 0.9   # 700ms
+                inventory_close_delay = 0.8  # 800ms
+
+                logger.info(f"AUTO-SELL CONFIG - Using hardcoded sequence: '{sell_sequence}'")
+
+                logger.debug(f"Opening inventory with '{inventory_key}' key")
+                self._send_key_safe(inventory_key)
+                time.sleep(inventory_open_delay)
+
+                if sell_sequence:
+                    sequence_steps = [step.strip() for step in sell_sequence.split(',')]
+                    logger.info(f"AUTO-SELL CONFIG - Parsed sequence steps: {sequence_steps}")
+                    logger.debug(f"Executing sell sequence: {sequence_steps}")
+                    
+                    for step in sequence_steps:
+                        if not self.dig_tool.running or not self.is_selling:
+                            logger.warning("Auto-sell interrupted")
+                            break
+                            
+                        if step: 
+                            logger.info(f"AUTO-SELL: Sending '{step}' key")
+                            self._send_navigation_key(step)
+                            time.sleep(step_delay)
+                else:
+                    logger.warning("AUTO-SELL CONFIG - No sell sequence found in config!")
+
+                    logger.debug(f"Waiting {sell_wait}s for sell operation to complete")
+                    time.sleep(sell_wait)
+
+                logger.debug(f"Closing inventory with '{inventory_key}' key")
+                self._send_key_safe(inventory_key)
+                time.sleep(inventory_close_delay)
+
+                restored_shifts = self.restore_shifts_after_sell()
+                if restored_shifts:
+                    logger.info(f"Restored shift keys after auto-sell: {restored_shifts}")
+                    time.sleep(0.1)
+
+                self.sell_count += 1
+
+                sell_every_x_digs = self.dig_tool.get_param("sell_every_x_digs")
+                if sell_every_x_digs and sell_every_x_digs > 0:
+                    items_sold = min(self.dig_tool.dig_count, sell_every_x_digs)
+                    self.dig_tool.dig_count = max(0, self.dig_tool.dig_count - items_sold)
+                    logger.info(f"UI navigation auto-sell completed: sold {items_sold} items, remaining dig_count: {self.dig_tool.dig_count}")
+
+                self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed (UI Nav)")
+                logger.info(f"UI navigation auto-sell #{self.sell_count} completed successfully")
+
+            self.is_selling = False
+            return True
+
+        except Exception as e:
+            self.is_selling = False
+
+            try:
+                restored_shifts = self.restore_shifts_after_sell()
+                if restored_shifts:
+                    logger.info(f"Restored shift keys after auto-sell exception: {restored_shifts}")
+            except Exception as restore_error:
+                logger.warning(f"Failed to restore shifts after auto-sell exception: {restore_error}")
+
+            error_msg = f"Error in UI navigation auto-sell: {e}"
+            logger.error(error_msg)
+            self.dig_tool.update_status(f"Auto-sell failed: {e}")
+            return False
+
+    def _send_key_safe(self, key):
+        try:
+            autoit.send(key)
+        except (OSError, WindowsError, Exception) as e:
+            logger.warning(f"AutoIt send '{key}' failed, using keyboard fallback: {e}")
+            if hasattr(Key, key.lower()):
+                self.keyboard_controller.press(getattr(Key, key.lower()))
+                self.keyboard_controller.release(getattr(Key, key.lower()))
+            else:
+                self.keyboard_controller.press(key)
+                self.keyboard_controller.release(key)
+
+    def _send_navigation_key(self, key_name):
+        key_name = key_name.lower().strip()
+        logger.debug(f"_send_navigation_key called with: '{key_name}'")
+
+        if key_name == "down" or key_name == "↓":
+            logger.debug("Sending DOWN key")
+            try:
+                autoit.send("{DOWN}")
+                logger.debug("DOWN key sent via AutoIt")
+            except Exception as e:
+                logger.debug(f"AutoIt DOWN failed ({e}), using keyboard fallback")
+                self.keyboard_controller.press(Key.down)
+                self.keyboard_controller.release(Key.down)
+                logger.debug("DOWN key sent via keyboard controller")
+        elif key_name == "up" or key_name == "↑":
+            logger.debug("Sending UP key")
+            try:
+                autoit.send("{UP}")
+                logger.debug("UP key sent via AutoIt")
+            except Exception as e:
+                logger.debug(f"AutoIt UP failed ({e}), using keyboard fallback")
+                self.keyboard_controller.press(Key.up)
+                self.keyboard_controller.release(Key.up)
+                logger.debug("UP key sent via keyboard controller")
+        elif key_name == "left" or key_name == "←":
+            logger.debug("Sending LEFT key")
+            try:
+                autoit.send("{LEFT}")
+            except:
+                self.keyboard_controller.press(Key.left)
+                self.keyboard_controller.release(Key.left)
+        elif key_name == "right" or key_name == "→":
+            logger.debug("Sending RIGHT key")
+            try:
+                autoit.send("{RIGHT}")
+            except:
+                self.keyboard_controller.press(Key.right)
+                self.keyboard_controller.release(Key.right)
+        elif key_name == "enter" or key_name == "return":
+            logger.debug("Sending ENTER key")
+            try:
+                autoit.send("{ENTER}")
+            except:
+                self.keyboard_controller.press(Key.enter)
+                self.keyboard_controller.release(Key.enter)
+        elif key_name == "space":
+            logger.debug("Sending SPACE key")
+            try:
+                autoit.send("{SPACE}")
+            except:
+                self.keyboard_controller.press(Key.space)
+                self.keyboard_controller.release(Key.space)
+        elif key_name == "tab":
+            logger.debug("Sending TAB key")
+            try:
+                autoit.send("{TAB}")
+            except:
+                self.keyboard_controller.press(Key.tab)
+                self.keyboard_controller.release(Key.tab)
+        elif key_name == "escape" or key_name == "esc":
+            logger.debug("Sending ESC key")
+            try:
+                autoit.send("{ESC}")
+            except:
+                self.keyboard_controller.press(Key.esc)
+                self.keyboard_controller.release(Key.esc)
+        else:
+            logger.debug(f"Sending regular key: '{key_name}'")
+            self._send_key_safe(key_name)
+
+    def test_sell_button_click(self):
+        auto_sell_method = self.dig_tool.get_param("auto_sell_method")
+        
+        if auto_sell_method == "button_click":
+            if not self.sell_button_position:
+                self.dig_tool.update_status("Sell button not set!")
+                return
+            threading.Thread(target=self._test_sell_click_with_delay, daemon=True).start()
+        elif auto_sell_method == "ui_navigation":
+            threading.Thread(target=self._test_ui_navigation_with_delay, daemon=True).start()
+        else:
+            self.dig_tool.update_status(f"Unknown auto-sell method: {auto_sell_method}")
+
+    def _test_ui_navigation_with_delay(self):
+        logger.info("Testing UI navigation auto-sell sequence")
+        
+        for i in range(5, 0, -1):
+            self.dig_tool.update_status(f"UI navigation test in {i} seconds...")
+            time.sleep(1.0)
+
+        self.dig_tool.update_status("Testing UI navigation sequence...")
+        logger.info("Executing UI navigation test sequence")
+
+        try:
+            if not self.find_and_focus_roblox_window():
+                logger.warning("Could not focus Roblox window for UI navigation test")
+            
+            inventory_key = "g"
+            sell_sequence = "\\,down,up,enter,\\"
+            step_delay = 0.3  # 300ms
+            inventory_open_delay = 0.7   # 700ms
+            inventory_close_delay = 0.8  # 800ms
+
+            logger.info(f"CONFIGURATION CHECK - Using hardcoded sequence: '{sell_sequence}'")
+            
+            logger.debug(f"Opening inventory with '{inventory_key}' key")
+            self._send_key_safe(inventory_key)
+            time.sleep(inventory_open_delay)
+
+            if sell_sequence:
+                sequence_steps = [step.strip() for step in sell_sequence.split(',')]
+                logger.info(f"CONFIGURATION CHECK - Parsed sequence steps: {sequence_steps}")
+                logger.debug(f"Executing test sequence: {sequence_steps}")
+                
+                for i, step in enumerate(sequence_steps):
+                    if step:
+                        logger.info(f"STEP {i+1}/{len(sequence_steps)}: Sending '{step}' key")
+                        self._send_navigation_key(step)
+                        logger.debug(f"Step {i+1} completed, waiting {step_delay:.3f}s")
+                        time.sleep(step_delay)
+            else:
+                logger.warning("CONFIGURATION CHECK - No sell sequence found in config!")
+
+            logger.debug(f"Closing inventory with '{inventory_key}' key")
+            self._send_key_safe(inventory_key)
+            time.sleep(inventory_close_delay)
+
+            self.dig_tool.update_status("UI navigation test completed successfully!")
+            logger.info("UI navigation test sequence completed")
+
+        except Exception as e:
+            error_msg = f"UI navigation test failed: {e}"
+            logger.error(error_msg)
+            self.dig_tool.update_status(error_msg)
 
     def _test_sell_click_with_delay(self):
         x, y = self.sell_button_position
