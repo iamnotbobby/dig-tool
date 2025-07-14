@@ -797,7 +797,7 @@ class AutomationManager:
             return "AUTO SELLING"
         elif self.is_walking:
             return "WALKING"
-        elif self.dig_tool.get_param("auto_walk_enabled"):
+        elif (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled')):
             if self.dig_tool.get_param("auto_shovel_enabled"):
                 current_time = time.time()
                 shovel_timeout = self.dig_tool.get_param("shovel_timeout") * 60
@@ -1074,7 +1074,7 @@ class AutomationManager:
         return True
 
     def can_auto_sell(self):
-        auto_walk_enabled = self.dig_tool.get_param("auto_walk_enabled")
+        auto_walk_enabled = (self.get_param('auto_walk_enabled') or self.get_param('ranged_auto_walk_enabled'))
         auto_sell_enabled = self.dig_tool.get_param("auto_sell_enabled")
 
         if auto_sell_enabled and not auto_walk_enabled:
