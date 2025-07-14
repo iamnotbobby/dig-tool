@@ -1,70 +1,178 @@
 name: Build and Release with PyInstaller
-
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'v1.0'
+        description: 'Release tag (e.g., v1.0-beta)'
         required: true
-        default: 'v1.0'
+        default: 'v1.0-beta'
       release_name:
-        description: 'v1.0'
+        description: 'Release name'
         required: true
-        default: 'release v1.0'
-      release_notes:
-        description: 'release notes'
+        default: 'Beta Release v1.0'
+      is_beta_release:
+        description: 'Mark as beta release'
         required: false
-        default: 'compiled with PyInstaller'
-
+        default: true
+        type: boolean
+      custom_notes:
+        description: 'Additional release notes (optional)'
+        required: false
+        default: ''
 jobs:
   build-and-release:
     runs-on: windows-latest
-
+    permissions:
+      contents: write
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0  
+         
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           architecture: 'x64'
           cache: 'pip'
-
+         
       - name: Install Dependencies
         run: |
-          pip install opencv-python numpy Pillow keyboard pywin32 pynput requests pyautoit pyinstaller
-
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Generate executable name with version
+        id: exe_name
+        run: |
+          $releaseTag = "${{ github.event.inputs.release_tag }}"
+          $version = $releaseTag -replace '^v', '' -replace '[^a-zA-Z0-9.-]', '-'
+          $exeName = "DigTool-$version"
+          
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "Generated executable name: $exeName"
+        shell: powershell
+         
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name=DigTool --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
-
-      - name: Get executable name
-        id: get_exe_name
+          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+         
+      - name: Get executable info and generate checksums
+        id: get_exe_info
         run: |
           $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
-          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
-          echo "exe_path=dist/$exeName" >> $env:GITHUB_OUTPUT
-        shell: powershell
+          $exePath = "dist/$exeName"
+          $fileSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+          
+          $sha256Hash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
+          $md5Hash = (Get-FileHash -Path $exePath -Algorithm MD5).Hash
+          
+          $checksumContent = @"
+          # Checksums for $exeName
+          # Built by GitHub Actions on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+          # Workflow: ${{ github.workflow }}
+          # Run ID: ${{ github.run_id }}
+          # Commit: ${{ github.sha }}
 
+          SHA256: $sha256Hash
+          MD5: $md5Hash
+
+          # Verification Instructions:
+          # Windows: certutil -hashfile $exeName SHA256
+          # Linux/Mac: sha25 Get-FileHash -Path $exeName -Algorithm SHA256
+          "@
+          
+          $checksumContent | Out-File -FilePath "dist/CHECKSUMS.txt" -Encoding UTF8
+          
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
+          echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
+          echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
+          echo "Built executable: $exeName (${fileSize}MB)"
+          echo "SHA256: $sha256Hash"
+        shell: powershell
+        
+      - name: Generate build attestation
+        id: build_attestation
+        run: |
+          $attestation = @{
+            "build_info" = @{
+              "workflow" = "${{ github.workflow }}"
+              "run_id" = "${{ github.run_id }}"
+              "run_number" = "${{ github.run_number }}"
+              "actor" = "${{ github.actor }}"
+              "repository" = "${{ github.repository }}"
+              "ref" = "${{ github.ref }}"
+              "sha" = "${{ github.sha }}"
+              "timestamp" = "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
+            }
+            "executable" = @{
+              "name" = "${{ steps.get_exe_info.outputs.exe_name }}"
+              "sha256" = "${{ steps.get_exe_info.outputs.sha256_hash }}"
+              "md5" = "${{ steps.get_exe_info.outputs.md5_hash }}"
+              "size_mb" = "${{ steps.get_exe_info.outputs.file_size }}"
+            }
+            "verification" = @{
+              "github_actions_url" = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "commit_url" = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+            }
+          }
+          
+          $attestationJson = $attestation | ConvertTo-Json -Depth 10
+          $attestationJson | Out-File -FilePath "dist/build-attestation.json" -Encoding UTF8
+          
+          echo "Generated build attestation"
+        shell: powershell
+        
+      - name: Create and push tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a "${{ github.event.inputs.release_tag }}" -m "Release ${{ github.event.inputs.release_name }}"
+          git push origin "${{ github.event.inputs.release_tag }}"
+       
+      - name: Generate automated release notes
+        id: generate_notes
+        run: |
+          $notes = ""
+         
+          if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
+            $notes += "**BETA RELEASE** - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
+          }
+         
+          $customNotes = "${{ github.event.inputs.custom_notes }}"
+          if ($customNotes -and $customNotes.Trim() -ne "") {
+            $notes += "$customNotes`n`n"
+          }
+          
+          $notes += "<details>`n<summary>Integrity Verification</summary>`n`n"
+          $notes += "**SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
+          $notes += "</details>"
+         
+          echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
+          echo "$notes" >> $env:GITHUB_OUTPUT
+          echo "EOF" >> $env:GITHUB_OUTPUT
+        shell: powershell
+       
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
-          release_name: ${{ github.event.inputs.release_name }}
-          body: ${{ github.event.inputs.release_notes }}
+          name: ${{ github.event.inputs.release_name }}
+          body: ${{ steps.generate_notes.outputs.release_notes }}
           draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.get_exe_name.outputs.exe_path }}
-          asset_name: ${{ steps.get_exe_name.outputs.exe_name }}
-          asset_content_type: application/octet-stream
+          prerelease: ${{ github.event.inputs.is_beta_release }}
+          files: |
+            ${{ steps.get_exe_info.outputs.exe_path }}
+            dist/CHECKSUMS.txt
+            dist/build-attestation.json
+         
+      - name: Output release info
+        run: |
+          echo "Release created successfully!"
+          echo "Tag: ${{ github.event.inputs.release_tag }}"
+          echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
+          echo "Full path: ${{ steps.get_exe_info.outputs.exe_path }}"
+        shell: powershell
