@@ -45,6 +45,7 @@ class SettingsManager:
             "auto_sell_enabled": False,
             "sell_every_x_digs": 10,
             "sell_delay": 3000,
+            "auto_sell_method": "button_click", 
             # Otsu detection parameters
             "use_otsu_detection": False,
             "otsu_min_area": 50,
@@ -96,6 +97,7 @@ class SettingsManager:
             "auto_sell_enabled": "Automatically sell items after a certain number of digs.",
             "sell_every_x_digs": "Number of digs before auto-selling items.",
             "sell_delay": "Delay in milliseconds before clicking the sell button.",
+            "auto_sell_method": "Method for auto-selling: 'button_click' (click specific position) or 'ui_navigation' (use keyboard shortcuts).",
             "auto_walk_enabled": "Automatically move around while digging.",
             "walk_duration": "Default duration to hold down key presses (milliseconds). Used as base duration unless custom durations are set for individual keys.",
             "dynamic_walkspeed_enabled": "Apply a mathematical formula to determine the decreased walkspeed after X items.",
@@ -370,6 +372,8 @@ class SettingsManager:
                 return isinstance(value, bool)
             elif key in ["user_id", "webhook_url"]:
                 return isinstance(value, str)
+            elif key == "auto_sell_method":
+                return isinstance(value, str) and value in ["button_click", "ui_navigation"]
             elif key == "initial_walkspeed_decrease":
                 if isinstance(value, str):
                     value = float(value)
@@ -1004,6 +1008,7 @@ class SettingsManager:
                 ["explorer", os.path.abspath(self.settings_dir)], check=False
             )
             logger.info(f"Opened settings directory: {self.settings_dir}")
+            return True
 
         except Exception as e:
             logger.error(f"Failed to open settings directory: {e}")
