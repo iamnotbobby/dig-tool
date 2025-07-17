@@ -139,6 +139,8 @@ jobs:
          
           if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
             $notes += "**BETA RELEASE** - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
+          } else {
+            $notes += "Join our [Discord](https://discord.com/invite/mxE7dzXMGf) for support and updates!`n`n"
           }
          
           $customNotes = "${{ github.event.inputs.custom_notes }}"
@@ -146,10 +148,8 @@ jobs:
             $notes += "$customNotes`n`n"
           }
           
-          $notes += "<details>`n<summary>Integrity Verification</summary>`n`n"
-          $notes += "**SHA256:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "**File Integrity Verification:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
           $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
-          $notes += "</details>"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
           echo "$notes" >> $env:GITHUB_OUTPUT
