@@ -6,6 +6,82 @@ from enum import Enum
 import queue
 import os
 import cv2
+import sys
+import io
+
+
+def setup_debug_directory():
+    """Setup debug directory with same logic as settings directory."""
+    try:
+        # Try to get LOCALAPPDATA first
+        appdata_dir = os.environ.get("LOCALAPPDATA")
+        if appdata_dir and os.path.exists(appdata_dir):
+            debug_dir = os.path.join(appdata_dir, "DigTool", "debug_clicks")
+            return debug_dir
+
+        # Fallback to APPDATA
+        appdata_dir = os.environ.get("APPDATA")
+        if appdata_dir and os.path.exists(appdata_dir):
+            debug_dir = os.path.join(appdata_dir, "DigTool", "debug_clicks")
+            return debug_dir
+
+        # Final fallback to current directory
+        debug_dir = os.path.join(os.getcwd(), "debug_clicks")
+        logger.warning("Using current directory for debug storage as fallback") if 'logger' in globals() else None
+        return debug_dir
+    except Exception as e:
+        if 'logger' in globals():
+            logger.error(f"Error setting up debug directory: {e}")
+        debug_dir = os.path.join(os.getcwd(), "debug_clicks")
+        return debug_dir
+
+
+def ensure_debug_directory(debug_dir=None):
+    """Ensure debug directory exists."""
+    if debug_dir is None:
+        debug_dir = setup_debug_directory()
+    
+    try:
+        os.makedirs(debug_dir, exist_ok=True)
+        if 'logger' in globals():
+            logger.info(f"Debug directory ensured at: {debug_dir}")
+        return debug_dir
+    except Exception as e:
+        if 'logger' in globals():
+            logger.error(f"Error ensuring debug directory: {e}")
+        # Fallback to current directory
+        fallback_dir = os.path.join(os.getcwd(), "debug_clicks")
+        try:
+            os.makedirs(fallback_dir, exist_ok=True)
+            return fallback_dir
+        except Exception as fallback_error:
+            if 'logger' in globals():
+                logger.error(f"Fallback debug directory creation failed: {fallback_error}")
+            return fallback_dir
+
+
+def get_debug_log_path(debug_dir=None):
+    """Get the debug log file path, ensuring the directory exists."""
+    if debug_dir is None:
+        debug_dir = ensure_debug_directory()
+    else:
+        debug_dir = ensure_debug_directory(debug_dir)
+    
+    return os.path.join(debug_dir, "click_log.txt")
+
+
+def get_debug_info(debug_dir=None):
+    """Get debug directory information, similar to settings_manager.get_settings_info()."""
+    if debug_dir is None:
+        debug_dir = setup_debug_directory()
+    
+    debug_log_path = get_debug_log_path(debug_dir)
+    
+    return {
+        "debug_directory": debug_dir,
+        "debug_log_path": debug_log_path,
+        "exists": os.path.exists(debug_dir),
+    }
 
 
 def save_debug_screenshot(
@@ -79,6 +155,30 @@ class LogLevel(Enum):
     ERROR = 4
 
 
+class ConsoleRedirector(io.TextIOBase):
+    """Custom stream to redirect console output to the debug logger."""
+    
+    def __init__(self, logger_instance, log_level=LogLevel.INFO, stream_name="CONSOLE"):
+        self.logger = logger_instance
+        self.log_level = log_level
+        self.stream_name = stream_name
+        self.buffer = ""
+        
+    def write(self, text):
+        if text and text.strip():  # Only log non-empty text
+            # Remove newlines and extra whitespace
+            clean_text = text.strip()
+            if clean_text:
+                self.logger._log(self.log_level, f"[{self.stream_name}] {clean_text}")
+        return len(text)
+    
+    def flush(self):
+        pass
+    
+    def writable(self):
+        return True
+
+
 class DebugLogger:
     def __init__(self):
         self.log_queue = queue.Queue(maxsize=1000)
@@ -98,6 +198,14 @@ class DebugLogger:
         self._batch_size = 50
         self._file_buffer = []
         self._buffer_size = 100
+        
+        # Console redirection properties
+        self.capture_console_output = False
+        self.original_stdout = None
+        self.original_stderr = None
+        self.stdout_redirector = None
+        self.stderr_redirector = None
+        
         self.log_levels = {
             LogLevel.DEBUG: {"color": "#888888", "prefix": "[DEBUG]"},
             LogLevel.INFO: {"color": "#000000", "prefix": "[INFO]"},
@@ -196,6 +304,37 @@ class DebugLogger:
         else:
             self.info("Debug logging manually disabled")
 
+    def enable_console_capture(self):
+        """Enable capturing of all console output (stdout/stderr) to the logger."""
+        if not self.capture_console_output:
+            self.original_stdout = sys.stdout
+            self.original_stderr = sys.stderr
+            
+            self.stdout_redirector = ConsoleRedirector(self, LogLevel.INFO, "STDOUT")
+            self.stderr_redirector = ConsoleRedirector(self, LogLevel.ERROR, "STDERR")
+            
+            sys.stdout = self.stdout_redirector
+            sys.stderr = self.stderr_redirector
+            
+            self.capture_console_output = True
+            self.info("Console output capture enabled - all message streams will be logged")
+
+    def disable_console_capture(self):
+        """Disable capturing of console output and restore original streams."""
+        if self.capture_console_output:
+            if self.original_stdout:
+                sys.stdout = self.original_stdout
+            if self.original_stderr:
+                sys.stderr = self.original_stderr
+            
+            self.capture_console_output = False
+            self.original_stdout = None
+            self.original_stderr = None
+            self.stdout_redirector = None
+            self.stderr_redirector = None
+            
+            self.info("Console output capture disabled - restored original streams")
+
     def show_console(self):
         if self.console_window and self.console_window.winfo_exists():
             self.console_window.lift()
@@ -242,6 +381,14 @@ class DebugLogger:
             text="Enable Logging",
             variable=self.logging_enabled_var,
             command=self._toggle_logging,
+        ).pack(side=tk.LEFT, padx=5)
+
+        self.console_capture_var = tk.BooleanVar(value=self.capture_console_output)
+        ttk.Checkbutton(
+            toolbar,
+            text="Capture Console",
+            variable=self.console_capture_var,
+            command=self._toggle_console_capture,
         ).pack(side=tk.LEFT, padx=5)
 
         options_frame = ttk.Frame(self.console_window)
@@ -314,9 +461,23 @@ class DebugLogger:
     def _clear_console(self):
         if self.console_text:
             self.console_text.delete("1.0", tk.END)
+        # Clear the log history to prevent old logs from reappearing
+        self.log_history.clear()
+        # Also clear the file buffer to prevent pending logs from being written
+        self._file_buffer.clear()
+        # Clear the log queue to prevent queued logs from being processed
+        while not self.log_queue.empty():
+            try:
+                self.log_queue.get_nowait()
+            except queue.Empty:
+                break
 
     def _toggle_auto_scroll(self):
-        self.auto_scroll = self.auto_scroll_var.get()
+        if hasattr(self, 'auto_scroll_var'):
+            self.auto_scroll = self.auto_scroll_var.get()
+        # Also force scroll to end if auto-scroll is enabled
+        if self.auto_scroll and self.console_text:
+            self.console_text.see(tk.END)
 
     def _toggle_always_on_top(self):
         self.always_on_top = self.always_on_top_var.get()
@@ -325,6 +486,12 @@ class DebugLogger:
 
     def _toggle_logging(self):
         self.set_logging_enabled(self.logging_enabled_var.get())
+
+    def _toggle_console_capture(self):
+        if self.console_capture_var.get():
+            self.enable_console_capture()
+        else:
+            self.disable_console_capture()
 
     def _toggle_save_to_file(self):
         self.save_to_file = self.save_to_file_var.get()
@@ -430,6 +597,7 @@ class DebugLogger:
 
     def cleanup(self):
         self._flush_file_buffer()
+        self.disable_console_capture()  # Restore original streams
         while not self.log_queue.empty():
             try:
                 self.log_queue.get_nowait()
@@ -565,8 +733,49 @@ class DebugLogger:
                 entry = self.log_queue.get_nowait()
                 self._add_log_entry(entry)
                 processed += 1
+            
+            # Ensure auto-scroll is applied after processing the batch
+            if processed > 0 and self.auto_scroll:
+                self.console_text.see(tk.END)
         except queue.Empty:
             pass
 
 
 logger = DebugLogger()
+
+
+def enable_console_logging():
+    """Enable console output capture for the global logger instance."""
+    logger.enable_console_capture()
+
+
+def init_click_debug_log(debug_log_path=None, ensure_debug_dir_func=None):
+    """Initialize debug log file for click tracking.
+    
+    Args:
+        debug_log_path: Optional path to debug log file. If None, will use default path.
+        ensure_debug_dir_func: Optional legacy function for compatibility. Will be ignored.
+    """
+    try:
+        # Use new path setup if no path provided
+        if debug_log_path is None:
+            debug_log_path = get_debug_log_path()
+        else:
+            # Ensure directory exists for provided path
+            debug_dir = os.path.dirname(debug_log_path)
+            ensure_debug_directory(debug_dir)
+        
+        with open(debug_log_path, "w") as f:
+            f.write("Dig Tool Debug Log\n")
+            f.write("==================\n")
+            f.write(f"Session started at timestamp: {int(time.time())}\n")
+            f.write(
+                "Format: Click# | Timestamp | Line_Pos | Velocity | Acceleration | Sweet_Spot_Range | Click_Type | Confidence | Screenshot_File\n"
+            )
+            f.write("-" * 120 + "\n")
+        
+        logger.info(f"Debug log initialized at: {debug_log_path}")
+        return debug_log_path
+    except Exception as e:
+        logger.error(f"Error creating debug log: {e}")
+        return None

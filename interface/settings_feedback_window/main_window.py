@@ -9,8 +9,9 @@ from .window_management import WindowManagement
 
 
 class SettingsFeedbackWindow:
-    def __init__(self, parent, title="Settings Operation"):
-        self.parent = parent
+    def __init__(self, dig_tool, title="Settings Operation"):
+        self.dig_tool = dig_tool
+        self.parent = dig_tool.root if hasattr(dig_tool, 'root') else dig_tool
         self.window = None
         self.title = title
         self.progress_var = None

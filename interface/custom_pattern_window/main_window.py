@@ -18,8 +18,9 @@ from .pattern_display import PatternDisplay
 
 
 class CustomPatternWindow:
-    def __init__(self, parent, automation_manager):
-        self.parent = parent
+    def __init__(self, dig_tool, automation_manager):
+        self.dig_tool = dig_tool
+        self.parent = dig_tool.root
         self.automation_manager = automation_manager
         self.window = None
         self.pattern_listbox = None
@@ -70,9 +71,15 @@ class CustomPatternWindow:
             
         self.window = tk.Toplevel(self.parent)
         self.window.title("Custom Movement Patterns")
-        self.window.geometry("900x750")
+        
+        pattern_width = int(self.dig_tool.width * 2.0)
+        pattern_height = int(self.dig_tool.base_height * 1.32)
+        min_width = int(self.dig_tool.width * 1.78)
+        min_height = int(self.dig_tool.base_height * 1.05)
+        
+        self.window.geometry(f"{pattern_width}x{pattern_height}")
         self.window.resizable(True, True)
-        self.window.minsize(800, 600)
+        self.window.minsize(min_width, min_height)
 
         self.window.wm_iconbitmap(os.path.join(sys._MEIPASS, "assets/icon.ico") if hasattr(sys, '_MEIPASS') else "assets/icon.ico")
 

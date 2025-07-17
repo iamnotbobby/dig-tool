@@ -25,8 +25,14 @@ class WindowManagement:
 
     def _center_window(self):
         self.main_window.window.update_idletasks()
-        width = 550
-        height = 500
+        
+        if hasattr(self.main_window, 'dig_tool'):
+            width = int(self.main_window.dig_tool.width * 1.22)
+            height = int(self.main_window.dig_tool.base_height * 0.88)
+        else:
+            width = 550
+            height = 500
+            
         screen_width = self.main_window.window.winfo_screenwidth()
         screen_height = self.main_window.window.winfo_screenheight()
         x = (screen_width - width) // 2

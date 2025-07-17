@@ -1,3 +1,5 @@
+from utils.config_management import get_param
+from utils.system_utils import get_cached_system_latency
 import tkinter as tk
 from tkinter import Label, Frame, ttk, Canvas
 import win32gui, win32con
@@ -95,7 +97,7 @@ class CollapsiblePane(Frame):
 
     def open(self):
         if not self.is_open.get():
-            self.sub_frame.pack(fill="x", pady=2, padx=2)
+            self.sub_frame.pack(fill="x", pady=1, padx=1)  
             self.toggle_button.configure(text=f"− {self.text}")
             self.is_open.set(True)
 
@@ -123,7 +125,8 @@ class AccordionManager:
                     pane.open()
             else:
                 pane.close()
-        self.dig_tool_instance.resize_for_content()
+        from utils.ui_management import resize_for_content
+        resize_for_content(self.dig_tool_instance)
 
 
 class GameOverlay:
@@ -289,7 +292,7 @@ class GameOverlay:
 
         self.latency_label = Label(
             stats_frame,
-            text=f"LAT: {self.parent.get_cached_system_latency()}ms",
+            text=f"LAT: {get_cached_system_latency(self.parent)}ms",
             fg="#a78bfa",
             bg="black",
             font=("Consolas", 9),
@@ -409,13 +412,13 @@ class GameOverlay:
             self.dig_label.config(text=f"DIGS: {dig_count}")
             self.clicks_label.config(text=f"CLICKS: {click_count}")
 
-            is_pred = self.parent.get_param("prediction_enabled")
+            is_pred = get_param(self.parent, "prediction_enabled")
             self.pred_label.config(
                 text=f"PRED: {'ON' if is_pred else 'OFF'}",
                 fg="#4ecdc4" if is_pred else "#ff4757",
             )
             self.latency_label.config(
-                text=f"LAT: {self.parent.get_cached_system_latency()}ms"
+                text=f"LAT: {get_cached_system_latency(self.parent)}ms"
             )
 
             bot_key = self.parent.keybind_vars["toggle_bot"].get().upper()
@@ -637,17 +640,17 @@ class AutoWalkOverlay:
             return
         try:
             dig_count = kwargs.get("dig_count", 0)
-            initial_items = self.parent.get_param("initial_item_count") or 0
+            initial_items = get_param(self.parent, "initial_item_count") or 0
             total_items = dig_count + initial_items
 
-            if self.parent.get_param("dynamic_walkspeed_enabled"):
+            if get_param(self.parent, "dynamic_walkspeed_enabled"):
                 formula_reduction = (
                     self.parent.automation_manager.calculate_walkspeed_multiplier(
                         total_items
                     )
                 )
                 initial_decrease = (
-                    self.parent.get_param("initial_walkspeed_decrease") or 0.0
+                    get_param(self.parent, "initial_walkspeed_decrease") or 0.0
                 )
                 total_reduction = min(formula_reduction + initial_decrease, 0.99)
 
@@ -657,12 +660,12 @@ class AutoWalkOverlay:
                 )
 
                 duration_multiplier = 1.0 + total_reduction
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
+                base_duration = get_param(self.parent, "walk_duration") / 1000.0
                 actual_duration = base_duration * duration_multiplier
                 self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s")
             else:
                 self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%")
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
+                base_duration = get_param(self.parent, "walk_duration") / 1000.0
                 self.duration_label.config(text=f"DURATION: {base_duration:.3f}s")
 
             self.update_pattern_name()
@@ -679,10 +682,10 @@ class AutoWalkOverlay:
             elif not is_walking:
                 self._animation_running = False
 
-            auto_sell_enabled = self.parent.get_param("auto_sell_enabled")
+            auto_sell_enabled = get_param(self.parent, "auto_sell_enabled")
             if auto_sell_enabled:
                 dig_count = kwargs.get("dig_count", 0)
-                sell_interval = self.parent.get_param("sell_every_x_digs")
+                sell_interval = get_param(self.parent, "sell_every_x_digs")
                 if sell_interval and sell_interval > 0:
                     current_progress = dig_count % sell_interval
                     self.autosell_label.config(

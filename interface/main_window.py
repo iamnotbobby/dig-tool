@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import Label, Button, Frame, Checkbutton, ttk
 try:
@@ -8,8 +9,36 @@ except ImportError:
     DND_FILES = None
 from interface.components import CollapsiblePane, AccordionManager, Tooltip
 from utils.debug_logger import logger
+from utils.pattern_utils import (
+    open_custom_pattern_manager,
+    on_walk_pattern_changed,
+)
+from utils.input_management import (
+    apply_keybinds,
+)
+from utils.ui_management import (
+    test_sell_button_click,
+    show_settings_info,
+    show_debug_console,
+)
+from utils.ui_management import (
+    toggle_preview_window,
+    toggle_debug_window,
+    toggle_main_on_top,
+    toggle_preview_on_top,
+    toggle_debug_on_top,
+)
+from utils.input_management import (
+    start_area_selection,
+    start_sell_button_selection,
+    start_cursor_position_selection,
+    toggle_gui,
+    toggle_overlay,
+    toggle_autowalk_overlay,
+)
+from utils.ui_management import update_area_info, update_sell_info, update_cursor_info
 import os
-import json
+from core.notifications import test_discord_ping
 
 
 class DisabledTooltip:
@@ -127,14 +156,14 @@ class CollapsibleSubsection:
         self.is_open = tk.BooleanVar(value=False)
 
         self.container = Frame(parent, bg=parent.cget('bg'))
-        self.container.pack(fill='x', pady=(4, 2), padx=8)
+        self.container.pack(fill='x', pady=(1, 0), padx=4)  
 
         self.header = Frame(self.container, bg=bg_color, relief='raised', bd=1)
         self.header.pack(fill='x')
 
-        self.toggle_btn = Button(self.header, text=f"▶ {title}", font=("Segoe UI", 9, 'bold'),
+        self.toggle_btn = Button(self.header, text=f"▶ {title}", font=("Segoe UI", 8, 'bold'),
                                  bg=bg_color, fg="#333333", relief='flat', anchor='w',  # Dark gray text
-                                 command=self.toggle, pady=2, padx=8)
+                                 command=self.toggle, pady=0, padx=4)  
         self.toggle_btn.pack(fill='x')
 
         self.content = Frame(self.container, bg=bg_color, relief='sunken', bd=1)
@@ -145,7 +174,7 @@ class CollapsibleSubsection:
             self.toggle_btn.config(text=f"▶ {self.title}")
             self.is_open.set(False)
         else:
-            self.content.pack(fill='x', pady=(0, 2))
+            self.content.pack(fill='x', pady=(0, 1))
             self.toggle_btn.config(text=f"▼ {self.title}")
             self.is_open.set(True)
 
@@ -496,16 +525,50 @@ class MainWindow:
         TEXT_COLOR = "#000000"  # Black text
         BTN_BG = "#e1e1e1"  # Light gray button background
         FONT_FAMILY = "Segoe UI"
-        SECTION_PADY = 5
-        PARAM_PADY = 4
-        PARAM_PADX = 8
+        SECTION_PADY = 3  
+        PARAM_PADY = 2    
+        PARAM_PADX = 6    
         ENTRY_WIDTH = 15
-        BUTTON_PADY = 8
+        BUTTON_PADY = 5   
         LABEL_WIDTH = 25
 
         self.dig_tool.root.configure(bg=BG_COLOR)
-        self.dig_tool.controls_panel = Frame(self.dig_tool.root, bg=BG_COLOR, padx=10, pady=10)
-        self.dig_tool.controls_panel.pack(side=tk.TOP, fill=tk.X, expand=False)
+        
+      
+        main_container = Frame(self.dig_tool.root, bg=BG_COLOR)
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        
+      
+        canvas = tk.Canvas(main_container, bg=BG_COLOR, highlightthickness=0)
+        canvas.pack(fill='both', expand=True)
+        
+        
+        self.dig_tool.controls_panel = Frame(canvas, bg=BG_COLOR)
+        
+        
+        canvas_window = canvas.create_window((0, 0), window=self.dig_tool.controls_panel, anchor="nw")
+        
+        
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        def _bind_to_mousewheel(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        def _unbind_from_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+        
+        canvas.bind('<Enter>', _bind_to_mousewheel)
+        canvas.bind('<Leave>', _unbind_from_mousewheel)
+        
+       
+        def _configure_canvas(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas_width = canvas.winfo_width()
+            canvas.itemconfig(canvas_window, width=canvas_width)
+        
+        self.dig_tool.controls_panel.bind('<Configure>', _configure_canvas)
+        canvas.bind('<Configure>', _configure_canvas)
 
         Label(self.dig_tool.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 14, 'bold'), bg=BG_COLOR,
               fg=TEXT_COLOR).pack(pady=(0, 8), anchor='center')
@@ -541,8 +604,8 @@ class MainWindow:
                         'pady': 6}
 
         for i, (text, command) in enumerate(
-                [("Select Area", self.dig_tool.start_area_selection), ("Start", self.dig_tool.toggle_detection),
-                 ("Show/Hide", self.dig_tool.toggle_gui), ("Overlay", self.dig_tool.toggle_overlay)]):
+                [("Select Area", lambda: start_area_selection(self.dig_tool)), ("Start", self.dig_tool.toggle_detection),
+                 ("Show/Hide", lambda: toggle_gui(self.dig_tool)), ("Overlay", lambda: toggle_overlay(self.dig_tool))]):
             btn = Button(actions_frame, text=text, command=command, **button_style)
             if text == "Start":
                 self.dig_tool.start_stop_btn = btn
@@ -556,19 +619,19 @@ class MainWindow:
         actions_frame2.pack(fill=tk.X, pady=(SECTION_PADY, 0))
 
         sell_button_btn = Button(actions_frame2, text="Set Sell Button",
-                                 command=self.dig_tool.start_sell_button_selection, **button_style)
+                                 command=lambda: start_sell_button_selection(self.dig_tool), **button_style)
         sell_button_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
         StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
                       "Sell button position is set. Click to change it.", self.is_sell_button_set)
 
         cursor_pos_btn = Button(actions_frame2, text="Set Cursor Pos",
-                                command=self.dig_tool.start_cursor_position_selection, **button_style)
+                                command=lambda: start_cursor_position_selection(self.dig_tool), **button_style)
         cursor_pos_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         StatusTooltip(cursor_pos_btn, "Click to set a custom cursor position for clicking",
                       "Cursor position is set. Click to change it.", self.is_cursor_position_set)
 
-        for i, (text, command, attr) in enumerate([("Show Preview", self.dig_tool.toggle_preview_window, 'preview_btn'),
-                                                   ("Show Debug", self.dig_tool.toggle_debug_window, 'debug_btn')]):
+        for i, (text, command, attr) in enumerate([("Show Preview", lambda: toggle_preview_window(self.dig_tool), 'preview_btn'),
+                                                   ("Show Debug", lambda: toggle_debug_window(self.dig_tool), 'debug_btn')]):
             btn = Button(actions_frame2, text=text, command=command, **button_style)
             if attr:
                 setattr(self.dig_tool, attr, btn)
@@ -576,7 +639,7 @@ class MainWindow:
             btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         config_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
-        config_frame.pack(fill='x', expand=True, pady=(8, 0))
+        config_frame.pack(fill='x', pady=(8, 0))
 
         style = ttk.Style()
         style.configure("Header.TButton", font=(FONT_FAMILY, 9, 'bold'), background="#dcdcdc",
@@ -599,7 +662,7 @@ class MainWindow:
         panes = {}
         for name, color in panes_config:
             pane = CollapsiblePane(config_frame, text=name, manager=self.dig_tool.accordion, bg_color=color)
-            pane.pack(fill='x', pady=2)
+            pane.pack(fill='x', pady=1)  
             self.dig_tool.accordion.add_pane(pane)
             panes[name.lower().replace('-', '_')] = pane
 
@@ -847,7 +910,7 @@ class MainWindow:
                                                          validation_callback=self.validate_cursor_position_toggle)
 
         create_section_button(cursor_subsection.content, "Set Cursor Position",
-                              self.dig_tool.start_cursor_position_selection,
+                              lambda: start_cursor_position_selection(self.dig_tool),
                               self.cursor_dependent_widgets, 'cursor')
 
         # ===== AUTO-WALK PANE =====
@@ -864,7 +927,7 @@ class MainWindow:
         overlay_button_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
         
         autowalk_overlay_btn = Button(overlay_button_frame, text="Open Auto Walk Overlay", 
-                                     command=self.dig_tool.toggle_autowalk_overlay,
+                                     command=lambda: toggle_autowalk_overlay(self.dig_tool),
                                      font=(FONT_FAMILY, 9), bg='#d4e6f1', fg='#2c3e50', 
                                      relief='solid', borderwidth=1, pady=4)
         autowalk_overlay_btn.pack(fill='x')
@@ -878,7 +941,7 @@ class MainWindow:
               width=LABEL_WIDTH, anchor='w').pack(side='left')
 
         self.dig_tool.walk_pattern_var = tk.StringVar(value="_KC_Nugget_v1")
-        self.dig_tool.walk_pattern_var.trace_add('write', self.dig_tool.on_walk_pattern_changed)
+        self.dig_tool.walk_pattern_var.trace_add('write', lambda *args: on_walk_pattern_changed(self.dig_tool, *args))
         self.walk_pattern_combo = ttk.Combobox(pattern_frame, textvariable=self.dig_tool.walk_pattern_var,
                                                values=list(self.dig_tool.automation_manager.get_pattern_list().keys()),
                                                state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9))
@@ -888,7 +951,7 @@ class MainWindow:
         custom_pattern_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
 
         custom_pattern_btn = Button(custom_pattern_frame, text="Manage Custom Patterns",
-                                    command=self.dig_tool.open_custom_pattern_manager,
+                                    command=lambda: open_custom_pattern_manager(self.dig_tool),
                                     font=(FONT_FAMILY, 9), bg="#4CAF50", fg="white", relief='solid', borderwidth=1,
                                     pady=4)  # Green button
         custom_pattern_btn.pack(side='left', expand=True, fill='x', padx=(0, 2))
@@ -926,25 +989,63 @@ class MainWindow:
                              ['button_click', 'ui_navigation'],
                              self.sell_dependent_widgets, 'sell')
         
-        create_dual_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
-                                "Sell Delay (ms):", 'sell_delay',
-                                self.sell_dependent_widgets, 'sell')
+        
+        self.ui_sequence_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        
+        self.ui_sequence_entry = create_param_entry(self.ui_sequence_frame, "UI Navigation Sequence:", 'auto_sell_ui_sequence',
+                                                   self.sell_dependent_widgets, 'sell')
+        
+       
+        self.ui_sequence_widgets = [self.ui_sequence_frame]
+        
+        
+        create_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
+                          self.sell_dependent_widgets, 'sell')
+        
+        
+        self.sell_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        
+        self.sell_delay_entry = create_param_entry(self.sell_delay_frame, "Sell Delay (ms):", 'sell_delay',
+                                                  self.sell_dependent_widgets, 'sell')
+        
+       
+        self.sell_delay_widgets = [self.sell_delay_frame]
+        
+        create_param_entry(auto_sell_subsection.content, "Post-Sell Engagement Timeout (s):", 'auto_sell_target_engagement_timeout',
+                          self.sell_dependent_widgets, 'sell')
 
         self.test_sell_button = create_section_button(auto_sell_subsection.content, "Test Sell Click",
-                              self.dig_tool.test_sell_button_click,
+                              lambda: test_sell_button_click(self.dig_tool),
                               self.sell_dependent_widgets, 'sell')
         
         def update_test_button_text(*args):
             method = self.dig_tool.param_vars.get('auto_sell_method', tk.StringVar()).get()
             if method == "button_click":
                 self.test_sell_button.config(text="Test Sell Click")
+             
+                for widget in self.ui_sequence_widgets:
+                    widget.pack_forget()
+               
+                for widget in self.sell_delay_widgets:
+                    widget.pack(fill='x', padx=10, pady=2)
             elif method == "ui_navigation":
                 self.test_sell_button.config(text="Test UI Navigation")
+             
+                for widget in self.ui_sequence_widgets:
+                    widget.pack(fill='x', padx=10, pady=2)
+            
+                for widget in self.sell_delay_widgets:
+                    widget.pack_forget()
             else:
                 self.test_sell_button.config(text="Test Sell")
+                for widget in self.ui_sequence_widgets:
+                    widget.pack_forget()
+                for widget in self.sell_delay_widgets:
+                    widget.pack_forget()
         
         self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
-        update_test_button_text()
+        
+        self.dig_tool.root.after_idle(update_test_button_text)
 
         # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
@@ -952,24 +1053,24 @@ class MainWindow:
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
         create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
                               'include_screenshot_in_discord')
-        create_section_button(panes['discord'].sub_frame, "Test Discord Ping", self.dig_tool.test_discord_ping)
+        create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
-        self.dig_tool.param_vars['main_on_top'].trace_add('write', self.dig_tool.toggle_main_on_top)
+        self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))
         create_checkbox_param(panes['window'].sub_frame, "Preview Window Always on Top", 'preview_on_top')
-        self.dig_tool.param_vars['preview_on_top'].trace_add('write', self.dig_tool.toggle_preview_on_top)
+        self.dig_tool.param_vars['preview_on_top'].trace_add('write', lambda *args: toggle_preview_on_top(self.dig_tool))
         create_checkbox_param(panes['window'].sub_frame, "Debug Window Always on Top", 'debug_on_top')
-        self.dig_tool.param_vars['debug_on_top'].trace_add('write', self.dig_tool.toggle_debug_on_top)
+        self.dig_tool.param_vars['debug_on_top'].trace_add('write', lambda *args: toggle_debug_on_top(self.dig_tool))
 
         create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
         create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
-        create_section_button(panes['debug'].sub_frame, "Show Debug Console", self.dig_tool.show_debug_console)
+        create_section_button(panes['debug'].sub_frame, "Show Debug Console", lambda: show_debug_console(self.dig_tool))
 
         def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=parent.cget('bg'))
             frame.pack(fill='x', pady=BUTTON_PADY, padx=PARAM_PADX)
 
-            label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=parent.cget('bg'), fg=TEXT_COLOR, width=22,
+            label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=parent.cget('bg'), fg=TEXT_COLOR, width=22,
                           anchor='w')
             label.pack(side='left')
 
@@ -1004,9 +1105,9 @@ class MainWindow:
                     if not current_key or current_key.strip() == "":
                         key_var.set(default_value)
                     button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
-                    self.dig_tool.apply_keybinds()
+                    apply_keybinds(self.dig_tool)
 
-            hotkey_btn = Button(frame, text=key_var.get().upper(), font=(FONT_FAMILY, 10, 'bold'), bg=BTN_BG,
+            hotkey_btn = Button(frame, text=key_var.get().upper(), font=(FONT_FAMILY, 9, 'bold'), bg=BTN_BG,
                                 fg=TEXT_COLOR, relief='solid', borderwidth=1, width=12, pady=4)
             hotkey_btn.config(command=lambda v=key_var, b=hotkey_btn:
             __import__('threading').Thread(target=set_hotkey_thread, args=(v, b), daemon=True).start())
@@ -1017,13 +1118,12 @@ class MainWindow:
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto Walk Overlay:", 'toggle_autowalk_overlay')
 
-        # Settings info button
         settings_info_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
         settings_info_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
-        Button(settings_info_frame, text="Open Settings Folder", command=self.dig_tool.show_settings_info,
+        Button(settings_info_frame, text="Open Dig Tool Folder", command=lambda: show_settings_info(self.dig_tool),
                font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR, relief='solid', borderwidth=1, pady=4).pack(
             expand=True, fill=tk.X)
-        Tooltip(settings_info_frame.winfo_children()[0], "Open the settings folder in Windows Explorer to view or manage your settings files.")
+        Tooltip(settings_info_frame.winfo_children()[0], "Open the Dig Tool folder in Windows Explorer to view settings, debug logs, and other application files.")
 
         save_load_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
         save_load_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
@@ -1048,16 +1148,16 @@ class MainWindow:
         self.dig_tool.param_vars['use_otsu_detection'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
 
-        # Initialize previous auto walk state
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
         self.update_dependent_widgets_state()
 
-        self.dig_tool.update_main_button_text()
-        self.dig_tool.toggle_main_on_top()
-        self.dig_tool.update_area_info()
-        self.dig_tool.update_sell_info()
-        self.dig_tool.update_cursor_info()
+        from utils.ui_management import update_main_button_text
+        update_main_button_text(self.dig_tool)
+        toggle_main_on_top(self.dig_tool)
+        update_area_info(self.dig_tool)
+        update_sell_info(self.dig_tool)
+        update_cursor_info(self.dig_tool)
         
         self.setup_drag_drop()
 
@@ -1140,12 +1240,13 @@ class MainWindow:
             logger.info(f"picked_color_rgb: '{picked_color}'")
             logger.info(f"color_tolerance: {color_tolerance}")
             
-            picked_via_get_param = self.dig_tool.get_param('picked_color_rgb')
+            from utils.config_management import get_param
+            picked_via_get_param = get_param(self.dig_tool, 'picked_color_rgb')
             logger.info(f"Via get_param: '{picked_via_get_param}'")
             
             test_color = "#00FF00"  
             self.dig_tool.param_vars['picked_color_rgb'].set(test_color)
-            after_set = self.dig_tool.get_param('picked_color_rgb')
+            after_set = get_param(self.dig_tool, 'picked_color_rgb')
             logger.info(f"After setting {test_color}: '{after_set}'")
             
             self.dig_tool.update_status(f"Color test complete - current: {after_set}")
