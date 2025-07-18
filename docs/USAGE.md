@@ -2,7 +2,7 @@
 
 ## Table of Contents
 
-<!-- Run with: npx doctoc --maxlevel 3 USAGE.md -->
+<!-- Run with: npx doctoc --maxlevel 3 docs/USAGE.md -->
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -17,10 +17,8 @@
 - [Troubleshooting](#troubleshooting)
   - [❌ Macro stops walking or digging suddenly](#-macro-stops-walking-or-digging-suddenly)
   - [❌ Macro fails to hit strong hits consistently](#-macro-fails-to-hit-strong-hits-consistently)
-  - [❌ Walk patterns failed to import](#-walk-patterns-failed-to-import)
   - [❌ Windows Defender blocked or deleted the executable](#-windows-defender-blocked-or-deleted-the-executable)
   - [❌ Hotkeys don’t do anything](#-hotkeys-dont-do-anything)
-  - [❌ Settings reverted after restart](#-settings-reverted-after-restart)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -45,10 +43,10 @@
 2. **Select an area**
 
    - Click the `Select Area` button on the main GUI.  
-   ![Select Area Button](/assets/select_area_button.png)
+   ![Select Area Button](/assets/docs/select_area_button.png)
 
    - Your screen will darken — click and drag to highlight your target dig area.  
-   ![Select Area Example](/assets/selection_area.png)
+   ![Select Area Example](/assets/docs/selection_area.png)
 
 > [!IMPORTANT]
 > You must select the bottom half of the minigame bar.
@@ -59,11 +57,14 @@
    Before starting the macro, you'll need to make sure `Notifications Viewport` is disabled in the in-game settings menu.
 
    - Open your in-game settings menu.  
-   ![Game Settings Button](/assets/game_settings_button.png)
+   ![Game Settings Button](/assets/docs/game_settings_button.png)
    - Look for the **"Notifications Viewport"** setting.  
-   ![Notifications Viewport Slider](/assets/notifications_viewport_slider.png)
+   ![Notifications Viewport Slider](/assets/docs/notifications_viewport_slider.png)
    - Make sure it is **disabled** (the slider should be to the **left** and appear **grey**).  
-   ![Notifications Viewport Example](/assets/notifications_viewport_disabled.png)
+   ![Notifications Viewport Example](/assets/docs/notifications_viewport_disabled.png)
+
+> \[!IMPORTANT]
+> Leaving this setting enabled may cause the macro to miss hits or improperly detect the zone.
 
 4. **Start Automation**
 
@@ -79,11 +80,11 @@ Settings control your macro behavior such as detection, behavior, input delay, a
 ### Steps to Import Settings
 
 1. Open the `Settings` dropdown menu at the bottom of the main GUI.  
-![Settings Dropdown](/assets/settings_dropdown.png)
+![Settings Dropdown](/assets/docs/settings_dropdown.png)
 2. Click `Load Settings`.  
-![Load Settings Button](/assets/load_settings_button.png)
+![Load Settings Button](/assets/docs/load_settings_button.png)
 3. Choose a `.json` configuration file.  
-![Load File Dialog](/assets/load_filedialog.png)
+![Load File Dialog](/assets/docs/load_filedialog.png)
 
 ---
 
@@ -94,15 +95,15 @@ You can import `.json` pattern files to define how your character walks during m
 ### Steps to Import Walk Patterns
 
 1. Open the `Behavior` dropdown menu on the main GUI.  
-![Behavior Dropdown](/assets/behavior_dropdown.png)
+![Behavior Dropdown](/assets/docs/behavior_dropdown.png)
 2. Open the `Auto-Walk Settings` dropdown menu under that.  
-![Auto-Walk Settings Dropdown](/assets/autowalk_dropdown.png)
+![Auto-Walk Settings Dropdown](/assets/docs/autowalk_dropdown.png)
 3. Click `Manage Custom Patterns`.  
-![Manage Custom Patterns Button](/assets/manage_patterns_button.png)
+![Manage Custom Patterns Button](/assets/docs/manage_patterns_button.png)
 4. In the window that appears, click `Import Pattern`.  
-![Import Pattern](/assets/import_pattern_button.png)
+![Import Pattern](/assets/docs/import_pattern_button.png)
 5. Choose a `.json` configuration file.  
-![Load File Dialog](/assets/load_filedialog.png)
+![Load File Dialog](/assets/docs/load_filedialog.png)
 
 ---
 
@@ -146,71 +147,42 @@ If your macro walks correctly but **fails to get strong hits**, or **only gets t
 * **First**, make sure **Notifications Viewport** is **disabled** in the game’s settings:
 
   * Open the **in-game settings menu**.  
-    ![Game Settings Button](/assets/game_settings_button.png)
+    ![Game Settings Button](/assets/docs/game_settings_button.png)
 
   * Find the **"Notifications Viewport"** setting.  
-    ![Notifications Viewport Slider](/assets/notifications_viewport_slider.png)
+    ![Notifications Viewport Slider](/assets/docs/notifications_viewport_slider.png)
 
   * The slider should be to the **left** and appear **grey**.  
-    ![Notifications Viewport Example](/assets/notifications_viewport_disabled.png)
+    ![Notifications Viewport Example](/assets/docs/notifications_viewport_disabled.png)
 
-* If Notifications Viewport is disabled but the preview still shows the **entire black area as the bounding box** (instead of the dig zone):
+* If Notifications Viewport is **enabled**, disable it and test again.
 
-  * This is a **known bug** with no current fix.
-  * The macro cannot accurately locate the sweet spot in this case.
+* If Notifications Viewport is **already disabled**, and you're still having issues, then:
 
-* If the bounding box **does follow the dig zone and sweet spot**, but strong hits are still rare or inconsistent:
+  * **Open the macro’s settings** and check if **Prediction** is turned on by navigating to `Behavior Settings` > `Prediction Settings`.
+    * Optionally press <kbd>F3</kbd> or the overlay hotkey to show the overlay. An indicator will appear as `PRED: ON` or `PRED: OFF`.
+  * If Prediction is on, **turn it off** and test again, as it can interfere with accuracy.
 
-  * Make sure your **FPS is uncapped** in Roblox.
-  * In **Roblox settings**, set **`Maximum Frame Rate` to 240**.
-  * Try to reach **at least 150 FPS**, and ideally **200+ FPS**.
+* If both Notifications Viewport is disabled **and** Prediction is off, but you're still having issues:
+
+  * Check the preview:
+
+    * If the preview shows the **entire black area as the bounding box** instead of the dig zone:
+
+      * This is a **known bug** with no current fix.
+      * The macro cannot locate the sweet spot in this case.
+
+    * If the bounding box **is correct** and follows the dig zone/sweet spot:
+
+      * Make sure your **FPS is uncapped** in Roblox.
+      * In **Roblox settings**, set **`Maximum Frame Rate` to 240**.
+      * Try to reach **at least 150 FPS**, and ideally **200+ FPS**.
 
 #### Final step:
 
 * If your FPS is already high but strong hits still fail, your **CPU may be too slow** to keep up with the visual processing.
 
   * Consider upgrading to a **faster CPU** if possible.
-
-### ❌ Walk patterns failed to import
-
-When importing walk patterns, it may **look like the import failed**, but this is actually due to a known bug.
-
-#### What’s happening:
-
-* After you select and open a `.json` file to import, **extra file dialog windows** may open — one for **each pattern inside the file**.
-* An error message may appear at the end.
-
-#### What to do:
-
-1. Simply **click `Cancel`** on each dialog that pops up.
-2. After the last one, **ignore the final error message**.
-3. Press the `Refresh List` button.
-4. The imported walk patterns should now appear as expected.
-
-#### AZERTY keyboard users — read this!
-
-The macro supports AZERTY keyboards, but you can’t import AZERTY walk pattern files directly — only patterns using W, A, S, D can be imported.
-
-If you try to import a `.json` file and see an error like:
-
-> `Invalid moves (only W, A, S, D allowed)`
-
-This means the file was created using **AZERTY-style movement keys** (`ZQSD`).
-
-To fix this:
-
-1. Open the `.json` file in any text editor (like Notepad).
-2. Find the line that looks like:
-
-   ```json
-   {
-     "Pattern_Name": [
-       "z",
-       "q",
-       ...
-   ```
-3. Manually copy each letter of the pattern into the macro’s walk pattern key recorder.
-
 
 ### ❌ Windows Defender blocked or deleted the executable
 
@@ -238,13 +210,3 @@ Sometimes the macro’s hotkeys (e.g., <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>F3</kb
 
 * Simply **close and restart the program**.
   This usually restores full hotkey functionality.
-
-### ❌ Settings reverted after restart
-
-Settings **do not persist automatically** between sessions.
-
-#### What to do:
-
-* If you want to keep your settings, make sure to **manually save them before closing the program**.
-* Alternatively, you can **load your saved settings file** each time you start the macro.
-
