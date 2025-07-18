@@ -123,10 +123,63 @@ class AccordionManager:
                     pane.close()
                 else:
                     pane.open()
+                    self.dig_tool_instance.root.after(50, lambda: self._auto_scroll_to_pane(pane))
             else:
                 pane.close()
         from utils.ui_management import resize_for_content
         resize_for_content(self.dig_tool_instance)
+
+    def _auto_scroll_to_pane(self, pane):
+        try:
+            canvas = None
+            
+            if hasattr(self.dig_tool_instance, 'root'):
+                for child in self.dig_tool_instance.root.winfo_children():
+                    canvas = self._find_canvas_widget(child)
+                    if canvas:
+                        break
+            
+            if not canvas:
+                return
+            
+            pane.update_idletasks()
+            self.dig_tool_instance.root.update_idletasks()
+            
+            pane_y = pane.winfo_y()
+            pane_height = pane.winfo_height()
+            
+            canvas_height = canvas.winfo_height()
+            
+            scroll_top = pane_y - (canvas_height // 4) 
+            
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            scroll_region = canvas.cget("scrollregion")
+            if scroll_region:
+                _, _, _, total_height = map(int, scroll_region.split())
+                
+                if total_height > canvas_height:
+                    scroll_top = max(0, scroll_top)
+                    scroll_fraction = scroll_top / (total_height - canvas_height)
+                    scroll_fraction = max(0.0, min(1.0, scroll_fraction))
+                    
+                    canvas.yview_moveto(scroll_fraction)
+                    
+        except Exception as e:
+            pass
+    
+    def _find_canvas_widget(self, widget):
+        if isinstance(widget, tk.Canvas):
+            return widget
+        
+        try:
+            for child in widget.winfo_children():
+                result = self._find_canvas_widget(child)
+                if result:
+                    return result
+        except:
+            pass
+        
+        return None
 
 
 class GameOverlay:

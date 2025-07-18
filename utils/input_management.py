@@ -1,8 +1,3 @@
-"""
-Input and interaction management utilities for the DigTool application.
-Provides click handling, keybind management, and UI selection functionality.
-"""
-
 import threading
 import time
 import ctypes
@@ -18,16 +13,6 @@ from utils.system_utils import send_click
 def perform_click_action(
     delay, running, use_custom_cursor, cursor_position, click_lock
 ):
-    """
-    Perform a click action with optional delay and cursor positioning.
-    
-    Args:
-        delay: Time to wait before clicking
-        running: Whether the tool is currently running
-        use_custom_cursor: Whether to use custom cursor position
-        cursor_position: Tuple of (x, y) cursor coordinates
-        click_lock: Threading lock for click coordination
-    """
     if delay > 0:
         time.sleep(float(delay))
         
@@ -45,16 +30,13 @@ def perform_click_action(
         click_lock.release()
 
 
-# Click and Mouse Interaction Functions
 def cleanup_click_threads(dig_tool_instance):
-    """Clean up finished click threads."""
     dig_tool_instance._click_thread_pool = [
         t for t in dig_tool_instance._click_thread_pool if t.is_alive()
     ]
 
 
 def perform_click(dig_tool_instance, delay=0):
-    """Perform a click action with optional delay."""
     perform_click_action(
         delay,
         dig_tool_instance.running,
@@ -66,7 +48,6 @@ def perform_click(dig_tool_instance, delay=0):
 
 
 def perform_instant_click(dig_tool_instance):
-    """Perform an instant click in a separate thread."""
     cleanup_click_threads(dig_tool_instance)
     if len(dig_tool_instance._click_thread_pool) < dig_tool_instance._max_click_threads:
         click_thread = threading.Thread(
@@ -77,7 +58,6 @@ def perform_instant_click(dig_tool_instance):
 
 
 def _instant_click(dig_tool_instance):
-    """Internal instant click implementation."""
     if not dig_tool_instance.running:
         return
     if get_param(dig_tool_instance, "use_custom_cursor") and dig_tool_instance.cursor_position:
@@ -102,7 +82,6 @@ def save_debug_screenshot_wrapper(
     prediction_used=False,
     confidence=0.0,
 ):
-    """Wrapper for saving debug screenshots."""
     if not get_param(dig_tool_instance, "debug_clicks_enabled"):
         return
     ensure_debug_directory(dig_tool_instance.debug_dir)
@@ -136,9 +115,7 @@ def save_debug_screenshot_wrapper(
         )
 
 
-# Keybind Management Functions
 def apply_keybinds(instance):
-    """Apply keyboard hotkeys based on keybind variables."""
     logger.info("Applying keybinds...")
     
     time.sleep(0.1)
@@ -208,7 +185,6 @@ def apply_keybinds(instance):
 
 
 def run_hotkey_listener(instance):
-    """Run the hotkey listener thread."""
     logger.info("Hotkey listener thread started")
     
     max_retries = 3
@@ -228,40 +204,42 @@ def run_hotkey_listener(instance):
         time.sleep(0.5)
 
 
-# Selection and Overlay Functions
 def start_area_selection(dig_tool_instance):
-    """Start the game area selection process."""
     dig_tool_instance.root.iconify()
     dig_tool_instance.selection_overlay = tk.Toplevel()
     dig_tool_instance.selection_overlay.attributes(
-        "-fullscreen", True, "-alpha", 0.2, "-topmost", True
+        "-fullscreen", True, "-alpha", 0.3, "-topmost", True
     )
-    dig_tool_instance.selection_overlay.configure(bg="blue", cursor="crosshair")
+    dig_tool_instance.selection_overlay.configure(bg="#1a1a1a", cursor="crosshair")
+    
     dig_tool_instance.selection_rect = tk.Frame(
         dig_tool_instance.selection_overlay,
-        bg="red",
-        highlightthickness=1,
-        highlightbackground="white",
+        highlightthickness=2,
+        highlightbackground="#00ff88",
+        highlightcolor="#00ff88",
+        bd=0,
+        relief="solid"
     )
+    dig_tool_instance.selection_rect.configure(highlightthickness=2)
+    
     dig_tool_instance.selection_overlay.bind("<Button-1>", lambda e: on_drag_start(dig_tool_instance, e))
     dig_tool_instance.selection_overlay.bind("<B1-Motion>", lambda e: on_drag_motion(dig_tool_instance, e))
     dig_tool_instance.selection_overlay.bind("<ButtonRelease-1>", lambda e: on_drag_end(dig_tool_instance, e))
 
 
 def on_drag_start(dig_tool_instance, event):
-    """Handle drag start for area selection."""
     dig_tool_instance.drag_start = (event.x_root, event.y_root)
     dig_tool_instance.selection_rect.place(x=event.x, y=event.y, width=1, height=1)
 
 
 def on_drag_motion(dig_tool_instance, event):
-    """Handle drag motion for area selection."""
     x1, y1 = dig_tool_instance.drag_start
     x2, y2 = event.x_root, event.y_root
     x, y = (
         dig_tool_instance.selection_overlay.winfo_rootx(),
         dig_tool_instance.selection_overlay.winfo_rooty(),
     )
+    
     dig_tool_instance.selection_rect.place(
         x=min(x1, x2) - x,
         y=min(y1, y2) - y,
@@ -271,7 +249,6 @@ def on_drag_motion(dig_tool_instance, event):
 
 
 def on_drag_end(dig_tool_instance, event):
-    """Handle drag end for area selection."""
     x1, y1 = dig_tool_instance.drag_start
     x2, y2 = event.x_root, event.y_root
     dig_tool_instance.game_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
@@ -281,8 +258,11 @@ def on_drag_end(dig_tool_instance, event):
     dig_tool_instance.preview_btn.config(state=tk.NORMAL)
     dig_tool_instance.debug_btn.config(state=tk.NORMAL)
     
-    from utils.ui_management import update_area_info
-    update_area_info(dig_tool_instance)
+    if hasattr(dig_tool_instance, 'main_window') and dig_tool_instance.main_window:
+        dig_tool_instance.main_window.update_status_with_area_indicator()
+    else:
+        dig_tool_instance.update_status("Game area set. Press Start to begin.")
+    
     dig_tool_instance.start_threads()
 
     dig_tool_instance.root.after_idle(
@@ -291,28 +271,17 @@ def on_drag_end(dig_tool_instance, event):
 
 
 def start_sell_button_selection(dig_tool_instance):
-    """Start the sell button selection process."""
     dig_tool_instance.root.iconify()
     dig_tool_instance.sell_selection_overlay = tk.Toplevel()
     dig_tool_instance.sell_selection_overlay.attributes(
         "-fullscreen", True, "-alpha", 0.3, "-topmost", True
     )
-    dig_tool_instance.sell_selection_overlay.configure(bg="red", cursor="crosshair")
-
-    instruction_label = Label(
-        dig_tool_instance.sell_selection_overlay,
-        text="FIRST: Press 'G' to open your inventory\nTHEN: Click on the SELL BUTTON",
-        font=("Arial", 20, "bold"),
-        bg="red",
-        fg="white",
-    )
-    instruction_label.pack(pady=100)
+    dig_tool_instance.sell_selection_overlay.configure(bg="#1a1a1a", cursor="crosshair")
 
     dig_tool_instance.sell_selection_overlay.bind("<Button-1>", lambda e: on_sell_button_click(dig_tool_instance, e))
 
 
 def on_sell_button_click(dig_tool_instance, event):
-    """Handle sell button click selection."""
     dig_tool_instance.automation_manager.sell_button_position = (event.x_root, event.y_root)
     dig_tool_instance.sell_selection_overlay.destroy()
     dig_tool_instance.root.deiconify()
@@ -326,28 +295,17 @@ def on_sell_button_click(dig_tool_instance, event):
 
 
 def start_cursor_position_selection(dig_tool_instance):
-    """Start the cursor position selection process."""
     dig_tool_instance.root.iconify()
     dig_tool_instance.cursor_selection_overlay = tk.Toplevel()
     dig_tool_instance.cursor_selection_overlay.attributes(
         "-fullscreen", True, "-alpha", 0.3, "-topmost", True
     )
-    dig_tool_instance.cursor_selection_overlay.configure(bg="blue", cursor="crosshair")
-
-    instruction_label = Label(
-        dig_tool_instance.cursor_selection_overlay,
-        text="Click to set cursor position for clicking",
-        font=("Arial", 20, "bold"),
-        bg="blue",
-        fg="white",
-    )
-    instruction_label.pack(pady=100)
+    dig_tool_instance.cursor_selection_overlay.configure(bg="#1a1a1a", cursor="crosshair")
 
     dig_tool_instance.cursor_selection_overlay.bind("<Button-1>", lambda e: on_cursor_position_click(dig_tool_instance, e))
 
 
 def on_cursor_position_click(dig_tool_instance, event):
-    """Handle cursor position click selection."""
     dig_tool_instance.cursor_position = (event.x_root, event.y_root)
     dig_tool_instance.cursor_selection_overlay.destroy()
     dig_tool_instance.root.deiconify()
@@ -362,14 +320,12 @@ def on_cursor_position_click(dig_tool_instance, event):
 
 
 def toggle_overlay(dig_tool_instance):
-    """Toggle the game overlay."""
     if not dig_tool_instance.root.winfo_exists():
         return
     dig_tool_instance.root.after_idle(lambda: _toggle_overlay_thread_safe(dig_tool_instance))
 
 
 def _toggle_overlay_thread_safe(dig_tool_instance):
-    """Thread-safe overlay toggle."""
     try:
         if not dig_tool_instance.overlay_enabled:
             if not dig_tool_instance.game_area:
@@ -395,12 +351,10 @@ def _toggle_overlay_thread_safe(dig_tool_instance):
 
 
 def toggle_autowalk_overlay(dig_tool_instance):
-    """Toggle the autowalk overlay."""
     dig_tool_instance.root.after_idle(lambda: _toggle_autowalk_overlay_thread_safe(dig_tool_instance))
 
 
 def _toggle_autowalk_overlay_thread_safe(dig_tool_instance):
-    """Thread-safe autowalk overlay toggle."""
     try:
         if not dig_tool_instance.autowalk_overlay_enabled:
             if not get_param(dig_tool_instance, "auto_walk_enabled"):
@@ -424,12 +378,10 @@ def _toggle_autowalk_overlay_thread_safe(dig_tool_instance):
 
 
 def toggle_gui(dig_tool_instance):
-    """Toggle GUI visibility."""
     dig_tool_instance.root.after(0, lambda: _toggle_gui_thread_safe(dig_tool_instance))
 
 
 def _toggle_gui_thread_safe(dig_tool_instance):
-    """Thread-safe GUI toggle."""
     if dig_tool_instance.root.winfo_exists():
         if dig_tool_instance.root.state() == "normal":
             dig_tool_instance.root.withdraw()

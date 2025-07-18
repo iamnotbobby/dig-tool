@@ -679,31 +679,30 @@ def calculate_window_dimensions():
     """Calculate appropriate window dimensions based on screen resolution."""
     screen_width, screen_height = get_screen_resolution()
     
-    # Calculate dimensions based on screen size
     if screen_width <= 1366 and screen_height <= 768:
         width = 480
-        base_height = 520
+        base_height = 480  
     elif screen_width <= 1600 and screen_height <= 900:
         width = 490
-        base_height = 580
+        base_height = 510 
     elif screen_width <= 1920 and screen_height <= 1080:
         width = 500
-        base_height = 650
+        base_height = 550  
     elif screen_width <= 2560 and screen_height <= 1440:
         width = 520
-        base_height = 750
+        base_height = 630
     elif screen_width <= 3840 and screen_height <= 2160:
         width = 540
-        base_height = 850
+        base_height = 730
     else:
         width = 560
-        base_height = 950
-    
-    # Set minimum dimensions
+        base_height = 780
+
+
     width = max(width, 400)
-    base_height = max(base_height, 520)
+    base_height = max(base_height, 480) 
     
-    # Set maximum dimensions to prevent too large windows
+   
     width = min(width, 600)
     base_height = min(base_height, int(screen_height * 0.85))  # Max 85% of screen height
     

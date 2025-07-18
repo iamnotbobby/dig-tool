@@ -204,6 +204,9 @@ class DigTool:
 
         self.main_window.create_ui()
         
+        from utils.ui_management import setup_dropdown_resize_handling
+        setup_dropdown_resize_handling(self)
+        
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.after(50, lambda: update_gui_from_queue(self))
 
@@ -279,7 +282,25 @@ class DigTool:
 
     def update_status(self, text):
         if self.root.winfo_exists():
-            self.status_label.config(text=f"Status: {text}")
+            try:
+                if hasattr(self, 'status_text') and self.status_text:
+                    self.status_text.config(state='normal')
+                    self.status_text.delete(1.0, tk.END)
+                    self.status_text.insert(1.0, text)
+                    
+                    lines = text.count('\n') + 1
+                    chars_per_line = 90  
+                    wrapped_lines = max(1, len(text) // chars_per_line)
+                    total_lines = max(lines, wrapped_lines)
+                    
+                    height = max(3, min(6, total_lines))
+                    self.status_text.config(height=height)
+                    
+                    self.status_text.config(state='disabled')
+                elif hasattr(self, 'status_label') and self.status_label:
+                    self.status_label.config(text=f"Status: {text}")
+            except Exception as e:
+                pass  
 
     def _update_time_cache(self):
         update_time_cache(self)

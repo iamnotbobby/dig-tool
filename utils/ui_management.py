@@ -1,18 +1,10 @@
-"""
-UI and window management utilities for the DigTool application.
-Combines functionality from gui_utils, ui_utils, and window_utils.
-"""
-
 import tkinter as tk
-from tkinter import Label, Frame, messagebox
-from PIL import Image, ImageTk
+from tkinter import Label, Frame, messagebox, ttk
 import cv2
 import os
 
 
-# UI Information Display Functions
 def update_area_info(dig_tool_instance):
-    """Update the area info display."""
     if not hasattr(dig_tool_instance, "area_info_label"):
         return
     if dig_tool_instance.game_area:
@@ -25,7 +17,6 @@ def update_area_info(dig_tool_instance):
 
 
 def update_sell_info(dig_tool_instance):
-    """Update the sell button info display."""
     if not hasattr(dig_tool_instance, "sell_info_label"):
         return
     if dig_tool_instance.automation_manager.sell_button_position:
@@ -37,7 +28,6 @@ def update_sell_info(dig_tool_instance):
 
 
 def update_cursor_info(dig_tool_instance):
-    """Update the cursor position info display."""
     if not hasattr(dig_tool_instance, "cursor_info_label"):
         return
     if hasattr(dig_tool_instance, "cursor_position") and dig_tool_instance.cursor_position:
@@ -49,12 +39,10 @@ def update_cursor_info(dig_tool_instance):
 
 
 def test_sell_button_click(dig_tool_instance):
-    """Test the sell button click functionality."""
     dig_tool_instance.automation_manager.test_sell_button_click()
 
 
 def show_settings_info(dig_tool_instance):
-    """Show the settings directory information."""
     success = dig_tool_instance.settings_manager.open_settings_directory()
     if not success:
         settings_info = dig_tool_instance.settings_manager.get_settings_info()
@@ -65,14 +53,11 @@ def show_settings_info(dig_tool_instance):
 
 
 def show_debug_console(dig_tool_instance):
-    """Show the debug console."""
     from utils.debug_logger import logger
     logger.show_console()
 
 
-# Preview Window Management
 def create_preview_window(dig_tool_instance):
-    """Create and configure the preview window."""
     dig_tool_instance.preview_window = tk.Toplevel(dig_tool_instance.root)
     dig_tool_instance.preview_window.title("Preview")
     
@@ -107,7 +92,6 @@ def create_preview_window(dig_tool_instance):
 
 
 def toggle_preview_window(dig_tool_instance):
-    """Toggle the preview window visibility."""
     if dig_tool_instance.preview_window is None:
         create_preview_window(dig_tool_instance)
     else:
@@ -118,16 +102,13 @@ def toggle_preview_window(dig_tool_instance):
 
 
 def toggle_preview_on_top(dig_tool_instance):
-    """Toggle preview window always on top."""
     if dig_tool_instance.preview_window:
         dig_tool_instance.preview_window.attributes(
             "-topmost", dig_tool_instance.param_vars["preview_on_top"].get()
         )
 
 
-# Debug Window Management
 def create_debug_window(dig_tool_instance):
-    """Create and configure the debug window."""
     dig_tool_instance.debug_window = tk.Toplevel(dig_tool_instance.root)
     dig_tool_instance.debug_window.title("Debug Mask & Detection Info")
     
@@ -183,7 +164,6 @@ def create_debug_window(dig_tool_instance):
 
 
 def toggle_debug_window(dig_tool_instance):
-    """Toggle the debug window visibility."""
     if dig_tool_instance.debug_window is None:
         create_debug_window(dig_tool_instance)
     else:
@@ -195,49 +175,77 @@ def toggle_debug_window(dig_tool_instance):
 
 
 def toggle_debug_on_top(dig_tool_instance):
-    """Toggle debug window always on top."""
     if dig_tool_instance.debug_window:
         dig_tool_instance.debug_window.attributes(
             "-topmost", dig_tool_instance.param_vars["debug_on_top"].get()
         )
 
 
-# Main Window Management
 def toggle_main_on_top(dig_tool_instance, *args):
-    """Toggle main window always on top."""
     dig_tool_instance.root.attributes("-topmost", dig_tool_instance.param_vars["main_on_top"].get())
 
 
 def resize_for_content(dig_tool_instance):
-    """Resize the window to fit the content."""
-    dig_tool_instance.root.update_idletasks()
+    try:
+        dig_tool_instance.root.update_idletasks()
+        
+        required_height = dig_tool_instance.controls_panel.winfo_reqheight()
+      
+        base_height = dig_tool_instance.base_height
+        content_height = required_height + 80  
+        
     
-    # Calculate required height based on content
-    required_height = dig_tool_instance.controls_panel.winfo_reqheight()
+        if content_height > base_height + 100:  
+            target_height = min(content_height, base_height + 200) 
+        else:
+            target_height = max(base_height, content_height)
+        
+      
+        screen_height = dig_tool_instance.root.winfo_screenheight()
+        max_height = int(screen_height * 0.85)
+        target_height = min(target_height, max_height)
+        
+   
+        dig_tool_instance.root.geometry(f"{dig_tool_instance.width}x{target_height}")
+        dig_tool_instance.root.update_idletasks()
+        
+    except Exception as e:
     
-    # Add some padding for the window decorations and margins
-    padding = 120  # Space for window decorations, margins, and some buffer
-    total_height = required_height + padding
+        dig_tool_instance.root.geometry(f"{dig_tool_instance.width}x{dig_tool_instance.base_height}")
+        dig_tool_instance.root.update_idletasks()
+
+
+def setup_dropdown_resize_handling(dig_tool_instance):
+    def on_dropdown_open(event):
+        dig_tool_instance.root.after(10, lambda: resize_for_content(dig_tool_instance))
     
-    # Ensure minimum height
-    min_height = 400
-    total_height = max(total_height, min_height)
+    def on_dropdown_close(event):
+
+        dig_tool_instance.root.after(10, lambda: resize_for_content(dig_tool_instance))
     
-    # Get screen dimensions to avoid window being too large
-    screen_width = dig_tool_instance.root.winfo_screenwidth()
-    screen_height = dig_tool_instance.root.winfo_screenheight()
+   
+    def bind_combobox_events(widget):
+        if isinstance(widget, ttk.Combobox):
+            widget.bind('<Button-1>', on_dropdown_open)
+            widget.bind('<FocusOut>', on_dropdown_close)
+            widget.bind('<Return>', on_dropdown_close)
+            widget.bind('<Escape>', on_dropdown_close)
+        
+   
+        try:
+            for child in widget.winfo_children():
+                bind_combobox_events(child)
+        except:
+            pass
     
-    # Limit height to 90% of screen height
-    max_height = int(screen_height * 0.9)
-    total_height = min(total_height, max_height)
-    
-    # Update window geometry
-    dig_tool_instance.root.geometry(f"{dig_tool_instance.width}x{total_height}")
-    dig_tool_instance.root.update_idletasks()
+   
+    try:
+        bind_combobox_events(dig_tool_instance.root)
+    except:
+        pass
 
 
 def update_main_button_text(dig_tool_instance):
-    """Update main button text with current state and keybinds."""
     if not dig_tool_instance.root.winfo_exists():
         return
     try:
@@ -256,9 +264,9 @@ def update_main_button_text(dig_tool_instance):
         pass
 
 
-# GUI Image/Video Functions
+
 def save_debug_screenshot(dig_tool_instance):
-    """Save a debug screenshot showing mask and detection area."""
+
     from utils.debug_logger import logger
     from utils.screen_capture import capture_region
     import numpy as np
@@ -275,18 +283,15 @@ def save_debug_screenshot(dig_tool_instance):
     screenshot_cv = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(screenshot_cv, cv2.COLOR_BGR2HSV)
 
-    # Create mask
     mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
     if dig_tool_instance.automation_manager.locked_color:
         lower_bound, upper_bound = dig_tool_instance.automation_manager.hsv_bounds
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
 
-    # Create overlay with mask
     overlay = screenshot_cv.copy()
     overlay[mask > 0] = [0, 255, 0]
     result = cv2.addWeighted(screenshot_cv, 0.7, overlay, 0.3, 0)
 
-    # Add detection area if exists
     if dig_tool_instance.game_area:
         x1, y1, x2, y2 = dig_tool_instance.game_area
         detect_x1 = int((x2 - x1) * 0.15)
@@ -295,7 +300,6 @@ def save_debug_screenshot(dig_tool_instance):
         detect_y2 = int((y2 - y1) * 0.85)
         cv2.rectangle(result, (detect_x1, detect_y1), (detect_x2, detect_y2), (255, 0, 0), 2)
 
-    # Save image
     import time
     timestamp = int(time.time())
     filename = f"debug_screenshot_{timestamp}.png"
@@ -304,15 +308,12 @@ def save_debug_screenshot(dig_tool_instance):
 
 
 def update_automation_info(dig_tool_instance):
-    """Update automation-related UI info displays."""
     update_area_info(dig_tool_instance)
     update_sell_info(dig_tool_instance)
     update_cursor_info(dig_tool_instance)
 
 
-# GUI Queue Management Functions
 def update_gui_from_queue(instance):
-    """Update GUI elements from the results queue."""
     import cv2
     import numpy as np
     import queue
@@ -322,7 +323,6 @@ def update_gui_from_queue(instance):
     try:
         preview_array, debug_mask, overlay_info = instance.results_queue.get_nowait()
         
-        # Update preview window
         if instance.preview_window and instance.preview_label:
             pw, ph = (
                 instance.preview_label.winfo_width(),
@@ -337,7 +337,6 @@ def update_gui_from_queue(instance):
                 instance.preview_label.configure(image=photo)
                 instance.preview_label.image = photo
 
-            # Update velocity info
             if hasattr(instance, "velocity_info_label") and instance.velocity_info_label:
                 velocity = overlay_info.get("velocity", 0)
                 acceleration = overlay_info.get("acceleration", 0)
@@ -351,7 +350,6 @@ def update_gui_from_queue(instance):
 
                 instance.velocity_info_label.config(text=velocity_text)
         
-        # Update debug window
         if instance.debug_window and instance.debug_label and debug_mask is not None:
             dw, dh = instance.debug_label.winfo_width(), instance.debug_label.winfo_height()
             if dw > 20 and dh > 20:
@@ -364,14 +362,12 @@ def update_gui_from_queue(instance):
                 instance.debug_label.configure(image=debug_photo)
                 instance.debug_label.image = debug_photo
         
-        # Update color swatch
         locked_color = overlay_info.get("locked_color_hex")
         if instance.color_swatch_label:
             instance.color_swatch_label.config(
                 bg=locked_color if locked_color else "#000000"
             )
 
-        # Update detection info
         if instance.detection_info_label and overlay_info.get("detection_info"):
             detection_info = overlay_info["detection_info"]
             method = detection_info.get("method", "Unknown")
@@ -398,7 +394,6 @@ def update_gui_from_queue(instance):
 
             instance.detection_info_label.config(text=info_text)
 
-        # Update overlays
         if instance.overlay_enabled and instance.overlay:
             instance.overlay.update_info(**overlay_info)
         if instance.autowalk_overlay_enabled and instance.autowalk_overlay:

@@ -11,7 +11,6 @@ import io
 
 
 def setup_debug_directory():
-    """Setup debug directory with same logic as settings directory."""
     try:
         # Try to get LOCALAPPDATA first
         appdata_dir = os.environ.get("LOCALAPPDATA")
@@ -37,7 +36,6 @@ def setup_debug_directory():
 
 
 def ensure_debug_directory(debug_dir=None):
-    """Ensure debug directory exists."""
     if debug_dir is None:
         debug_dir = setup_debug_directory()
     
@@ -61,7 +59,6 @@ def ensure_debug_directory(debug_dir=None):
 
 
 def get_debug_log_path(debug_dir=None):
-    """Get the debug log file path, ensuring the directory exists."""
     if debug_dir is None:
         debug_dir = ensure_debug_directory()
     else:
@@ -71,7 +68,6 @@ def get_debug_log_path(debug_dir=None):
 
 
 def get_debug_info(debug_dir=None):
-    """Get debug directory information, similar to settings_manager.get_settings_info()."""
     if debug_dir is None:
         debug_dir = setup_debug_directory()
     
@@ -156,7 +152,6 @@ class LogLevel(Enum):
 
 
 class ConsoleRedirector(io.TextIOBase):
-    """Custom stream to redirect console output to the debug logger."""
     
     def __init__(self, logger_instance, log_level=LogLevel.INFO, stream_name="CONSOLE"):
         self.logger = logger_instance
@@ -165,8 +160,7 @@ class ConsoleRedirector(io.TextIOBase):
         self.buffer = ""
         
     def write(self, text):
-        if text and text.strip():  # Only log non-empty text
-            # Remove newlines and extra whitespace
+        if text and text.strip():  
             clean_text = text.strip()
             if clean_text:
                 self.logger._log(self.log_level, f"[{self.stream_name}] {clean_text}")
@@ -199,7 +193,6 @@ class DebugLogger:
         self._file_buffer = []
         self._buffer_size = 100
         
-        # Console redirection properties
         self.capture_console_output = False
         self.original_stdout = None
         self.original_stderr = None
@@ -305,7 +298,6 @@ class DebugLogger:
             self.info("Debug logging manually disabled")
 
     def enable_console_capture(self):
-        """Enable capturing of all console output (stdout/stderr) to the logger."""
         if not self.capture_console_output:
             self.original_stdout = sys.stdout
             self.original_stderr = sys.stderr
@@ -320,7 +312,6 @@ class DebugLogger:
             self.info("Console output capture enabled - all message streams will be logged")
 
     def disable_console_capture(self):
-        """Disable capturing of console output and restore original streams."""
         if self.capture_console_output:
             if self.original_stdout:
                 sys.stdout = self.original_stdout
@@ -461,11 +452,8 @@ class DebugLogger:
     def _clear_console(self):
         if self.console_text:
             self.console_text.delete("1.0", tk.END)
-        # Clear the log history to prevent old logs from reappearing
         self.log_history.clear()
-        # Also clear the file buffer to prevent pending logs from being written
         self._file_buffer.clear()
-        # Clear the log queue to prevent queued logs from being processed
         while not self.log_queue.empty():
             try:
                 self.log_queue.get_nowait()
@@ -475,7 +463,6 @@ class DebugLogger:
     def _toggle_auto_scroll(self):
         if hasattr(self, 'auto_scroll_var'):
             self.auto_scroll = self.auto_scroll_var.get()
-        # Also force scroll to end if auto-scroll is enabled
         if self.auto_scroll and self.console_text:
             self.console_text.see(tk.END)
 
@@ -597,7 +584,7 @@ class DebugLogger:
 
     def cleanup(self):
         self._flush_file_buffer()
-        self.disable_console_capture()  # Restore original streams
+        self.disable_console_capture() 
         while not self.log_queue.empty():
             try:
                 self.log_queue.get_nowait()
@@ -734,7 +721,6 @@ class DebugLogger:
                 self._add_log_entry(entry)
                 processed += 1
             
-            # Ensure auto-scroll is applied after processing the batch
             if processed > 0 and self.auto_scroll:
                 self.console_text.see(tk.END)
         except queue.Empty:
@@ -745,23 +731,14 @@ logger = DebugLogger()
 
 
 def enable_console_logging():
-    """Enable console output capture for the global logger instance."""
     logger.enable_console_capture()
 
 
 def init_click_debug_log(debug_log_path=None, ensure_debug_dir_func=None):
-    """Initialize debug log file for click tracking.
-    
-    Args:
-        debug_log_path: Optional path to debug log file. If None, will use default path.
-        ensure_debug_dir_func: Optional legacy function for compatibility. Will be ignored.
-    """
     try:
-        # Use new path setup if no path provided
         if debug_log_path is None:
             debug_log_path = get_debug_log_path()
         else:
-            # Ensure directory exists for provided path
             debug_dir = os.path.dirname(debug_log_path)
             ensure_debug_directory(debug_dir)
         

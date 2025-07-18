@@ -236,10 +236,6 @@ class MainWindow:
             if self.dig_tool.param_vars['use_custom_cursor'].get():
                 self.dig_tool.param_vars['use_custom_cursor'].set(False)
                 self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
-        if not hasattr(self.dig_tool, 'cursor_position') or not self.dig_tool.cursor_position:
-            if self.dig_tool.param_vars['use_custom_cursor'].get():
-                self.dig_tool.param_vars['use_custom_cursor'].set(False)
-                self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
 
     def validate_velocity_toggle(self, *args):
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
@@ -272,23 +268,15 @@ class MainWindow:
         import numpy as np
         from core.detection import rgb_to_hsv_single
         
-        self.dig_tool.root.withdraw()
+        self.dig_tool.root.iconify()
         
         try:
             overlay = tk.Toplevel()
             overlay.attributes('-topmost', True)
-            overlay.attributes('-alpha', 0.1)  # Very transparent
-            overlay.configure(bg='black')
+            overlay.attributes('-alpha', 0.3)
+            overlay.configure(bg='#1a1a1a', cursor='crosshair')
             overlay.overrideredirect(True)
             overlay.geometry(f"{overlay.winfo_screenwidth()}x{overlay.winfo_screenheight()}+0+0")
-            
-            instruction_frame = tk.Frame(overlay, bg='black')
-            instruction_frame.place(relx=0.5, rely=0.1, anchor='center')
-            
-            instruction_label = tk.Label(instruction_frame, 
-                                       text="Drag to select an area to sample colors from\nPress ESC to cancel", 
-                                       font=("Arial", 16, "bold"), bg='black', fg='white', justify='center')
-            instruction_label.pack(pady=10)
             
             start_pos = None
             selection_rect = None
@@ -302,7 +290,8 @@ class MainWindow:
                 
                 if selection_rect:
                     selection_rect.destroy()
-                selection_rect = tk.Frame(overlay, bg=overlay.cget('bg'), highlightthickness=2, highlightbackground='lime', highlightcolor='lime')
+                selection_rect = tk.Frame(overlay, highlightthickness=2, highlightbackground='#ff9500', highlightcolor='#ff9500', relief='solid', bd=0)
+                selection_rect.configure(highlightthickness=2)
                 selection_rect.place(x=event.x, y=event.y, width=1, height=1)
             
             def on_motion(event):
@@ -528,7 +517,7 @@ class MainWindow:
         SECTION_PADY = 3  
         PARAM_PADY = 2    
         PARAM_PADX = 6    
-        ENTRY_WIDTH = 15
+        ENTRY_WIDTH = 18
         BUTTON_PADY = 5   
         LABEL_WIDTH = 25
 
@@ -550,7 +539,14 @@ class MainWindow:
         
         
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            scroll_region = canvas.cget("scrollregion")
+            if scroll_region:
+                x1, y1, x2, y2 = map(float, scroll_region.split())
+                content_height = y2 - y1
+                canvas_height = canvas.winfo_height()
+                
+                if content_height > canvas_height:
+                    canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
         def _bind_to_mousewheel(event):
             canvas.bind_all("<MouseWheel>", _on_mousewheel)
@@ -570,32 +566,42 @@ class MainWindow:
         self.dig_tool.controls_panel.bind('<Configure>', _configure_canvas)
         canvas.bind('<Configure>', _configure_canvas)
 
-        Label(self.dig_tool.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 14, 'bold'), bg=BG_COLOR,
-              fg=TEXT_COLOR).pack(pady=(0, 8), anchor='center')
+        main_title = Label(self.dig_tool.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 16, 'bold'), 
+                          bg=BG_COLOR, fg="#2c3e50")
+        main_title.pack(pady=(0, 8), anchor='center')
 
-        self.dig_tool.status_label = Label(self.dig_tool.controls_panel, text="Status: Select a game area to begin.",
-                                           font=(FONT_FAMILY, 9), bg=BG_COLOR, fg=TEXT_COLOR, wraplength=780,
-                                           justify='left')
-        self.dig_tool.status_label.pack(fill=tk.X, pady=(0, 10), anchor='w')
+        status_title_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        status_title_frame.pack(fill=tk.X, pady=(0, 3), padx=5)
+        
+        status_title = Label(status_title_frame, text="Status", font=(FONT_FAMILY, 10, 'bold'), 
+                            bg=BG_COLOR, fg="#2c3e50")
+        status_title.pack(anchor='w')
+        
+        separator = Frame(status_title_frame, height=1, bg="#cccccc")
+        separator.pack(fill=tk.X, pady=(2, 0))
 
-        info_panel = Frame(self.dig_tool.controls_panel, bg=FRAME_BG, relief='solid', bd=1)
-        info_panel.pack(fill=tk.X, pady=(0, 10), padx=2)
-
-        info_header = Label(info_panel, text="Configuration Status", font=(FONT_FAMILY, 9, 'bold'), bg=FRAME_BG,
-                            fg=TEXT_COLOR)
-        info_header.pack(pady=(6, 4))
-
-        self.dig_tool.area_info_label = Label(info_panel, text="Game Area: Not set", font=(FONT_FAMILY, 8), bg=FRAME_BG,
-                                              fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.area_info_label.pack(fill='x', padx=12, pady=2)
-
-        self.dig_tool.sell_info_label = Label(info_panel, text="Sell Button: Not set", font=(FONT_FAMILY, 8),
-                                              bg=FRAME_BG, fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.sell_info_label.pack(fill='x', padx=12, pady=2)
-
-        self.dig_tool.cursor_info_label = Label(info_panel, text="Cursor Position: Not set", font=(FONT_FAMILY, 8),
-                                                bg=FRAME_BG, fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.cursor_info_label.pack(fill='x', padx=12, pady=(2, 8))
+        status_outer_frame = Frame(self.dig_tool.controls_panel, bg="#b8b8b8", relief='solid', bd=1)
+        status_outer_frame.pack(fill=tk.X, pady=(0, 5), padx=2)
+        
+        status_frame = Frame(status_outer_frame, bg="#e8e8e8", relief='flat', bd=0)
+        status_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        from tkinter import Text
+        self.dig_tool.status_text = Text(status_frame, height=3, font=(FONT_FAMILY, 9), bg="#e8e8e8", 
+                                        fg=TEXT_COLOR, wrap=tk.WORD, relief='flat', bd=0, state='disabled',
+                                        cursor='arrow', highlightthickness=0)
+        self.dig_tool.status_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        
+        self.dig_tool.status_text.config(state='normal')
+        self.dig_tool.status_text.delete(1.0, tk.END)
+        self.dig_tool.status_text.insert(1.0, "Select a game area to begin.")
+        self.dig_tool.status_text.config(state='disabled')
+        
+        indicator_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        indicator_frame.pack(fill=tk.X, pady=(0, 10), padx=2)
+        
+        self.dig_tool.game_area_indicator = Label(indicator_frame, text="✗ Game Area: Not Set", 
+                                                 font=(FONT_FAMILY, 9), bg=BG_COLOR, fg="#cc0000")
+        self.dig_tool.game_area_indicator.pack(anchor='w', padx=5)
 
         actions_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
         actions_frame.pack(fill=tk.X, pady=(0, SECTION_PADY))
@@ -617,18 +623,6 @@ class MainWindow:
 
         actions_frame2 = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
         actions_frame2.pack(fill=tk.X, pady=(SECTION_PADY, 0))
-
-        sell_button_btn = Button(actions_frame2, text="Set Sell Button",
-                                 command=lambda: start_sell_button_selection(self.dig_tool), **button_style)
-        sell_button_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
-                      "Sell button position is set. Click to change it.", self.is_sell_button_set)
-
-        cursor_pos_btn = Button(actions_frame2, text="Set Cursor Pos",
-                                command=lambda: start_cursor_position_selection(self.dig_tool), **button_style)
-        cursor_pos_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        StatusTooltip(cursor_pos_btn, "Click to set a custom cursor position for clicking",
-                      "Cursor position is set. Click to change it.", self.is_cursor_position_set)
 
         for i, (text, command, attr) in enumerate([("Show Preview", lambda: toggle_preview_window(self.dig_tool), 'preview_btn'),
                                                    ("Show Debug", lambda: toggle_debug_window(self.dig_tool), 'debug_btn')]):
@@ -806,7 +800,7 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key] = default_value
 
             combo = ttk.Combobox(frame, textvariable=self.dig_tool.param_vars[var_key], values=values, state="readonly",
-                                 width=ENTRY_WIDTH - 2, font=(FONT_FAMILY, 9))
+                                 width=ENTRY_WIDTH - 2, font=(FONT_FAMILY, 9), height=8)
             combo.pack(side='right', ipady=3)
 
             if dependent_list is not None: dependent_list.append(combo)
@@ -909,9 +903,10 @@ class MainWindow:
                                                          widget_type='cursor',
                                                          validation_callback=self.validate_cursor_position_toggle)
 
-        create_section_button(cursor_subsection.content, "Set Cursor Position",
-                              lambda: start_cursor_position_selection(self.dig_tool),
-                              self.cursor_dependent_widgets, 'cursor')
+        cursor_pos_btn = create_section_button(cursor_subsection.content, "Set Cursor Position",
+                              lambda: start_cursor_position_selection(self.dig_tool))
+        StatusTooltip(cursor_pos_btn, "Click to set a custom cursor position for clicking",
+                      "Cursor position is set. Click to change it.", self.is_cursor_position_set)
 
         # ===== AUTO-WALK PANE =====
         auto_walk_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled')
@@ -944,7 +939,7 @@ class MainWindow:
         self.dig_tool.walk_pattern_var.trace_add('write', lambda *args: on_walk_pattern_changed(self.dig_tool, *args))
         self.walk_pattern_combo = ttk.Combobox(pattern_frame, textvariable=self.dig_tool.walk_pattern_var,
                                                values=list(self.dig_tool.automation_manager.get_pattern_list().keys()),
-                                               state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9))
+                                               state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9), height=8)
         self.walk_pattern_combo.pack(side='right', ipady=3)
 
         custom_pattern_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")  # Light blue background
@@ -984,6 +979,11 @@ class MainWindow:
                                                         'auto_sell_enabled',
                                                         widget_type='sell',
                                                         validation_callback=self.validate_auto_sell_toggle)
+        
+        sell_button_btn = create_section_button(auto_sell_subsection.content, "Set Sell Button",
+                                               lambda: start_sell_button_selection(self.dig_tool))
+        StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
+                      "Sell button position is set. Click to change it.", self.is_sell_button_set)
         
         create_dropdown_param(auto_sell_subsection.content, "Auto-Sell Method:", 'auto_sell_method',
                              ['button_click', 'ui_navigation'],
@@ -1113,7 +1113,7 @@ class MainWindow:
             __import__('threading').Thread(target=set_hotkey_thread, args=(v, b), daemon=True).start())
             hotkey_btn.pack(side='right')
 
-        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Bot:", 'toggle_bot')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Tool:", 'toggle_bot')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle GUI:", 'toggle_gui')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto Walk Overlay:", 'toggle_autowalk_overlay')
@@ -1155,11 +1155,28 @@ class MainWindow:
         from utils.ui_management import update_main_button_text
         update_main_button_text(self.dig_tool)
         toggle_main_on_top(self.dig_tool)
-        update_area_info(self.dig_tool)
-        update_sell_info(self.dig_tool)
-        update_cursor_info(self.dig_tool)
+        self.update_status_with_area_indicator()
         
         self.setup_drag_drop()
+
+    def update_status_with_area_indicator(self):
+        if hasattr(self.dig_tool, 'game_area') and self.dig_tool.game_area:
+            base_status = "Game area set. Press Start to begin."
+            if hasattr(self.dig_tool, 'game_area_indicator'):
+                self.dig_tool.game_area_indicator.config(text="✓ Game Area: Set", fg="#00aa00")
+        else:
+            base_status = "Select a game area to begin."
+            if hasattr(self.dig_tool, 'game_area_indicator'):
+                self.dig_tool.game_area_indicator.config(text="✗ Game Area: Not Set", fg="#cc0000")
+        
+        self.dig_tool.update_status(base_status)
+    
+    def update_game_area_indicator(self):
+        if hasattr(self.dig_tool, 'game_area_indicator'):
+            if hasattr(self.dig_tool, 'game_area') and self.dig_tool.game_area:
+                self.dig_tool.game_area_indicator.config(text="✓ Game Area: Set", fg="#00aa00")
+            else:
+                self.dig_tool.game_area_indicator.config(text="✗ Game Area: Not Set", fg="#cc0000")
 
     def setup_drag_drop(self):
         if not DND_AVAILABLE:
