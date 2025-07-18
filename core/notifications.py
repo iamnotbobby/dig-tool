@@ -256,17 +256,17 @@ def check_milestone_notifications(dig_tool_instance):
             
             if not dig_tool_instance.money_ocr.money_area:
                 logger.info("Money area not set, prompting user to select area")
-                dig_tool_instance.update_status("💰 Select money area for Discord notifications...")
+                dig_tool_instance.update_status("Select money area for Discord notifications...")
                 
                 def select_area_and_continue():
                     try:
                         if dig_tool_instance.money_ocr.select_money_area():
                             logger.info("Money area selected successfully")
-                            dig_tool_instance.update_status("✅ Money area selected")
+                            dig_tool_instance.update_status("Money area selected")
                             _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_screenshot)
                         else:
                             logger.warning("Money area selection cancelled")
-                            dig_tool_instance.update_status("⚠️ Money area not selected, sending milestone without money value")
+                            dig_tool_instance.update_status("Money area not selected, sending milestone without money value")
                             _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_screenshot, skip_ocr=True)
                     except Exception as e:
                         logger.error(f"Error in area selection: {e}")
