@@ -398,6 +398,8 @@ def update_gui_from_queue(instance):
             instance.overlay.update_info(**overlay_info)
         if instance.autowalk_overlay_enabled and instance.autowalk_overlay:
             instance.autowalk_overlay.update_info(**overlay_info)
+        if instance.color_modules_overlay_enabled and instance.color_modules_overlay:
+            instance.color_modules_overlay.update_info(**overlay_info)
             
     except (queue.Empty, RuntimeError, TclError):
         pass

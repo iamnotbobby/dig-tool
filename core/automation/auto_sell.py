@@ -36,12 +36,7 @@ class AutoSellManager:
             return False
 
     def can_auto_sell(self):
-        auto_walk_enabled = get_param(self.dig_tool, "auto_walk_enabled")
         auto_sell_enabled = get_param(self.dig_tool, "auto_sell_enabled")
-
-        if auto_sell_enabled and not auto_walk_enabled:
-            self.dig_tool.update_status("Auto-sell disabled: Auto-walk must be enabled!")
-            return False
 
         if not auto_sell_enabled:
             return False

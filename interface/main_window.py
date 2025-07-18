@@ -7,7 +7,7 @@ try:
 except ImportError:
     DND_AVAILABLE = False
     DND_FILES = None
-from interface.components import CollapsiblePane, AccordionManager, Tooltip
+from interface.components import CollapsiblePane, AccordionManager, Tooltip, ColorModulesOverlay
 from utils.debug_logger import logger
 from utils.pattern_utils import (
     open_custom_pattern_manager,
@@ -35,6 +35,7 @@ from utils.input_management import (
     toggle_gui,
     toggle_overlay,
     toggle_autowalk_overlay,
+    toggle_color_modules_overlay,
 )
 from utils.ui_management import update_area_info, update_sell_info, update_cursor_info
 import os
@@ -255,6 +256,22 @@ class MainWindow:
             if self.dig_tool.param_vars['auto_sell_enabled'].get():
                 self.dig_tool.param_vars['auto_sell_enabled'].set(False)
                 self.dig_tool.update_status("Error: Set sell button first before enabling auto-sell!")
+                return
+
+        if self.dig_tool.param_vars['auto_sell_enabled'].get():
+            auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+            if not auto_walk_enabled:
+                import tkinter.messagebox as messagebox
+                result = messagebox.askyesno(
+                    "Auto-Sell Warning",
+                    "Enabling auto-sell without the usage of auto-walk MAY cause problems!\n\n"
+                    "Only enable this if you are automating Dig Tool through another way or will not interfere with the auto-sell process.\n\n"
+                    "Are you sure you want to enable auto-sell?",
+                    icon='warning'
+                )
+                if not result:
+                    self.dig_tool.param_vars['auto_sell_enabled'].set(False)
+                    return
 
     def is_sell_button_set(self):
         return self.dig_tool.automation_manager.sell_button_position is not None
@@ -470,13 +487,9 @@ class MainWindow:
             widget.config(state='normal' if shovel_enabled else 'disabled')
 
         if self.auto_sell_checkbox:
-            if auto_walk_enabled:
-                self.auto_sell_checkbox.config(state='normal', fg="#000000")  # Black text when enabled
-            else:
-                self.auto_sell_checkbox.config(state='disabled', fg="#666666")  # Gray text when disabled
-                self.dig_tool.param_vars['auto_sell_enabled'].set(False)
+            self.auto_sell_checkbox.config(state='normal', fg="#000000")
 
-        sell_enabled = auto_walk_enabled and self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
+        sell_enabled = self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
         for widget in self.sell_dependent_widgets:
             widget.config(state='normal' if sell_enabled else 'disabled')
 
@@ -502,7 +515,8 @@ class MainWindow:
                 if tooltip.widget_type == 'shovel':
                     tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
                 elif tooltip.widget_type == 'sell':
-                    tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
+                    sell_button_set = self.dig_tool.automation_manager.sell_button_position is not None
+                    tooltip.set_disabled(not sell_button_set, "Disabled: Set sell button position first")
                 elif tooltip.widget_type == 'cursor':
                     tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first")
                 elif tooltip.widget_type == 'velocity':
@@ -631,6 +645,9 @@ class MainWindow:
                 setattr(self.dig_tool, attr, btn)
                 btn.config(state=tk.DISABLED)
             btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        actions_frame3 = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        actions_frame3.pack(fill=tk.X, pady=(SECTION_PADY, 0))
 
         config_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
         config_frame.pack(fill='x', pady=(8, 0))
@@ -1065,6 +1082,9 @@ class MainWindow:
         create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
         create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
         create_section_button(panes['debug'].sub_frame, "Show Debug Console", lambda: show_debug_console(self.dig_tool))
+
+        create_section_button(panes['debug'].sub_frame, "Color Modules Overlay", 
+                             lambda: toggle_color_modules_overlay(self.dig_tool))
 
         def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=parent.cget('bg'))

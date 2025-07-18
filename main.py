@@ -139,6 +139,8 @@ class DigTool:
         self.overlay_enabled = False
         self.autowalk_overlay = None
         self.autowalk_overlay_enabled = False
+        self.color_modules_overlay = None
+        self.color_modules_overlay_enabled = False
         self.cam = ScreenCapture()
         self.region_key = "main_game"
         self.click_count = 0
@@ -780,52 +782,54 @@ class DigTool:
 
             if (
                 self.running
+                and pending_auto_sell
+                and dig_completed_time > 0
+                and current_time_ms - dig_completed_time >= post_dig_delay
+                and not self.automation_manager.is_selling
+            ):
+                logger.debug(
+                    f"Initiating auto-sell: dig_count={self.dig_count}, sell_every_x_digs={get_param(self, 'sell_every_x_digs')}"
+                )
+
+                if self.automation_manager.is_auto_sell_ready():
+                    threading.Thread(
+                        target=self.automation_manager.perform_auto_sell,
+                        daemon=True,
+                    ).start()
+                    pending_auto_sell = False
+                    dig_completed_time = 0
+
+                    wait_start_time = time.time()
+                    auto_sell_max_wait_time = 30.0
+
+                    while (
+                        self.automation_manager.is_selling
+                        and self.running
+                        and (time.time() - wait_start_time)
+                        < auto_sell_max_wait_time
+                    ):
+                        time.sleep(0.1)
+
+                    if (
+                        time.time() - wait_start_time
+                    ) >= auto_sell_max_wait_time:
+                        logger.warning(
+                            "Auto-sell wait timeout reached, continuing operation"
+                        )
+                else:
+                    logger.warning(
+                        "Auto-sell skipped: not ready (sell button, running state, or already selling)"
+                    )
+                    pending_auto_sell = False
+                    dig_completed_time = 0
+
+            if (
+                self.running
                 and get_param(self, "auto_walk_enabled")
                 and not self.automation_manager.is_selling
             ):
                 if auto_walk_state == "move":
                     if (
-                        pending_auto_sell
-                        and dig_completed_time > 0
-                        and current_time_ms - dig_completed_time >= post_dig_delay
-                    ):
-                        logger.debug(
-                            f"Initiating auto-sell: dig_count={self.dig_count}, sell_every_x_digs={get_param(self, 'sell_every_x_digs')}"
-                        )
-
-                        if self.automation_manager.is_auto_sell_ready():
-                            threading.Thread(
-                                target=self.automation_manager.perform_auto_sell,
-                                daemon=True,
-                            ).start()
-                            pending_auto_sell = False
-                            dig_completed_time = 0
-
-                            wait_start_time = time.time()
-                            auto_sell_max_wait_time = 30.0
-
-                            while (
-                                self.automation_manager.is_selling
-                                and self.running
-                                and (time.time() - wait_start_time)
-                                < auto_sell_max_wait_time
-                            ):
-                                time.sleep(0.1)
-
-                            if (
-                                time.time() - wait_start_time
-                            ) >= auto_sell_max_wait_time:
-                                logger.warning(
-                                    "Auto-sell wait timeout reached, resuming autowalk"
-                                )
-                        else:
-                            logger.warning(
-                                "Auto-sell skipped: not ready (sell button, running state, or already selling)"
-                            )
-                            pending_auto_sell = False
-                            dig_completed_time = 0
-
-                    elif (
                         not self.automation_manager.is_selling and not pending_auto_sell
                     ):
                         if walk_thread is None or not walk_thread.is_alive():
@@ -1106,6 +1110,28 @@ class DigTool:
                         self.manual_dig_target_disengaged_time = 0
                         
                         logger.info(f"Manual dig completed #{self.dig_count}")
+                        
+                        auto_sell_enabled = get_param(self, "auto_sell_enabled")
+                        sell_every_x_digs = get_param(self, "sell_every_x_digs")
+                        has_sell_button = (
+                            self.automation_manager.sell_button_position is not None
+                        )
+
+                        if (
+                            auto_sell_enabled
+                            and has_sell_button
+                            and self.dig_count > 0
+                            and self.dig_count % sell_every_x_digs == 0
+                        ):
+                            logger.info(
+                                f"Manual mode auto-sell triggered! Will sell immediately"
+                            )
+                            if self.automation_manager.is_auto_sell_ready():
+                                threading.Thread(
+                                    target=self.automation_manager.perform_auto_sell,
+                                    daemon=True,
+                                ).start()
+                        
                         check_milestone_notifications(self)
 
             if self.results_queue.empty():

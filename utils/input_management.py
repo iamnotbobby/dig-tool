@@ -377,6 +377,28 @@ def _toggle_autowalk_overlay_thread_safe(dig_tool_instance):
         logger.error(f"Error toggling auto walk overlay: {e}")
 
 
+def toggle_color_modules_overlay(dig_tool_instance):
+    dig_tool_instance.root.after_idle(lambda: _toggle_color_modules_overlay_thread_safe(dig_tool_instance))
+
+
+def _toggle_color_modules_overlay_thread_safe(dig_tool_instance):
+    try:
+        if not dig_tool_instance.color_modules_overlay_enabled:
+            from interface.components import ColorModulesOverlay
+            dig_tool_instance.color_modules_overlay = ColorModulesOverlay(dig_tool_instance)
+            dig_tool_instance.color_modules_overlay.create_overlay()
+            dig_tool_instance.color_modules_overlay_enabled = True
+            logger.debug("Color modules overlay enabled")
+        else:
+            if dig_tool_instance.color_modules_overlay:
+                dig_tool_instance.color_modules_overlay.destroy_overlay()
+            dig_tool_instance.color_modules_overlay = None
+            dig_tool_instance.color_modules_overlay_enabled = False
+            logger.debug("Color modules overlay disabled")
+    except Exception as e:
+        logger.error(f"Error toggling color modules overlay: {e}")
+
+
 def toggle_gui(dig_tool_instance):
     dig_tool_instance.root.after(0, lambda: _toggle_gui_thread_safe(dig_tool_instance))
 

@@ -762,6 +762,9 @@ def perform_final_cleanup(dig_tool_instance):
     if dig_tool_instance.autowalk_overlay:
         dig_tool_instance.autowalk_overlay.destroy_overlay()
         dig_tool_instance.autowalk_overlay = None
+    if dig_tool_instance.color_modules_overlay:
+        dig_tool_instance.color_modules_overlay.destroy_overlay()
+        dig_tool_instance.color_modules_overlay = None
 
     if hasattr(dig_tool_instance, "automation_manager") and dig_tool_instance.automation_manager:
         dig_tool_instance.automation_manager.cleanup()
