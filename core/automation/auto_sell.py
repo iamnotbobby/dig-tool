@@ -36,14 +36,21 @@ class AutoSellManager:
             return False
 
     def can_auto_sell(self):
-        auto_sell_enabled = get_param(self.dig_tool, "auto_sell_enabled")
-
-        if not auto_sell_enabled:
+        try:
+            auto_sell_enabled = get_param(self.dig_tool, "auto_sell_enabled")
+            if not auto_sell_enabled:
+                return False
+                
+            return self.is_auto_sell_ready()
+        except Exception as e:
+            logger.error(f"Error checking auto-sell availability: {e}")
             return False
-            
-        return self.is_auto_sell_ready()
 
     def autoit_click(self, x, y, retries=3):
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            logger.error(f"Invalid click coordinates: x={x}, y={y}")
+            return False
+            
         for attempt in range(retries):
             try:
                 autoit.mouse_move(x, y, speed=2)
@@ -53,7 +60,7 @@ class AutoSellManager:
                 tolerance = 5
 
                 if (abs(current_pos[0] - x) <= tolerance and abs(current_pos[1] - y) <= tolerance):
-                    autoit.mouse_click("left", x, y, speed=2)
+                    autoit.mouse_click("left", int(x), int(y), speed=2)
                     time.sleep(0.1)
                     return True
                 else:
@@ -66,9 +73,10 @@ class AutoSellManager:
                 logger.warning(f"AutoIt error attempt {attempt + 1}: {com_error}")
                 try:
                     from utils.system_utils import send_click
-                    send_click(x, y)
+                    send_click()
                     return True
-                except Exception:
+                except Exception as fallback_error:
+                    logger.warning(f"Fallback click also failed: {fallback_error}")
                     if attempt < retries - 1:
                         time.sleep(0.2)
                         continue
@@ -77,30 +85,46 @@ class AutoSellManager:
         return False
 
     def _process_sell_completion(self, method_name=""):
-     
-        restored_shifts = self.shift_manager.restore_shifts_after_sell()
-        if restored_shifts:
-            logger.info(f"Restored shift keys after auto-sell: {restored_shifts}")
-            time.sleep(0.1)
+        try:
+            restored_shifts = self.shift_manager.restore_shifts_after_sell()
+            if restored_shifts:
+                logger.info(f"Restored shift keys after auto-sell: {restored_shifts}")
+                time.sleep(0.1)
+        except Exception as e:
+            logger.warning(f"Failed to restore shifts after sell completion: {e}")
 
         self.sell_count += 1
 
-        sell_every_x_digs = get_param(self.dig_tool, "sell_every_x_digs")
-        if sell_every_x_digs and sell_every_x_digs > 0:
-            items_sold = min(self.dig_tool.dig_count, sell_every_x_digs)
-            
-            # Update sold items tracking for walkspeed calculations
-            self.items_sold_total += items_sold
-            
-            logger.info(f"Auto-sell completed: sold {items_sold} items, total dig_count: {self.dig_tool.dig_count}, total sold: {self.items_sold_total}")
+        try:
+            sell_every_x_digs = get_param(self.dig_tool, "sell_every_x_digs")
+            if sell_every_x_digs and int(sell_every_x_digs) > 0:
+                items_sold = min(self.dig_tool.dig_count, int(sell_every_x_digs))
+                
+                # Update sold items tracking for walkspeed calculations
+                self.items_sold_total += items_sold
+                
+                logger.info(f"Auto-sell completed: sold {items_sold} items, total dig_count: {self.dig_tool.dig_count}, total sold: {self.items_sold_total}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Error processing sell_every_x_digs parameter: {e}")
 
         method_suffix = f" ({method_name})" if method_name else ""
-        self.dig_tool.update_status(f"Auto-sell #{self.sell_count} completed{method_suffix}")
-        logger.info(f"Auto-sell #{self.sell_count} completed successfully{method_suffix}")
+        status_message = f"Auto-sell #{self.sell_count} completed{method_suffix}"
+        
+        try:
+            self.dig_tool.update_status(status_message)
+            logger.info(f"Auto-sell #{self.sell_count} completed successfully{method_suffix}")
+        except Exception as e:
+            logger.error(f"Failed to update status after sell completion: {e}")
 
     def get_walkspeed_dig_count(self):
-
-        return max(0, self.dig_tool.dig_count - self.items_sold_total)
+        try:
+            if not hasattr(self.dig_tool, 'dig_count'):
+                logger.warning("dig_tool.dig_count not available")
+                return 0
+            return max(0, self.dig_tool.dig_count - self.items_sold_total)
+        except (TypeError, AttributeError) as e:
+            logger.error(f"Error calculating walkspeed dig count: {e}")
+            return 0
 
     def perform_auto_sell(self):
      
@@ -151,12 +175,19 @@ class AutoSellManager:
                     autoit.send("g")
                 except (OSError, WindowsError, Exception) as e:
                     logger.warning(f"AutoIt send 'g' failed, using keyboard fallback: {e}")
-                    self.keyboard_controller.press("g")
-                    self.keyboard_controller.release("g")
+                    self.keyboard_controller.press_and_release("g")
 
                 time.sleep(0.5)
-
-                x, y = self.sell_button_position
+                
+                if not self.sell_button_position or len(self.sell_button_position) != 2:
+                    logger.error("Auto-sell failed: no sell button position set or invalid format")
+                    self.dig_tool.update_status("Auto-sell failed: no sell button position")
+                    self.is_selling = False
+                    self._restore_shifts_on_error()
+                    return
+                
+                x = self.sell_button_position[0]
+                y = self.sell_button_position[1]
                 sell_delay = get_param(self.dig_tool, "sell_delay") or 1000
                 sell_delay_seconds = sell_delay / 1000.0
                 time.sleep(sell_delay_seconds)
@@ -233,7 +264,7 @@ class AutoSellManager:
                 time.sleep(inventory_open_delay)
 
                 if sell_sequence:
-                    sequence_steps = [step.strip() for step in sell_sequence.split(',')]
+                    sequence_steps = [step.strip() for step in sell_sequence.split(',') if step.strip()]
                     
                     for step in sequence_steps:
                         if not self.dig_tool.running or not self.is_selling:
@@ -268,37 +299,55 @@ class AutoSellManager:
             return False
 
     def _monitor_post_sell_engagement(self):
-        target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout") or 5.0
-        target_check_interval = 0.1
-        engagement_start_time = time.time()
-        
-        logger.info(f"Monitoring target engagement for {target_engagement_timeout}s after auto-sell")
-        
-        checks_performed = 0
-        while time.time() - engagement_start_time < target_engagement_timeout:
-            if not self.dig_tool.running:
-                logger.info("Post-sell engagement monitoring aborted: tool stopped")
-                return
+        try:
+            target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout") or 5.0
+            target_check_interval = 0.1
+            engagement_start_time = time.time()
+            
+            logger.info(f"Monitoring target engagement for {target_engagement_timeout}s after auto-sell")
+            
+            checks_performed = 0
+            while time.time() - engagement_start_time < target_engagement_timeout:
+                if not self.dig_tool.running:
+                    logger.info("Post-sell engagement monitoring aborted: tool stopped")
+                    return
+                    
+                try:
+                    target_engaged = hasattr(self.dig_tool, 'target_engaged') and self.dig_tool.target_engaged
+                    checks_performed += 1
+                    
+                    if target_engaged:
+                        logger.info(f"Target engagement detected after {time.time() - engagement_start_time:.1f}s")
+                        return
+                except Exception as e:
+                    logger.warning(f"Error checking target engagement: {e}")
                 
-            target_engaged = hasattr(self.dig_tool, 'target_engaged') and self.dig_tool.target_engaged
-            checks_performed += 1
+                time.sleep(target_check_interval)
             
-            if target_engaged:
-                logger.info(f"Target engagement detected after {time.time() - engagement_start_time:.1f}s")
-                return
+            logger.warning(f"No target engagement detected after {target_engagement_timeout}s, applying fallback")
+            self._apply_auto_sell_fallback()
             
-            time.sleep(target_check_interval)
-        
-        logger.warning(f"No target engagement detected after {target_engagement_timeout}s, applying fallback")
-        self._apply_auto_sell_fallback()
+        except Exception as e:
+            logger.error(f"Error in post-sell engagement monitoring: {e}")
+            try:
+                self._apply_auto_sell_fallback()
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
 
     def _apply_auto_sell_fallback(self):
-        logger.info("Auto-sell fallback: Re-closing inventory to ensure proper state")
-        self._send_key_safe("g")
-        time.sleep(0.8)
+        try:
+            logger.info("Auto-sell fallback: Re-closing inventory to ensure proper state")
+            self._send_key_safe("g")
+            time.sleep(0.8)
+        except Exception as e:
+            logger.error(f"Error in auto-sell fallback: {e}")
 
     def _send_key_safe(self, key):
-        key_name = key.lower().strip()
+        if not key:
+            logger.warning("Empty key provided to _send_key_safe")
+            return
+            
+        key_name = str(key).lower().strip()
         
         special_keys = {
             "down": ("{DOWN}", Key.down), "↓": ("{DOWN}", Key.down),
@@ -312,21 +361,28 @@ class AutoSellManager:
             if key_name in special_keys:
                 autoit_cmd, key_obj = special_keys[key_name]
                 autoit.send(autoit_cmd)
+                logger.debug(f"Sent special key via AutoIt: {key_name}")
             else:
                 autoit.send(key)
+                logger.debug(f"Sent key via AutoIt: {key}")
         except (OSError, WindowsError, Exception) as e:
-            if key_name in special_keys:
-                _, key_obj = special_keys[key_name]
-                self.keyboard_controller.press(key_obj)
-                self.keyboard_controller.release(key_obj)
-            else:
-                if hasattr(Key, key_name):
-                    key_obj = getattr(Key, key_name)
+            logger.warning(f"AutoIt send failed for key '{key}', using keyboard fallback: {e}")
+            try:
+                if key_name in special_keys:
+                    _, key_obj = special_keys[key_name]
                     self.keyboard_controller.press(key_obj)
                     self.keyboard_controller.release(key_obj)
                 else:
-                    self.keyboard_controller.press(key)
-                    self.keyboard_controller.release(key)
+                    if hasattr(Key, key_name):
+                        key_obj = getattr(Key, key_name)
+                        self.keyboard_controller.press(key_obj)
+                        self.keyboard_controller.release(key_obj)
+                    else:
+                        self.keyboard_controller.press(key)
+                        self.keyboard_controller.release(key)
+                logger.debug(f"Sent key via keyboard fallback: {key}")
+            except Exception as fallback_error:
+                logger.error(f"Both AutoIt and keyboard fallback failed for key '{key}': {fallback_error}")
 
     def _countdown_with_status(self, message_format, seconds=5):
         for i in range(seconds, 0, -1):
@@ -369,7 +425,7 @@ class AutoSellManager:
             time.sleep(inventory_open_delay)
 
             if sell_sequence:
-                sequence_steps = [step.strip() for step in sell_sequence.split(',')]
+                sequence_steps = [step.strip() for step in sell_sequence.split(',') if step.strip()]
                 logger.info(f"Parsed sequence steps: {sequence_steps}")
                 
                 for i, step in enumerate(sequence_steps):
@@ -392,7 +448,13 @@ class AutoSellManager:
             self.dig_tool.update_status(error_msg)
 
     def _test_sell_click_with_delay(self):
-        x, y = self.sell_button_position
+        if not self.sell_button_position or len(self.sell_button_position) != 2:
+            logger.error("Cannot test sell click: no sell button position set or invalid format")
+            self.dig_tool.update_status("Test failed: no sell button position set")
+            return
+            
+        x = self.sell_button_position[0]
+        y = self.sell_button_position[1]
         logger.info(f"Testing AutoIt click at position: {x}, {y}")
 
         self._countdown_with_status(f"Test click in {{}} seconds... Position: ({x}, {y})")

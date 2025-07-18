@@ -19,7 +19,9 @@ def update_area_info(dig_tool_instance):
 def update_sell_info(dig_tool_instance):
     if not hasattr(dig_tool_instance, "sell_info_label"):
         return
-    if dig_tool_instance.automation_manager.sell_button_position:
+    if (hasattr(dig_tool_instance, "automation_manager") and 
+        dig_tool_instance.automation_manager and
+        dig_tool_instance.automation_manager.sell_button_position):
         x, y = dig_tool_instance.automation_manager.sell_button_position
         sell_text = f"Sell Button: Set at ({x}, {y})"
     else:
@@ -39,7 +41,8 @@ def update_cursor_info(dig_tool_instance):
 
 
 def test_sell_button_click(dig_tool_instance):
-    dig_tool_instance.automation_manager.test_sell_button_click()
+    if hasattr(dig_tool_instance, "automation_manager") and dig_tool_instance.automation_manager:
+        dig_tool_instance.automation_manager.test_sell_button_click()
 
 
 def show_settings_info(dig_tool_instance):
@@ -102,10 +105,15 @@ def toggle_preview_window(dig_tool_instance):
 
 
 def toggle_preview_on_top(dig_tool_instance):
-    if dig_tool_instance.preview_window:
-        dig_tool_instance.preview_window.attributes(
-            "-topmost", dig_tool_instance.param_vars["preview_on_top"].get()
-        )
+    if (hasattr(dig_tool_instance, "preview_window") and dig_tool_instance.preview_window and
+        hasattr(dig_tool_instance, "param_vars") and dig_tool_instance.param_vars and
+        "preview_on_top" in dig_tool_instance.param_vars):
+        try:
+            dig_tool_instance.preview_window.attributes(
+                "-topmost", dig_tool_instance.param_vars["preview_on_top"].get()
+            )
+        except (tk.TclError, AttributeError):
+            pass
 
 
 def create_debug_window(dig_tool_instance):
@@ -175,14 +183,25 @@ def toggle_debug_window(dig_tool_instance):
 
 
 def toggle_debug_on_top(dig_tool_instance):
-    if dig_tool_instance.debug_window:
-        dig_tool_instance.debug_window.attributes(
-            "-topmost", dig_tool_instance.param_vars["debug_on_top"].get()
-        )
+    if (hasattr(dig_tool_instance, "debug_window") and dig_tool_instance.debug_window and
+        hasattr(dig_tool_instance, "param_vars") and dig_tool_instance.param_vars and
+        "debug_on_top" in dig_tool_instance.param_vars):
+        try:
+            dig_tool_instance.debug_window.attributes(
+                "-topmost", dig_tool_instance.param_vars["debug_on_top"].get()
+            )
+        except (tk.TclError, AttributeError):
+            pass
 
 
 def toggle_main_on_top(dig_tool_instance, *args):
-    dig_tool_instance.root.attributes("-topmost", dig_tool_instance.param_vars["main_on_top"].get())
+    if (hasattr(dig_tool_instance, "root") and dig_tool_instance.root and
+        hasattr(dig_tool_instance, "param_vars") and dig_tool_instance.param_vars and
+        "main_on_top" in dig_tool_instance.param_vars):
+        try:
+            dig_tool_instance.root.attributes("-topmost", dig_tool_instance.param_vars["main_on_top"].get())
+        except (tk.TclError, AttributeError):
+            pass
 
 
 def resize_for_content(dig_tool_instance):
@@ -246,20 +265,26 @@ def setup_dropdown_resize_handling(dig_tool_instance):
 
 
 def update_main_button_text(dig_tool_instance):
-    if not dig_tool_instance.root.winfo_exists():
+    if not hasattr(dig_tool_instance, "root") or not dig_tool_instance.root.winfo_exists():
         return
     try:
-        current_state = "Stop" if dig_tool_instance.running else "Start"
-        dig_tool_instance.start_stop_btn.config(
-            text=f"{current_state} ({dig_tool_instance.keybind_vars['toggle_bot'].get().upper()})"
-        )
-        dig_tool_instance.toggle_gui_btn.config(
-            text=f"Show/Hide ({dig_tool_instance.keybind_vars['toggle_gui'].get().upper()})"
-        )
-        overlay_status = "ON" if dig_tool_instance.overlay_enabled else "OFF"
-        dig_tool_instance.overlay_btn.config(
-            text=f"Overlay: {overlay_status} ({dig_tool_instance.keybind_vars['toggle_overlay'].get().upper()})"
-        )
+        current_state = "Stop" if getattr(dig_tool_instance, "running", False) else "Start"
+        if hasattr(dig_tool_instance, "start_stop_btn") and dig_tool_instance.start_stop_btn:
+            keybind = dig_tool_instance.keybind_vars.get('toggle_bot', {}).get() if hasattr(dig_tool_instance, "keybind_vars") and dig_tool_instance.keybind_vars else ""
+            dig_tool_instance.start_stop_btn.config(
+                text=f"{current_state} ({keybind.upper()})"
+            )
+        if hasattr(dig_tool_instance, "toggle_gui_btn") and dig_tool_instance.toggle_gui_btn:
+            keybind = dig_tool_instance.keybind_vars.get('toggle_gui', {}).get() if hasattr(dig_tool_instance, "keybind_vars") and dig_tool_instance.keybind_vars else ""
+            dig_tool_instance.toggle_gui_btn.config(
+                text=f"Show/Hide ({keybind.upper()})"
+            )
+        if hasattr(dig_tool_instance, "overlay_btn") and dig_tool_instance.overlay_btn:
+            overlay_status = "ON" if getattr(dig_tool_instance, "overlay_enabled", False) else "OFF"
+            keybind = dig_tool_instance.keybind_vars.get('toggle_overlay', {}).get() if hasattr(dig_tool_instance, "keybind_vars") and dig_tool_instance.keybind_vars else ""
+            dig_tool_instance.overlay_btn.config(
+                text=f"Overlay: {overlay_status} ({keybind.upper()})"
+            )
     except (tk.TclError, AttributeError):
         pass
 
@@ -268,25 +293,29 @@ def update_main_button_text(dig_tool_instance):
 def save_debug_screenshot(dig_tool_instance):
 
     from utils.debug_logger import logger
-    from utils.screen_capture import capture_region
+    from utils.screen_capture import ScreenCapture
     import numpy as np
 
     if not dig_tool_instance.game_area:
-        logger.log("No game area set, cannot take debug screenshot")
+        logger.info("No game area set, cannot take debug screenshot")
         return
 
-    screenshot = capture_region(dig_tool_instance.game_area)
+    screen_capture = ScreenCapture()
+    screenshot = screen_capture.capture_region(dig_tool_instance.game_area)
     if screenshot is None:
-        logger.log("Failed to capture game area")
+        logger.info("Failed to capture game area")
         return
 
     screenshot_cv = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(screenshot_cv, cv2.COLOR_BGR2HSV)
 
     mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-    if dig_tool_instance.automation_manager.locked_color:
+    if (hasattr(dig_tool_instance, "automation_manager") and 
+        dig_tool_instance.automation_manager and
+        dig_tool_instance.automation_manager.locked_color):
         lower_bound, upper_bound = dig_tool_instance.automation_manager.hsv_bounds
-        mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        if lower_bound is not None and upper_bound is not None:
+            mask = cv2.inRange(hsv, lower_bound, upper_bound)
 
     overlay = screenshot_cv.copy()
     overlay[mask > 0] = [0, 255, 0]
@@ -304,7 +333,7 @@ def save_debug_screenshot(dig_tool_instance):
     timestamp = int(time.time())
     filename = f"debug_screenshot_{timestamp}.png"
     cv2.imwrite(filename, result)
-    logger.log(f"Debug screenshot saved as {filename}")
+    logger.info(f"Debug screenshot saved as {filename}")
 
 
 def update_automation_info(dig_tool_instance):
@@ -394,15 +423,22 @@ def update_gui_from_queue(instance):
 
             instance.detection_info_label.config(text=info_text)
 
-        if instance.overlay_enabled and instance.overlay:
+        if (hasattr(instance, "overlay_enabled") and instance.overlay_enabled and 
+            hasattr(instance, "overlay") and instance.overlay):
             instance.overlay.update_info(**overlay_info)
-        if instance.autowalk_overlay_enabled and instance.autowalk_overlay:
+        if (hasattr(instance, "autowalk_overlay_enabled") and instance.autowalk_overlay_enabled and 
+            hasattr(instance, "autowalk_overlay") and instance.autowalk_overlay):
             instance.autowalk_overlay.update_info(**overlay_info)
-        if instance.color_modules_overlay_enabled and instance.color_modules_overlay:
+        if (hasattr(instance, "color_modules_overlay_enabled") and instance.color_modules_overlay_enabled and 
+            hasattr(instance, "color_modules_overlay") and instance.color_modules_overlay):
             instance.color_modules_overlay.update_info(**overlay_info)
             
-    except (queue.Empty, RuntimeError, TclError):
+    except (queue.Empty, RuntimeError, TclError, AttributeError):
         pass
     finally:
-        if instance.preview_active:
-            instance.root.after(50, lambda: update_gui_from_queue(instance))
+        if (hasattr(instance, "preview_active") and instance.preview_active and 
+            hasattr(instance, "root") and instance.root):
+            try:
+                instance.root.after(50, lambda: update_gui_from_queue(instance))
+            except (TclError, AttributeError):
+                pass

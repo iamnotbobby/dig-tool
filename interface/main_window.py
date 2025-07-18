@@ -2,12 +2,12 @@ import json
 import tkinter as tk
 from tkinter import Label, Button, Frame, Checkbutton, ttk
 try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
+    from tkinterdnd2 import DND_FILES
     DND_AVAILABLE = True
 except ImportError:
     DND_AVAILABLE = False
     DND_FILES = None
-from interface.components import CollapsiblePane, AccordionManager, Tooltip, ColorModulesOverlay
+from interface.components import CollapsiblePane, AccordionManager, Tooltip
 from utils.debug_logger import logger
 from utils.pattern_utils import (
     open_custom_pattern_manager,
@@ -49,6 +49,7 @@ class DisabledTooltip:
         self.original_tooltip = original_tooltip
         self.tooltip_window = None
         self.is_disabled = False
+        self.widget_type = None
 
         self.widget.bind("<Enter>", self.show_tooltip)
         self.widget.bind("<Leave>", self.hide_tooltip)

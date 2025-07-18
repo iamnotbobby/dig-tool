@@ -7,8 +7,9 @@ import threading
 import time
 from utils.debug_logger import logger
 from utils.pattern_utils import update_walk_pattern_dropdown, open_custom_pattern_manager
-from utils.input_management import start_area_selection, start_sell_button_selection, start_cursor_position_selection
+from utils.input_management import apply_keybinds
 from utils.ui_management import update_area_info, update_sell_info, update_cursor_info
+from utils.config_management import get_param
 
 from interface.settings_feedback_window import SettingsFeedbackWindow
 from interface.export_options_dialog import ExportOptionsDialog
@@ -214,32 +215,11 @@ class SettingsManager:
                 else:
                     widget.config(state="normal", fg="#000000")
 
-    def get_param(self, key):
+    def get_local_param(self, key):
         try:
-            if key in self.dig_tool.param_vars:
-                value = self.dig_tool.param_vars[key].get()
-
-                if key in self.dig_tool.last_known_good_params:
-                    old_value = self.dig_tool.last_known_good_params[key]
-                    if old_value != value:
-                        self.dig_tool.root.after_idle(
-                            lambda: self.auto_save_setting("parameters")
-                        )
-
-                self.dig_tool.last_known_good_params[key] = value
-
-                if key in ["use_custom_cursor", "auto_walk_enabled"]:
-                    self.update_setting_states()
-
-                return value
-            else:
-                return self.default_params.get(key, 0)
-        except (tk.TclError, ValueError, AttributeError):
-            self.dig_tool.update_status(
-                f"Error: Invalid value for '{key}'. Using last known good value."
-            )
-            if key in self.dig_tool.last_known_good_params:
-                return self.dig_tool.last_known_good_params[key]
+            return get_param(self.dig_tool, key)
+        except Exception as e:
+            logger.error(f"Error getting parameter {key}: {e}")
             return self.default_params.get(key, 0)
 
     def validate_game_area(self, area):
@@ -269,6 +249,26 @@ class SettingsManager:
                 return (
                     isinstance(x, (int, float))
                     and isinstance(y, (int, float))
+                    and x >= 0
+                    and y >= 0
+                )
+        except (ValueError, TypeError):
+            pass
+        return False
+
+    def validate_window_position(self, position):
+        if not position:
+            return False
+        try:
+            if isinstance(position, (list, tuple)) and len(position) == 4:
+                x, y, width, height = position
+                return (
+                    isinstance(x, (int, float))
+                    and isinstance(y, (int, float))
+                    and isinstance(width, (int, float))
+                    and isinstance(height, (int, float))
+                    and width > 0
+                    and height > 0
                     and x >= 0
                     and y >= 0
                 )
@@ -449,10 +449,10 @@ class SettingsManager:
 
                 settings["params"] = {}
 
-                if export_options["keybinds"]:
+                if export_options and export_options.get("keybinds", False):
                     settings["keybinds"] = {}
 
-                if export_options["configuration"]:
+                if export_options and export_options.get("configuration", False):
                     settings["game_area"] = self.dig_tool.game_area
                     settings["sell_button_position"] = getattr(
                         self.dig_tool.automation_manager, "sell_button_position", None
@@ -472,26 +472,21 @@ class SettingsManager:
                 total_params = len(self.default_params)
                 for i, key in enumerate(self.default_params.keys()):
                     try:
-                        if key in self.dig_tool.param_vars:
-                            value = self.dig_tool.param_vars[key].get()
+                        value = get_param(self.dig_tool, key)
 
-                            if (
-                                key in ["user_id", "webhook_url"]
-                                and not export_options["discord"]
-                            ):
-                                settings["params"][key] = ""
-                                feedback.add_change_entry(
-                                    key, str(value), "(excluded)", "warning"
-                                )
-                            else:
-                                settings["params"][key] = value
-                                feedback.add_change_entry(
-                                    key, "", str(value), "success"
-                                )
-                        else:
-                            settings["params"][key] = self.default_params[key]
+                        if (
+                            key in ["user_id", "webhook_url"]
+                            and export_options
+                            and not export_options.get("discord", True)
+                        ):
+                            settings["params"][key] = ""
                             feedback.add_change_entry(
-                                key, "", str(self.default_params[key]), "info"
+                                key, str(value), "(excluded)", "warning"
+                            )
+                        else:
+                            settings["params"][key] = value
+                            feedback.add_change_entry(
+                                key, "", str(value), "success"
                             )
                     except Exception as e:
                         settings["params"][key] = self.default_params.get(key)
@@ -501,7 +496,7 @@ class SettingsManager:
                     feedback.update_progress(progress)
                     time.sleep(0.02)
 
-                if export_options["keybinds"]:
+                if export_options and export_options.get("keybinds", False):
                     feedback.add_section("KEYBINDS")
                     feedback.update_progress(50, "Processing keybinds...")
 
@@ -542,7 +537,7 @@ class SettingsManager:
                     feedback.add_section("KEYBINDS")
                     feedback.add_text("✗ Keybinds: excluded", "warning")
 
-                if export_options["configuration"]:
+                if export_options and export_options.get("configuration", False):
                     feedback.add_section("CONFIGURATION")
                     feedback.update_progress(70, "Processing configuration...")
 
@@ -596,13 +591,13 @@ class SettingsManager:
                 time.sleep(0.1)
 
                 included_items = []
-                if export_options["parameters"]:
+                if export_options and export_options.get("parameters", False):
                     included_items.append("Parameters")
-                if export_options["keybinds"]:
+                if export_options and export_options.get("keybinds", False):
                     included_items.append("Keybinds")
-                if export_options["discord"]:
+                if export_options and export_options.get("discord", False):
                     included_items.append("Discord Info")
-                if export_options["configuration"]:
+                if export_options and export_options.get("configuration", False):
                     included_items.append("Configuration")
 
                 filename = os.path.basename(filepath)
@@ -651,6 +646,26 @@ class SettingsManager:
                 feedback.update_progress(20, "Validating settings structure...")
                 time.sleep(0.1)
 
+                position_keys = ["game_area", "sell_button_position", "cursor_position"]
+                found_position_keys = []
+                for key in position_keys:
+                    if key in settings:
+                        found_position_keys.append(key)
+
+                if found_position_keys:
+                    from tkinter import messagebox
+                    warning_message = (
+                        f"This configuration file contains position data that may not be accurate for your setup:\n\n"
+                        f"{', '.join(found_position_keys)}\n\n"
+                        f"These positions are specific to screen resolution and game window placement. "
+                        f"You may need to reconfigure these settings after import."
+                    )
+                    
+                    messagebox.showwarning(
+                        "Position Data Warning", 
+                        warning_message
+                    )
+
                 feedback.add_section("PARAMETERS")
                 params_loaded = 0
                 params_failed = []
@@ -662,30 +677,41 @@ class SettingsManager:
                             param_var = self.dig_tool.param_vars[key]
                             old_value = param_var.get()
 
-                            if isinstance(param_var, tk.BooleanVar):
-                                if isinstance(value, str):
-                                    converted_value = value.lower() in (
-                                        "true",
-                                        "1",
-                                        "yes",
-                                        "on",
-                                    )
-                                else:
-                                    converted_value = bool(value)
-                            elif isinstance(param_var, tk.DoubleVar):
-                                converted_value = float(value)
-                            elif isinstance(param_var, tk.IntVar):
-                                converted_value = int(
-                                    float(str(value).replace("JS:", ""))
-                                )
-                            else:
-                                converted_value = str(value)
 
-                            param_var.set(converted_value)
-                            feedback.add_change_entry(
-                                key, str(old_value), str(converted_value), "success"
-                            )
-                            params_loaded += 1
+                            try:
+                                if isinstance(param_var, tk.BooleanVar):
+                                    if isinstance(value, str):
+                                        converted_value = value.lower() in (
+                                            "true",
+                                            "1",
+                                            "yes",
+                                            "on",
+                                        )
+                                    else:
+                                        converted_value = bool(value)
+                                    param_var.set(converted_value)
+                                elif isinstance(param_var, tk.DoubleVar):
+                                    converted_value = float(value)
+                                    param_var.set(converted_value)
+                                elif isinstance(param_var, tk.IntVar):
+                                    converted_value = int(
+                                        float(str(value).replace("JS:", ""))
+                                    )
+                                    param_var.set(converted_value)
+                                else:  
+                                    converted_value = str(value)
+                                    param_var.set(converted_value)
+                                
+                                feedback.add_change_entry(
+                                    key, str(old_value), str(converted_value), "success"
+                                )
+                                params_loaded += 1
+                            except (ValueError, TypeError) as conv_error:
+                                logger.error(f"Error setting parameter {key}: {conv_error}")
+                                feedback.add_change_entry(
+                                    key, str(old_value), f"ERROR: {conv_error}", "error"
+                                )
+                                params_failed.append(key)
 
                         except Exception as e:
                             feedback.add_change_entry(
@@ -852,7 +878,7 @@ class SettingsManager:
 
                 feedback.update_progress(90, "Finalizing...")
 
-                self.dig_tool.apply_keybinds()
+                apply_keybinds(self.dig_tool)
 
                 if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
                     update_walk_pattern_dropdown(self.dig_tool)
@@ -942,18 +968,63 @@ class SettingsManager:
                     except Exception:
                         feedback.add_text("✗ Walk Pattern: Reset failed", "error")
 
+                if hasattr(self.dig_tool, "game_area") and self.dig_tool.game_area:
+                    try:
+                        old_area = str(self.dig_tool.game_area)
+                        self.dig_tool.game_area = None
+                        feedback.add_change_entry(
+                            "Game Area", old_area, "None", "success"
+                        )
+                
+                        from interface.main_window import update_area_info
+                        update_area_info(self.dig_tool)
+                        if hasattr(self.dig_tool, "preview_btn"):
+                            self.dig_tool.preview_btn.config(state=tk.DISABLED)
+                        if hasattr(self.dig_tool, "debug_btn"):
+                            self.dig_tool.debug_btn.config(state=tk.DISABLED)
+                    except Exception as e:
+                        feedback.add_text(f"✗ Game Area: Reset failed - {e}", "error")
+
+            
+                if hasattr(self.dig_tool, "automation_manager") and hasattr(self.dig_tool.automation_manager, "sell_button_position") and self.dig_tool.automation_manager.sell_button_position:
+                    try:
+                        old_pos = str(self.dig_tool.automation_manager.sell_button_position)
+                        self.dig_tool.automation_manager.sell_button_position = None
+                        feedback.add_change_entry(
+                            "Sell Button Position", old_pos, "None", "success"
+                        )
+                        
+                        from interface.main_window import update_sell_info
+                        update_sell_info(self.dig_tool)
+                    except Exception as e:
+                        feedback.add_text(f"✗ Sell Button Position: Reset failed - {e}", "error")
+
+             
+                if hasattr(self.dig_tool, "cursor_position") and self.dig_tool.cursor_position:
+                    try:
+                        old_pos = str(self.dig_tool.cursor_position)
+                        self.dig_tool.cursor_position = None
+                        feedback.add_change_entry(
+                            "Cursor Position", old_pos, "None", "success"
+                        )
+                       
+                        from interface.main_window import update_cursor_info
+                        update_cursor_info(self.dig_tool)
+                    except Exception as e:
+                        feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
+
                 feedback.update_progress(90, "Finalizing...")
 
                 if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
                     update_walk_pattern_dropdown(self.dig_tool)
 
-                self.dig_tool.apply_keybinds()
+                apply_keybinds(self.dig_tool)
 
                 self.save_all_settings()
 
                 feedback.update_progress(
                     100,
-                    f"Reset Complete! {params_reset} parameters and {keybinds_reset} keybinds reset.",
+                    f"Reset Complete! {params_reset} parameters, {keybinds_reset} keybinds, and configuration data reset.",
                 )
                 feedback.operation_complete(success=True)
 
@@ -1054,12 +1125,10 @@ class SettingsManager:
                                 param_var = self.dig_tool.param_vars[key]
                                 if isinstance(param_var, tk.BooleanVar):
                                     param_var.set(bool(value))
-                                elif isinstance(param_var, (tk.IntVar, tk.DoubleVar)):
-                                    param_var.set(
-                                        float(value)
-                                        if isinstance(param_var, tk.DoubleVar)
-                                        else int(value)
-                                    )
+                                elif isinstance(param_var, tk.DoubleVar):
+                                    param_var.set(float(value))
+                                elif isinstance(param_var, tk.IntVar):
+                                    param_var.set(int(value))
                                 elif isinstance(param_var, tk.StringVar):
                                     param_var.set(str(value))
                                 logger.debug(f"Loaded parameter {key}: {value}")
@@ -1341,6 +1410,26 @@ class SettingsManager:
 
                 feedback.update_progress(20, "Validating settings structure...")
                 
+                position_keys = ["game_area", "sell_button_position", "cursor_position"]
+                found_position_keys = []
+                for key in position_keys:
+                    if key in settings:
+                        found_position_keys.append(key)
+
+                if found_position_keys:
+                    from tkinter import messagebox
+                    warning_message = (
+                        f"This configuration file contains position data that may not be accurate for your setup:\n\n"
+                        f"{', '.join(found_position_keys)}\n\n"
+                        f"These positions are specific to screen resolution and game window placement. "
+                        f"You may need to reconfigure these settings after import."
+                    )
+                    
+                    messagebox.showwarning(
+                        "Position Data Warning", 
+                        warning_message
+                    )
+
                 feedback.add_section("PARAMETERS")
                 params_updated = 0
                 params_data = settings.get("parameters", settings.get("params", {})) 
@@ -1483,8 +1572,7 @@ class SettingsManager:
                 
                 self.update_setting_states()
                 
-                if hasattr(self.dig_tool, 'apply_keybinds'):
-                    self.dig_tool.apply_keybinds()
+                apply_keybinds(self.dig_tool)
 
                 feedback.update_progress(100, "Import completed successfully!")
                 

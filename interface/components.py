@@ -212,20 +212,29 @@ class GameOverlay:
 
     def _setup_overlay_content(self):
         try:
+            if not self.overlay:
+                logger.error("Overlay not available for setup")
+                return
+                
             icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-            if icon:
+            if icon and self.overlay:
                 self.overlay.iconphoto(False, icon)
 
             self._create_overlay_widgets()
             self.position_overlay()
 
-            self.overlay.after(50, self._apply_window_style)
-            self.overlay.after(200, self._show_overlay)
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
         except Exception as e:
             logger.error(f"Error setting up overlay content: {e}")
 
     def _show_overlay(self):
         try:
+            if not self.overlay:
+                logger.error("Overlay not available to show")
+                return
+                
             self.overlay.deiconify()
             self.visible = True
             logger.debug("Overlay shown successfully")
@@ -234,6 +243,10 @@ class GameOverlay:
 
     def _apply_window_style(self):
         try:
+            if not self.overlay:
+                logger.debug("Overlay not available for window style application")
+                return
+                
             hwnd = self.overlay.winfo_id()
 
             ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -249,6 +262,10 @@ class GameOverlay:
             logger.debug(f"Could not apply window style: {e}")
 
     def _create_overlay_widgets(self):
+        if not self.overlay:
+            logger.error("Overlay not available for widget creation")
+            return
+            
         self.overlay.minsize(200, 0)
 
         self.title_frame = Frame(self.overlay, bg="black", cursor="fleur")
@@ -489,8 +506,8 @@ class GameOverlay:
                         cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB)
                     )
                     photo = ImageTk.PhotoImage(image=img)
-                    self.preview_label_overlay.configure(image=photo)
-                    self.preview_label_overlay.image = photo
+                    self.preview_label_overlay.config(image=photo)  # type: ignore
+                    setattr(self.preview_label_overlay, '_image_ref', photo)
                 except Exception as e:
                     logger.debug(f"Error updating preview thumbnail: {e}")
         except Exception as e:
@@ -535,20 +552,29 @@ class AutoWalkOverlay:
 
     def _setup_overlay_content(self):
         try:
+            if not self.overlay:
+                logger.error("Auto walk overlay not available for setup")
+                return
+                
             icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-            if icon:
+            if icon and self.overlay:
                 self.overlay.iconphoto(False, icon)
 
             self._create_overlay_widgets()
             self.position_overlay()
 
-            self.overlay.after(50, self._apply_window_style)
-            self.overlay.after(200, self._show_overlay)
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
         except Exception as e:
             logger.error(f"Error setting up auto walk overlay content: {e}")
 
     def _show_overlay(self):
         try:
+            if not self.overlay:
+                logger.error("Auto walk overlay not available to show")
+                return
+                
             self.overlay.deiconify()
             self.visible = True
             logger.debug("Auto Walk overlay shown successfully")
@@ -557,6 +583,10 @@ class AutoWalkOverlay:
 
     def _apply_window_style(self):
         try:
+            if not self.overlay:
+                logger.debug("Auto walk overlay not available for window style application")
+                return
+                
             hwnd = self.overlay.winfo_id()
 
             ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -796,6 +826,7 @@ class AutoWalkOverlay:
                 is_walking
                 and self.visible
                 and getattr(self, "_animation_running", False)
+                and self.overlay
             ):
                 self.overlay.after(200, self.animate_path_step)
             else:
@@ -858,8 +889,8 @@ class AutoWalkOverlay:
 
             scale = 12.0
 
-            raw_points = [(0, 0)]
-            x, y = 0, 0
+            raw_points: list[tuple[float, float]] = [(0.0, 0.0)]
+            x, y = 0.0, 0.0
 
             for step in current_pattern:
                 dx, dy = self.get_direction_vector(step)
@@ -1040,7 +1071,7 @@ class ColorModulesOverlay:
             self.overlay.title("Color Modules")
             self.overlay.wm_overrideredirect(True)
             self.overlay.attributes("-topmost", True)
-            self.overlay.attributes("-alpha", 0.9)
+            self.overlay.attributes("-alpha", 1.0)
             self.overlay.configure(bg="black", bd=2, relief="solid")
 
             self.overlay.after_idle(self._setup_overlay_content)
@@ -1049,20 +1080,29 @@ class ColorModulesOverlay:
 
     def _setup_overlay_content(self):
         try:
+            if not self.overlay:
+                logger.error("Color modules overlay not available for setup")
+                return
+                
             icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-            if icon:
+            if icon and self.overlay:
                 self.overlay.iconphoto(False, icon)
 
             self._create_overlay_widgets()
             self.position_overlay()
 
-            self.overlay.after(50, self._apply_window_style)
-            self.overlay.after(200, self._show_overlay)
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
         except Exception as e:
             logger.error(f"Error setting up color modules overlay content: {e}")
 
     def _show_overlay(self):
         try:
+            if not self.overlay:
+                logger.error("Color modules overlay not available to show")
+                return
+                
             self.overlay.deiconify()
             self.visible = True
             logger.debug("Color modules overlay shown successfully")
@@ -1071,6 +1111,10 @@ class ColorModulesOverlay:
 
     def _apply_window_style(self):
         try:
+            if not self.overlay:
+                logger.debug("Color modules overlay not available for window style application")
+                return
+                
             hwnd = self.overlay.winfo_id()
 
             ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -1300,7 +1344,7 @@ class ColorModulesOverlay:
         if not self.overlay:
             self.create_overlay()
         
-        if not self.visible:
+        if not self.visible and self.overlay:
             self.overlay.deiconify()
             self.visible = True
         

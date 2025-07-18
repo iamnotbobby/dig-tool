@@ -86,6 +86,7 @@ class DigTool:
         logger.enable_logging_for_startup(30)
         enable_console_logging() 
         
+        # Test stdout and stderr
         print("Did you know Dig Tool is voice activated?") 
         sys.stderr.write("Herobrine is in your system...\n")
 
@@ -96,7 +97,7 @@ class DigTool:
         self.root.title("Dig Tool")
 
         self.root.wm_iconbitmap(
-            os.path.join(sys._MEIPASS, "assets/icon.ico")
+            os.path.join(getattr(sys, "_MEIPASS", ""), "assets/icon.ico")
             if hasattr(sys, "_MEIPASS")
             else "assets/icon.ico"
         )
@@ -165,6 +166,9 @@ class DigTool:
         self.main_loop_thread = None
         self.hotkey_thread = None
         self.results_queue = queue.Queue(maxsize=1)
+        
+        self.status_text = None
+        self.status_label = None
         
         self.debug_dir = setup_debug_directory()
         ensure_debug_directory(self.debug_dir)
@@ -308,7 +312,7 @@ class DigTool:
         update_time_cache(self)
 
     def run_main_loop(self):
-        screenshot_fps = get_param(self, "screenshot_fps") or 240
+        screenshot_fps = get_param(self, "screenshot_fps")
         process_every_nth_frame = 1
 
         screenshot_delay = 1.0 / screenshot_fps
@@ -390,12 +394,12 @@ class DigTool:
             cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY, dst=cached_line_area)
             line_sensitivity = get_param(self, "line_sensitivity")
             line_min_height = 1.0
-            line_offset = get_param(self, "line_detection_offset") or 5.0
+            line_offset = get_param(self, "line_detection_offset")
             if isinstance(line_offset, str):
                 line_offset = float(line_offset)
 
             line_pos = find_line_position(
-                cached_line_area, line_sensitivity, line_min_height, line_offset
+                cached_line_area, line_sensitivity, line_min_height, int(line_offset)
             )
 
             velocity_line_pos = line_pos
@@ -404,7 +408,7 @@ class DigTool:
                 bottom_start = height - bottom_height
                 bottom_area = cached_line_area[bottom_start:, :]
                 velocity_line_pos = find_line_position(
-                    bottom_area, line_sensitivity, line_min_height, line_offset
+                    bottom_area, line_sensitivity, line_min_height, int(line_offset)
                 )
                 if velocity_line_pos != -1:
                     velocity_line_pos += 0
@@ -464,13 +468,7 @@ class DigTool:
                                 target_hsv = rgb_to_hsv_single(rgb_color)
                                 
                                 color_tolerance_param = get_param(self, "color_tolerance")
-                                try:
-                                    if isinstance(color_tolerance_param, str):
-                                        color_tolerance = int(float(color_tolerance_param.strip())) if color_tolerance_param.strip() else 30
-                                    else:
-                                        color_tolerance = int(color_tolerance_param) if color_tolerance_param is not None else 30
-                                except (ValueError, TypeError):
-                                    color_tolerance = 30
+                                color_tolerance = color_tolerance_param if isinstance(color_tolerance_param, int) else 30
 
                                 final_mask = detect_by_color_picker(
                                     hsv, target_hsv, color_tolerance, False
@@ -515,10 +513,8 @@ class DigTool:
                             }
                     elif use_otsu:
                         if get_param(self, "otsu_adaptive_area"):
-                            area_percentile = float(
-                                get_param(self, "otsu_area_percentile")
-                            )
-                            morph_kernel = int(get_param(self, "otsu_morph_kernel_size"))
+                            area_percentile = get_param(self, "otsu_area_percentile")
+                            morph_kernel = get_param(self, "otsu_morph_kernel_size")
                             final_mask, threshold_value = detect_by_otsu_adaptive_area(
                                 hsv,
                                 area_percentile=area_percentile,
@@ -531,7 +527,7 @@ class DigTool:
                                 "morph_kernel": morph_kernel,
                             }
                         else:
-                            min_area = int(get_param(self, "otsu_min_area"))
+                            min_area = get_param(self, "otsu_min_area")
                             max_area_param = get_param(self, "otsu_max_area")
                             if (
                                 max_area_param == ""
@@ -545,7 +541,7 @@ class DigTool:
                                     max_area = int(max_area_param)
                                 except (ValueError, TypeError):
                                     max_area = None
-                            morph_kernel = int(get_param(self, "otsu_morph_kernel_size"))
+                            morph_kernel = get_param(self, "otsu_morph_kernel_size")
                             final_mask, threshold_value = (
                                 detect_by_otsu_with_area_filter(
                                     hsv,
@@ -577,7 +573,7 @@ class DigTool:
                             "threshold": saturation_threshold,
                         }
 
-                    line_exclusion_radius = get_param(self, "line_exclusion_radius") or 0
+                    line_exclusion_radius = get_param(self, "line_exclusion_radius")
                     if line_exclusion_radius > 0 and line_pos != -1:
                         cv2.rectangle(
                             final_mask,
@@ -614,15 +610,16 @@ class DigTool:
                 else:
                     if (
                         self._last_hsv_color is None
-                        or not np.array_equal(
+                        or (self.locked_color_hsv is not None and not np.array_equal(
                             self.locked_color_hsv, self._last_hsv_color
-                        )
+                        ))
                         or self._last_is_low_sat != self.is_low_sat_lock
                     ):
                         self._hsv_lower_bound_cache, self._hsv_upper_bound_cache = (
                             get_hsv_bounds(self.locked_color_hsv, self.is_low_sat_lock)
                         )
-                        self._last_hsv_color = self.locked_color_hsv.copy()
+                        if self.locked_color_hsv is not None:
+                            self._last_hsv_color = self.locked_color_hsv.copy()
                         self._last_is_low_sat = self.is_low_sat_lock
                     lower_bound, upper_bound = (
                         self._hsv_lower_bound_cache,
@@ -630,9 +627,13 @@ class DigTool:
                     )
                     if final_mask is None or final_mask.shape != (height_80, width):
                         final_mask = np.empty((height_80, width), dtype=np.uint8)
-                    cv2.inRange(hsv, lower_bound, upper_bound, dst=final_mask)
+                    
+                    if lower_bound is not None and upper_bound is not None:
+                        cv2.inRange(hsv, lower_bound, upper_bound, dst=final_mask)
+                    else:
+                        final_mask.fill(0)
 
-                    line_exclusion_radius = get_param(self, "line_exclusion_radius") or 0
+                    line_exclusion_radius = get_param(self, "line_exclusion_radius")
                     if line_exclusion_radius > 0 and line_pos != -1:
                         cv2.rectangle(
                             final_mask,
@@ -674,21 +675,25 @@ class DigTool:
                         raw_zone_x, raw_zone_w = x_temp, w_temp
                         if not self.is_color_locked:
                             mask = np.zeros(hsv.shape[:2], dtype="uint8")
-                            cv2.drawContours(mask, [main_contour], -1, 255, -1)
+                            cv2.drawContours(mask, [main_contour], -1, (255,), -1)
                             mean_hsv = cv2.mean(hsv, mask=mask)
                             self.locked_color_hsv = np.array(
                                 mean_hsv[:3], dtype=np.float32
                             )
                             self.is_color_locked = True
-                            bgr_color = cv2.cvtColor(
-                                np.uint8([[self.locked_color_hsv]]), cv2.COLOR_HSV2BGR
-                            )[0][0]
-                            self.locked_color_hex = f"#{bgr_color[2]:02x}{bgr_color[1]:02x}{bgr_color[0]:02x}"
+                            if self.locked_color_hsv is not None:
+                                hsv_array = np.array([[[
+                                    int(self.locked_color_hsv[0]),
+                                    int(self.locked_color_hsv[1]), 
+                                    int(self.locked_color_hsv[2])
+                                ]]], dtype=np.uint8)
+                                bgr_color = cv2.cvtColor(hsv_array, cv2.COLOR_HSV2BGR)[0][0]
+                                self.locked_color_hex = f"#{bgr_color[2]:02x}{bgr_color[1]:02x}{bgr_color[0]:02x}"
                             self.is_low_sat_lock = self.locked_color_hsv[1] < 25
             else:
                 raw_zone_x, raw_zone_w = None, None
 
-            if raw_zone_x is not None:
+            if raw_zone_x is not None and raw_zone_w is not None:
                 self.automation_manager.update_target_lock_activity()
                 self.frames_since_last_zone_detection = 0
 
@@ -698,7 +703,7 @@ class DigTool:
                     self.smoothed_zone_x, self.smoothed_zone_w = raw_zone_x, raw_zone_w
                 else:
                     position_change = abs(raw_zone_x - self.smoothed_zone_x)
-                    width_change = abs(raw_zone_w - self.smoothed_zone_w)
+                    width_change = abs(raw_zone_w - (self.smoothed_zone_w or 0))
 
                     if zone_smoothing_factor >= 1.0:
                         adaptive_smoothing = 1.0 
@@ -716,11 +721,11 @@ class DigTool:
 
                     self.smoothed_zone_x = (
                         adaptive_smoothing * raw_zone_x
-                        + (1 - adaptive_smoothing) * self.smoothed_zone_x
+                        + (1 - adaptive_smoothing) * (self.smoothed_zone_x or 0)
                     )
                     self.smoothed_zone_w = (
                         adaptive_smoothing * raw_zone_w
-                        + (1 - adaptive_smoothing) * self.smoothed_zone_w
+                        + (1 - adaptive_smoothing) * (self.smoothed_zone_w or 0)
                     )
             else:
                 self.frames_since_last_zone_detection += 1
@@ -750,23 +755,25 @@ class DigTool:
 
             sweet_spot_center, sweet_spot_start, sweet_spot_end = None, None, None
             if self.smoothed_zone_x is not None:
-                sweet_spot_center = self.smoothed_zone_x + self.smoothed_zone_w / 2
+                sweet_spot_center = (self.smoothed_zone_x or 0) + (self.smoothed_zone_w or 0) / 2
 
-                base_sweet_spot_width_percent = (
-                    get_param(self, "sweet_spot_width_percent") / 100.0
-                )
+                base_sweet_spot_width_percent = get_param(self, "sweet_spot_width_percent") / 100.0
+                enabled = get_param(self, "velocity_based_width_enabled")
+                velocity_multiplier = get_param(self, "velocity_width_multiplier")
+                max_velocity_factor = get_param(self, "velocity_max_factor")
+                
                 dynamic_sweet_spot_width_percent = (
                     calculate_velocity_based_sweet_spot_width(
                         base_sweet_spot_width_percent * 100.0,
                         velocity,
-                        enabled=get_param(self, "velocity_based_width_enabled"),
-                        velocity_multiplier=get_param(self, "velocity_width_multiplier"),
-                        max_velocity_factor=get_param(self, "velocity_max_factor"),
+                        enabled=enabled,
+                        velocity_multiplier=velocity_multiplier,
+                        max_velocity_factor=max_velocity_factor,
                     )
                     / 100.0
                 )
                 sweet_spot_width = (
-                    self.smoothed_zone_w * dynamic_sweet_spot_width_percent
+                    (self.smoothed_zone_w or 0) * dynamic_sweet_spot_width_percent
                 )
                 sweet_spot_start = sweet_spot_center - sweet_spot_width / 2
                 sweet_spot_end = sweet_spot_center + sweet_spot_width / 2
@@ -886,7 +893,11 @@ class DigTool:
                                 isinstance(direction, dict)
                                 and direction.get("duration") is not None
                             ):
-                                walk_duration = direction.get("duration")
+                                duration_value = direction.get("duration")
+                                try:
+                                    walk_duration = int(duration_value) if duration_value is not None else 1000
+                                except (ValueError, TypeError):
+                                    walk_duration = 1000
                             else:
                                 walk_duration = get_param(self, "walk_duration")
 
@@ -975,7 +986,11 @@ class DigTool:
                     0.0,
                 )
 
-                line_in_sweet_spot = sweet_spot_start <= line_pos <= sweet_spot_end
+                line_in_sweet_spot = (
+                    sweet_spot_start is not None and 
+                    sweet_spot_end is not None and 
+                    sweet_spot_start <= line_pos <= sweet_spot_end
+                )
 
                 if get_param(self, "prediction_enabled") and line_pos != -1:
                     prediction_confidence_threshold = get_param(self, 
@@ -996,7 +1011,9 @@ class DigTool:
 
                         if prediction_time > 0:
                             distance_to_center = abs(predicted_pos - sweet_spot_center)
-                            sweet_spot_radius = (sweet_spot_end - sweet_spot_start) / 2
+                            sweet_spot_radius = (
+                                (sweet_spot_end or 0) - (sweet_spot_start or 0)
+                            ) / 2
 
                             if distance_to_center <= sweet_spot_radius:
                                 base_confidence = max(
@@ -1040,27 +1057,40 @@ class DigTool:
 
                 if should_click:
                     self.automation_manager.update_click_activity()
-                    save_debug_screenshot_wrapper(
-                        self,
-                        screenshot,
-                        line_pos,
-                        sweet_spot_start,
-                        sweet_spot_end,
-                        zone_y2,
-                        velocity,
-                        acceleration,
-                        prediction_used,
-                        confidence,
-                    )
+                    
                     self.blind_until = current_time_ms + post_click_blindness
 
                     if click_delay == 0:
+                        save_debug_screenshot_wrapper(
+                            self,
+                            screenshot,
+                            line_pos,
+                            sweet_spot_start,
+                            sweet_spot_end,
+                            zone_y2,
+                            velocity,
+                            acceleration,
+                            prediction_used,
+                            confidence,
+                        )
                         perform_instant_click(self)
                     else:
                         self.click_lock.acquire()
-                        threading.Thread(
-                            target=perform_click, args=(self, click_delay,)
-                        ).start()
+                        def delayed_click_with_debug():
+                            save_debug_screenshot_wrapper(
+                                self,
+                                screenshot,
+                                line_pos,
+                                sweet_spot_start,
+                                sweet_spot_end,
+                                zone_y2,
+                                velocity,
+                                acceleration,
+                                prediction_used,
+                                confidence,
+                            )
+                            perform_click(self, click_delay)
+                        threading.Thread(target=delayed_click_with_debug).start()
 
             if (
                 get_param(self, "auto_walk_enabled")
@@ -1136,18 +1166,22 @@ class DigTool:
 
             if self.results_queue.empty():
                 preview_img = screenshot.copy()
-                if sweet_spot_center is not None:
+                if (sweet_spot_center is not None and 
+                    self.smoothed_zone_x is not None and 
+                    self.smoothed_zone_w is not None and
+                    sweet_spot_start is not None and 
+                    sweet_spot_end is not None):
                     cv2.rectangle(
                         preview_img,
                         (int(self.smoothed_zone_x), 0),
-                        (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2),
+                        (int(self.smoothed_zone_x + self.smoothed_zone_w), zone_y2 or height),
                         (0, 255, 0),
                         2,
                     )
                     cv2.rectangle(
                         preview_img,
                         (int(sweet_spot_start), 0),
-                        (int(sweet_spot_end), zone_y2),
+                        (int(sweet_spot_end), zone_y2 or height),
                         (0, 255, 255),
                         2,
                     )

@@ -2,7 +2,6 @@ import threading
 import time
 import ctypes
 import tkinter as tk
-from tkinter import Label
 import keyboard
 from interface.components import GameOverlay, AutoWalkOverlay
 from utils.debug_logger import logger, save_debug_screenshot, log_click_debug, ensure_debug_directory
@@ -91,10 +90,6 @@ def save_debug_screenshot_wrapper(
         sweet_spot_start,
         sweet_spot_end,
         zone_y2_cached,
-        velocity,
-        acceleration,
-        prediction_used,
-        confidence,
         dig_tool_instance.click_count,
         dig_tool_instance.debug_dir,
         dig_tool_instance.smoothed_zone_x,

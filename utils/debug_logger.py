@@ -133,13 +133,14 @@ def log_click_debug(
     debug_log_path,
 ):
     try:
+        timestamp = int(time.time() * 1000)
         log_entry = (
-            f"Click {click_count}: Line={line_pos}, Vel={velocity:.1f}, Acc={acceleration:.1f}, "
-            f"Sweet={sweet_spot_start}-{sweet_spot_end}, Pred={'Y' if prediction_used else 'N'}, "
+            f"{timestamp} - Click {click_count}: Line={line_pos}, Vel={velocity:.1f}, Acc={acceleration:.1f}, "
+            f"Sweet={sweet_spot_start:.1f}-{sweet_spot_end:.1f}, Pred={'Y' if prediction_used else 'N'}, "
             f"Conf={confidence:.2f}, File={filename}"
         )
         with open(debug_log_path, "a") as f:
-            f.write(f"{datetime.now().strftime('%H:%M:%S')} - {log_entry}\n")
+            f.write(f"{log_entry}\n")
     except Exception:
         pass
 
@@ -339,12 +340,15 @@ class DebugLogger:
             import sys
             import os
 
-            self.console_window.wm_iconbitmap(
-                os.path.join(sys._MEIPASS, "assets/icon.ico")
-                if hasattr(sys, "_MEIPASS")
-                else "assets/icon.ico"
-            )
-        except:
+            meipass = getattr(sys, "_MEIPASS", None)
+            if meipass:
+                icon_path = os.path.join(meipass, "assets/icon.ico")
+            else:
+                icon_path = "assets/icon.ico"
+            
+            if os.path.exists(icon_path):
+                self.console_window.wm_iconbitmap(icon_path)
+        except Exception:
             pass
         toolbar = ttk.Frame(self.console_window)
         toolbar.pack(fill=tk.X, padx=5, pady=5)
@@ -578,7 +582,8 @@ class DebugLogger:
 
     def _on_console_close(self):
         self._flush_file_buffer()
-        self.console_window.destroy()
+        if self.console_window and self.console_window.winfo_exists():
+            self.console_window.destroy()
         self.console_window = None
         self.console_text = None
 
@@ -631,10 +636,11 @@ class DebugLogger:
             self._history_load_index = end_idx
 
             if end_idx < len(self._history_to_load):
-                self.console_window.after(10, self._load_history_batch)
+                if self.console_window and self.console_window.winfo_exists():
+                    self.console_window.after(10, self._load_history_batch)
             else:
                 self.auto_scroll = original_auto_scroll
-                if self.auto_scroll:
+                if self.auto_scroll and self.console_text:
                     self.console_text.see(tk.END)
                 if hasattr(self, "_history_to_load"):
                     del self._history_to_load
@@ -662,25 +668,6 @@ class DebugLogger:
         self.console_text.tag_config(
             f"level_{entry['level'].name}", foreground=level_info["color"]
         )
-
-    def _populate_console_with_history(self):
-        if not self.console_text or not self.log_history:
-            return
-
-        try:
-            recent_logs = (
-                self.log_history[-self.max_lines :]
-                if len(self.log_history) > self.max_lines
-                else self.log_history
-            )
-
-            for entry in recent_logs:
-                self._add_log_entry(entry)
-
-            if self.auto_scroll:
-                self.console_text.see(tk.END)
-        except Exception as e:
-            pass
 
     def _add_log_entry(self, entry):
         if not self.console_text:
@@ -747,7 +734,7 @@ def init_click_debug_log(debug_log_path=None, ensure_debug_dir_func=None):
             f.write("==================\n")
             f.write(f"Session started at timestamp: {int(time.time())}\n")
             f.write(
-                "Format: Click# | Timestamp | Line_Pos | Velocity | Acceleration | Sweet_Spot_Range | Click_Type | Confidence | Screenshot_File\n"
+                "Format: Timestamp - Click#: Line=pos, Vel=velocity, Acc=acceleration, Sweet=start-end, Pred=Y/N, Conf=confidence, File=screenshot\n"
             )
             f.write("-" * 120 + "\n")
         

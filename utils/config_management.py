@@ -13,27 +13,41 @@ def get_param(dig_tool_instance, key):
         from utils.system_utils import get_cached_system_latency
         return get_cached_system_latency(dig_tool_instance)
     
+    default_value = dig_tool_instance.settings_manager.get_default_value(key)
+    
     if key in dig_tool_instance.param_vars:
         try:
             value = dig_tool_instance.param_vars[key].get()
             if isinstance(value, str) and value.strip() == "":
-                default_value = dig_tool_instance.settings_manager.get_default_value(key)
-                if default_value is not None:
-                    try:
-                        dig_tool_instance.param_vars[key].set(default_value)
-                    except:
-                        pass  # Ignore tkinter threading issues
                 return default_value
+            
+            if default_value is not None:
+                if isinstance(default_value, bool):
+                    return bool(value)
+                elif isinstance(default_value, int):
+                    try:
+                        return int(float(value)) if isinstance(value, str) else int(value)
+                    except (ValueError, TypeError):
+                        return default_value
+                elif isinstance(default_value, float):
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return default_value
+                else:
+                    return value
+            
             return value
         except:
-            default_value = dig_tool_instance.settings_manager.get_default_value(key)
             if default_value is not None:
                 try:
                     dig_tool_instance.param_vars[key].set(default_value)
                 except:
                     pass  # Ignore tkinter threading issues
                 return default_value
-    return getattr(dig_tool_instance, key, None)
+    
+    attr_value = getattr(dig_tool_instance, key, None)
+    return attr_value if attr_value is not None else default_value
 
 
 def set_param(dig_tool_instance, key, value):
@@ -46,7 +60,7 @@ def set_param(dig_tool_instance, key, value):
                         dig_tool_instance.param_vars[key].set(default_value)
                         setattr(dig_tool_instance, key, default_value)
                     except:
-                        setattr(dig_tool_instance, key, default_value)  # Fallback
+                        setattr(dig_tool_instance, key, default_value)  
                     return
 
             if hasattr(dig_tool_instance.settings_manager, "validate_param_value"):
@@ -57,7 +71,7 @@ def set_param(dig_tool_instance, key, value):
                             dig_tool_instance.param_vars[key].set(default_value)
                             setattr(dig_tool_instance, key, default_value)
                         except:
-                            setattr(dig_tool_instance, key, default_value)  # Fallback
+                            setattr(dig_tool_instance, key, default_value)  
                         return
 
             try:
@@ -71,7 +85,7 @@ def set_param(dig_tool_instance, key, value):
                     dig_tool_instance.param_vars[key].set(default_value)
                     setattr(dig_tool_instance, key, default_value)
                 except:
-                    setattr(dig_tool_instance, key, default_value)  # Fallback
+                    setattr(dig_tool_instance, key, default_value) 
                 return
 
     setattr(dig_tool_instance, key, value)
@@ -86,7 +100,7 @@ def validate_keybind(key_name, key_value):
         return False, "Keybind cannot contain spaces or whitespace"
 
     try:
-        keyboard.normalize_name(key_value)
+        keyboard.parse_hotkey(key_value)
         return True, "Valid keybind"
     except Exception as e:
         return False, f"Invalid key name: {e}"

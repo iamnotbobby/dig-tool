@@ -433,7 +433,7 @@ class PatternDisplay:
             duration_text = duration_entry.get().strip()
             
             if not new_key or not validate_step_input(new_key):
-                tk.messagebox.showerror("Invalid Input", "Please enter a valid key (W, A, S, D, or combinations like W+A)")
+                messagebox.showerror("Invalid Input", "Please enter a valid key (W, A, S, D, or combinations like W+A)")
                 return
             
             new_duration = None
@@ -441,10 +441,10 @@ class PatternDisplay:
                 try:
                     new_duration = int(duration_text)
                     if new_duration <= 0:
-                        tk.messagebox.showerror("Invalid Duration", "Duration must be a positive number")
+                        messagebox.showerror("Invalid Duration", "Duration must be a positive number")
                         return
                 except ValueError:
-                    tk.messagebox.showerror("Invalid Duration", "Duration must be a number")
+                    messagebox.showerror("Invalid Duration", "Duration must be a number")
                     return
             
             new_step = {'key': new_key, 'duration': new_duration, 'click': click_enabled_var.get()}
@@ -457,17 +457,17 @@ class PatternDisplay:
                     safe_schedule_ui_update(self.main_window.window, lambda: self.main_window._ensure_pattern_selected(self.main_window._current_pattern_name), 10)
                     dialog.destroy()
                 else:
-                    tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
+                    messagebox.showerror("Error", f"Failed to save pattern: {message}")
             else:
                 self._update_step_with_selection_restore(index, new_step)
                 dialog.destroy()
         
         def delete_step():
             if is_preview and len(self.main_window._current_pattern) <= 1:
-                tk.messagebox.showwarning("Cannot Delete", "Cannot delete the last step. Pattern must have at least one step.")
+                messagebox.showwarning("Cannot Delete", "Cannot delete the last step. Pattern must have at least one step.")
                 return
             
-            if tk.messagebox.askyesno("Confirm Delete", f"Delete step #{index+1}?"):
+            if messagebox.askyesno("Confirm Delete", f"Delete step #{index+1}?"):
                 if is_preview:
                     self.main_window._current_pattern.pop(index)
                     success, message = self.main_window.automation_manager.save_pattern(self.main_window._current_pattern_name, self.main_window._current_pattern)
@@ -476,7 +476,7 @@ class PatternDisplay:
                         safe_schedule_ui_update(self.main_window.window, lambda: self.main_window._ensure_pattern_selected(self.main_window._current_pattern_name), 10)
                         dialog.destroy()
                     else:
-                        tk.messagebox.showerror("Error", f"Failed to save pattern: {message}")
+                        messagebox.showerror("Error", f"Failed to save pattern: {message}")
                 else:
                     self._delete_step_with_selection_restore(index)
                     dialog.destroy()
