@@ -211,7 +211,11 @@ class AutoSellManager:
                     self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
 
             self.is_selling = False
-            self._monitor_post_sell_engagement()
+            
+            if get_param(self.dig_tool, "auto_walk_enabled"):
+                self._monitor_post_sell_engagement()
+            else:
+                logger.debug("Skipping post-sell engagement monitoring (auto-walk disabled)")
             return
 
         except Exception as e:
@@ -287,7 +291,11 @@ class AutoSellManager:
                 self._process_sell_completion("UI Nav")
 
             self.is_selling = False
-            self._monitor_post_sell_engagement()
+            
+            if get_param(self.dig_tool, "auto_walk_enabled"):
+                self._monitor_post_sell_engagement()
+            else:
+                logger.debug("Skipping post-sell engagement monitoring (auto-walk disabled)")
             return True
 
         except Exception as e:
@@ -301,6 +309,11 @@ class AutoSellManager:
     def _monitor_post_sell_engagement(self):
         try:
             target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout") or 5.0
+            
+            if target_engagement_timeout <= 0:
+                logger.debug("Post-sell engagement monitoring disabled (timeout <= 0)")
+                return
+                
             target_check_interval = 0.1
             engagement_start_time = time.time()
             
@@ -339,6 +352,10 @@ class AutoSellManager:
             logger.info("Auto-sell fallback: Re-closing inventory to ensure proper state")
             self._send_key_safe("g")
             time.sleep(0.8)
+            
+            if hasattr(self.dig_tool, 'automation_manager') and get_param(self.dig_tool, "auto_walk_enabled"):
+                logger.info("Auto-sell fallback: Advancing walk pattern")
+                self.dig_tool.automation_manager.advance_walk_pattern()
         except Exception as e:
             logger.error(f"Error in auto-sell fallback: {e}")
 

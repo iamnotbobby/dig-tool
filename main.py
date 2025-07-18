@@ -120,6 +120,9 @@ class DigTool:
 
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
+        
+        from utils.ocr_integration import MoneyOCR
+        self.money_ocr = MoneyOCR()
 
         self.settings_manager.load_all_settings()
 
@@ -823,6 +826,10 @@ class DigTool:
                         logger.warning(
                             "Auto-sell wait timeout reached, continuing operation"
                         )
+                    
+                    logger.info("Auto-sell completed, advancing walk pattern")
+                    self.automation_manager.advance_walk_pattern()
+                    auto_walk_state = "move"
                 else:
                     logger.warning(
                         "Auto-sell skipped: not ready (sell button, running state, or already selling)"
@@ -945,6 +952,7 @@ class DigTool:
                             logger.warning(
                                 f"Target engagement failed after {max_click_retries} retries - advancing pattern"
                             )
+                            self.automation_manager.advance_walk_pattern()
                             click_retry_count = 0
                             auto_walk_state = "move"
 

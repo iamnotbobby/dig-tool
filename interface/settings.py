@@ -74,6 +74,7 @@ class SettingsManager:
             "user_id": "",
             "webhook_url": "",
             "milestone_interval": 100,
+            "money_area": None,
             "use_custom_cursor": False,
             "shovel_equip_mode": "double",
             "include_screenshot_in_discord": False
@@ -124,6 +125,7 @@ class SettingsManager:
             "initial_walkspeed_decrease": "Additional walkspeed decrease factor (0.0-1.0) added on top of the formula. Higher = slower movement.",
             "user_id": "Discord user ID for notifications (optional - leave blank for no ping).",
             "webhook_url": "Discord webhook URL for sending notifications.",
+            "money_area": "Selected screen area for money detection in Discord notifications.",
             "auto_shovel_enabled": "Automatically re-equip shovel when no activity detected for specified time.",
             "shovel_slot": "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
             "shovel_timeout": "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
@@ -475,7 +477,7 @@ class SettingsManager:
                         value = get_param(self.dig_tool, key)
 
                         if (
-                            key in ["user_id", "webhook_url"]
+                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "include_screenshot_in_discord"]
                             and export_options
                             and not export_options.get("discord", True)
                         ):
@@ -1013,6 +1015,17 @@ class SettingsManager:
                     except Exception as e:
                         feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
 
+                # Reset money area from MoneyOCR instance
+                if hasattr(self.dig_tool, "money_ocr") and self.dig_tool.money_ocr.money_area:
+                    try:
+                        old_money_area = str(self.dig_tool.money_ocr.money_area)
+                        self.dig_tool.money_ocr.money_area = None
+                        feedback.add_change_entry(
+                            "Money Area", old_money_area, "None", "success"
+                        )
+                    except Exception as e:
+                        feedback.add_text(f"✗ Money Area: Reset failed - {e}", "error")
+
                 feedback.update_progress(90, "Finalizing...")
 
                 if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
@@ -1269,6 +1282,20 @@ class SettingsManager:
         try:
             if hasattr(self.dig_tool, "main_window") and self.dig_tool.main_window:
                 self.dig_tool.main_window.update_dependent_widgets_state()
+                
+            if hasattr(self.dig_tool, "money_ocr") and 'money_area' in self.dig_tool.param_vars:
+                try:
+                    money_area_str = self.dig_tool.param_vars['money_area'].get()
+                    if money_area_str and money_area_str != "None":
+                        import ast
+                        money_area = ast.literal_eval(money_area_str)
+                        if isinstance(money_area, (tuple, list)) and len(money_area) == 4:
+                            self.dig_tool.money_ocr.money_area = tuple(money_area)
+                            if not self.dig_tool.money_ocr.initialized:
+                                self.dig_tool.money_ocr.initialize_ocr()
+                            logger.info(f"Loaded money area from settings: {money_area}")
+                except Exception as e:
+                    logger.warning(f"Failed to load money area from settings: {e}")
 
             logger.info("Parameters applied successfully")
         except Exception as e:

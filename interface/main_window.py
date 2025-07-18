@@ -40,6 +40,7 @@ from utils.input_management import (
 from utils.ui_management import update_area_info, update_sell_info, update_cursor_info
 import os
 from core.notifications import test_discord_ping
+from utils.money_area_selection import select_money_area, test_money_ocr
 
 
 class DisabledTooltip:
@@ -1072,6 +1073,8 @@ class MainWindow:
         create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
                               'include_screenshot_in_discord')
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
+        create_section_button(panes['discord'].sub_frame, "Select Money Area", lambda: select_money_area(self.dig_tool))
+        create_section_button(panes['discord'].sub_frame, "Test Money OCR", lambda: test_money_ocr(self.dig_tool))
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
         self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))

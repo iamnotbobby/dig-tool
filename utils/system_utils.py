@@ -26,6 +26,9 @@ def check_dependencies():
         "requests": "requests",
         "autoit": "pyautoit",
         "mss": "mss",
+        "winrt.windows.media.ocr": "winrt-Windows.Media.Ocr",
+        "winrt.windows.graphics.imaging": "winrt-Windows.Graphics.Imaging",
+        "winrt.windows.storage.streams": "winrt-Windows.Storage.Streams",
     }
     missing_packages = []
     for module, package in required_packages.items():
