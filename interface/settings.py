@@ -481,7 +481,7 @@ class SettingsManager:
                         value = get_param(self.dig_tool, key)
 
                         if (
-                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "include_screenshot_in_discord"]
+                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord"]
                             and export_options
                             and not export_options.get("discord", True)
                         ):
@@ -1019,7 +1019,6 @@ class SettingsManager:
                     except Exception as e:
                         feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
 
-                # Reset money area from MoneyOCR instance
                 if hasattr(self.dig_tool, "money_ocr") and self.dig_tool.money_ocr.money_area:
                     try:
                         old_money_area = str(self.dig_tool.money_ocr.money_area)
@@ -1029,6 +1028,16 @@ class SettingsManager:
                         )
                     except Exception as e:
                         feedback.add_text(f"✗ Money Area: Reset failed - {e}", "error")
+                        
+                if hasattr(self.dig_tool, "item_ocr") and self.dig_tool.item_ocr.item_area:
+                    try:
+                        old_item_area = str(self.dig_tool.item_ocr.item_area)
+                        self.dig_tool.item_ocr.item_area = None
+                        feedback.add_change_entry(
+                            "Item Area", old_item_area, "None", "success"
+                        )
+                    except Exception as e:
+                        feedback.add_text(f"✗ Item Area: Reset failed - {e}", "error")
 
                 feedback.update_progress(90, "Finalizing...")
 
@@ -1300,6 +1309,20 @@ class SettingsManager:
                             logger.info(f"Loaded money area from settings: {money_area}")
                 except Exception as e:
                     logger.warning(f"Failed to load money area from settings: {e}")
+
+            if hasattr(self.dig_tool, "item_ocr") and 'item_area' in self.dig_tool.param_vars:
+                try:
+                    item_area_str = self.dig_tool.param_vars['item_area'].get()
+                    if item_area_str and item_area_str != "None":
+                        import ast
+                        item_area = ast.literal_eval(item_area_str)
+                        if isinstance(item_area, (tuple, list)) and len(item_area) == 4:
+                            self.dig_tool.item_ocr.item_area = tuple(item_area)
+                            if not self.dig_tool.item_ocr.initialized:
+                                self.dig_tool.item_ocr.initialize_ocr()
+                            logger.info(f"Loaded item area from settings: {item_area}")
+                except Exception as e:
+                    logger.warning(f"Failed to load item area from settings: {e}")
 
             logger.info("Parameters applied successfully")
         except Exception as e:

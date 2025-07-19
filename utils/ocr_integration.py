@@ -540,13 +540,13 @@ class ItemAreaSelector:
         root.attributes('-fullscreen', True)
         root.attributes('-alpha', 0.3)
         root.attributes('-topmost', True)
-        root.configure(bg='#FF69B4', cursor='crosshair')
+        root.configure(bg='#1a1a1a', cursor='crosshair')
         
         selection_rect = tk.Frame(
             root,
             highlightthickness=2,
-            highlightbackground="#FFD700",
-            highlightcolor="#FFD700",
+            highlightbackground="#4da6ff",
+            highlightcolor="#4da6ff",
             bd=0,
             relief="solid"
         )
