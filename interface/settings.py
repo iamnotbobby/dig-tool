@@ -75,9 +75,11 @@ class SettingsManager:
             "webhook_url": "",
             "milestone_interval": 100,
             "money_area": None,
+            "item_area": None,
             "use_custom_cursor": False,
             "shovel_equip_mode": "double",
-            "include_screenshot_in_discord": False
+            "include_screenshot_in_discord": False,
+            "enable_item_detection": False
         }
 
         self.param_descriptions = {
@@ -126,6 +128,8 @@ class SettingsManager:
             "user_id": "Discord user ID for notifications (optional - leave blank for no ping).",
             "webhook_url": "Discord webhook URL for sending notifications.",
             "money_area": "Selected screen area for money detection in Discord notifications.",
+            "item_area": "Selected screen area for item detection in Discord notifications.",
+            "enable_item_detection": "Enable automatic detection and notification of rare items during digging.",
             "auto_shovel_enabled": "Automatically re-equip shovel when no activity detected for specified time.",
             "shovel_slot": "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
             "shovel_timeout": "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
