@@ -136,23 +136,23 @@ class DiscordNotifier:
                     pass
 
     def send_startup_notification(self, user_id=None):
-        return self.send_notification("Bot started and ready", user_id, 0x00FF00)
+        return self.send_notification("🟢 Bot started and ready!", user_id, 0x00FF00)
 
     def send_shutdown_notification(self, user_id=None):
-        return self.send_notification("Bot stopped", user_id, 0xFF0000)
+        return self.send_notification("🔴 Bot stopped.", user_id, 0xFF0000)
 
     def send_milestone_notification(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, item_counts=None):
         embed = {
-            "title": "Milestone Reached",
+            "title": "🎯 Milestone Reached!",
             "color": 0x00FF00,
             "fields": [
                 {
-                    "name": "Digs",
+                    "name": "⛏️ Digs",
                     "value": f"{digs:,}",
                     "inline": True
                 },
                 {
-                    "name": "Clicks", 
+                    "name": "🖱️ Clicks", 
                     "value": f"{clicks:,}",
                     "inline": True
                 }
@@ -165,7 +165,7 @@ class DiscordNotifier:
         
         if money_value:
             embed["fields"].append({
-                "name": "Current Money",
+                "name": "💰 Current Money",
                 "value": money_value,
                 "inline": True
             })
@@ -206,11 +206,11 @@ class DiscordNotifier:
 
 
     def send_error_notification(self, error_message, user_id=None):
-        message = f"Error occurred: {error_message}"
+        message = f"⚠️ Error occurred: {error_message}"
         return self.send_notification(message, user_id, 0xFF9900)
 
     def test_webhook(self, user_id=None, include_screenshot=False):
-        return self.send_notification("Test notification - Discord integration is working", user_id, 0x9900ff, include_screenshot)
+        return self.send_notification("🧪 Test notification - Discord integration is working!", user_id, 0x9900ff, include_screenshot)
 
     def send_item_notification(self, rarity, user_id=None, include_screenshot=False):
         rarity_colors = {
@@ -225,7 +225,7 @@ class DiscordNotifier:
         }
         
         color = rarity_colors.get(rarity.lower(), 0x00FF00)
-        message = f"You dug up a {rarity} item"
+        message = f"🎉 You dug up a {rarity} item!"
         
         return self.send_notification(message, user_id, color, include_screenshot)
 
