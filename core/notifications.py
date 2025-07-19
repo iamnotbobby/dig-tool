@@ -86,14 +86,17 @@ class DiscordNotifier:
         from datetime import datetime
         return datetime.utcnow().isoformat()
     
-    def _send_webhook_request(self, payload, include_screenshot=False):
+    def _send_webhook_request(self, payload, include_screenshot=False, provided_screenshot=None):
         try:
             buffer = None
             files = {}
             
             if include_screenshot:
                 try:
-                    screenshot = ImageGrab.grab()
+                    if provided_screenshot:
+                        screenshot = provided_screenshot
+                    else:
+                        screenshot = ImageGrab.grab()
                     buffer = io.BytesIO()
                     screenshot.save(buffer, format='PNG')
                     buffer.seek(0)
@@ -183,6 +186,49 @@ class DiscordNotifier:
             payload["content"] = f"<@{user_id}>"
             
         return self._send_webhook_request(payload, include_screenshot)
+
+    def send_milestone_notification_with_money(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, ocr_screenshot=None):
+        embed = {
+            "title": "🎯 Milestone Reached!",
+            "color": 0x00FF00,
+            "fields": [
+                {
+                    "name": "⛏️ Digs",
+                    "value": f"{digs:,}",
+                    "inline": True
+                },
+                {
+                    "name": "🖱️ Clicks", 
+                    "value": f"{clicks:,}",
+                    "inline": True
+                }
+            ],
+            "timestamp": self._get_timestamp(),
+            "footer": {
+                "text": "Dig Tool"
+            }
+        }
+        
+        if money_value:
+            embed["fields"].append({
+                "name": "💰 Current Money",
+                "value": money_value,
+                "inline": True
+            })
+        
+        if include_screenshot:
+            embed["image"] = {
+                "url": "attachment://screenshot.png"
+            }
+            
+        payload: dict = {
+            "embeds": [embed]
+        }
+        
+        if user_id:
+            payload["content"] = f"<@{user_id}>"
+            
+        return self._send_webhook_request(payload, include_screenshot, ocr_screenshot)
 
 
     def send_error_notification(self, error_message, user_id=None):
@@ -289,13 +335,23 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
     def send_milestone():
         try:
             money_value = None
+            shared_screenshot = None
+            
+            if include_screenshot:
+                try:
+                    shared_screenshot = ImageGrab.grab()
+                except Exception as e:
+                    logger.error(f"Error capturing shared screenshot: {e}")
             
             if not skip_ocr and dig_tool_instance.money_ocr.initialized and dig_tool_instance.money_ocr.money_area:
                 try:
                     import time
                     time.sleep(0.2)
                     logger.info("Reading money value for milestone notification")
-                    money_value = dig_tool_instance.money_ocr.read_money_value()
+                    if shared_screenshot:
+                        money_value = dig_tool_instance.money_ocr.read_money_from_screenshot(shared_screenshot)
+                    else:
+                        money_value = dig_tool_instance.money_ocr.read_money_value()
                     if money_value:
                         logger.info(f"Money value detected: {money_value}")
                     else:
@@ -303,12 +359,13 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
                 except Exception as e:
                     logger.error(f"Error reading money value: {e}")
             
-            success = dig_tool_instance.discord_notifier.send_milestone_notification(
+            success = dig_tool_instance.discord_notifier.send_milestone_notification_with_money(
                 dig_tool_instance.dig_count,
                 dig_tool_instance.click_count,
                 user_id if user_id else None,
                 include_screenshot,
-                money_value
+                money_value,
+                shared_screenshot
             )
             if success:
                 logger.info(f"Milestone notification sent successfully for {dig_tool_instance.dig_count} digs")
