@@ -23,7 +23,7 @@ class ExportOptionsDialog:
         try:
             import sys
             import os
-            self.dialog.wm_iconbitmap(os.path.join(sys._MEIPASS, "assets/icon.ico") if hasattr(sys, '_MEIPASS') else "assets/icon.ico")
+            self.dialog.wm_iconbitmap(os.path.join(getattr(sys, '_MEIPASS', '.'), "assets/icon.ico") if hasattr(sys, '_MEIPASS') else "assets/icon.ico")
         except:
             pass  
         
@@ -81,7 +81,7 @@ class ExportOptionsDialog:
         discord_check = ttk.Checkbutton(discord_frame, text="Discord Information", 
                                        variable=self.vars['discord'])
         discord_check.pack(side=tk.LEFT)
-        ttk.Label(discord_frame, text="(Webhook URL, User ID)", 
+        ttk.Label(discord_frame, text="(Webhook URL, User ID, Money Area)", 
                  font=("Segoe UI", 9), foreground="gray").pack(side=tk.LEFT, padx=(10, 0))
         
       

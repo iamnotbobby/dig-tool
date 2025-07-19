@@ -612,3 +612,34 @@ def rgb_to_hsv_single(rgb_color):
         from utils.debug_logger import logger
         logger.error(f"rgb_to_hsv_single conversion failed: {e}, input: {rgb_color}")
         return np.array([0, 0, 0], dtype=np.uint8)
+
+
+def check_line_movement(dig_tool_instance, line_pos, target_fps):
+    line_movement_check_frames = max(
+        int(dig_tool_instance.base_line_movement_check_frames * (target_fps / 120.0)), 10
+    )
+
+    dig_tool_instance.line_moving_history.append(line_pos)
+
+    if len(dig_tool_instance.line_moving_history) > line_movement_check_frames:
+        dig_tool_instance.line_moving_history.pop(0)
+
+    if len(dig_tool_instance.line_moving_history) < 10:
+        return False
+
+    valid_positions = [pos for pos in dig_tool_instance.line_moving_history if pos != -1]
+
+    if len(valid_positions) < 5:
+        return False
+
+    min_pos = min(valid_positions)
+    max_pos = max(valid_positions)
+    movement_range = max_pos - min_pos
+
+    return movement_range >= dig_tool_instance.min_movement_threshold
+
+def check_target_engagement(dig_tool_instance, line_pos, target_fps):
+    line_detected = line_pos != -1
+    line_moving = check_line_movement(dig_tool_instance, line_pos, target_fps)
+
+    return line_detected and line_moving
