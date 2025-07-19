@@ -121,8 +121,9 @@ class DigTool:
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         
-        from utils.ocr_integration import MoneyOCR
+        from utils.ocr_integration import MoneyOCR, ItemOCR
         self.money_ocr = MoneyOCR()
+        self.item_ocr = ItemOCR()
 
         self.settings_manager.load_all_settings()
 
@@ -204,6 +205,17 @@ class DigTool:
         self._click_thread_pool = []
         self._max_click_threads = 3
 
+        self.item_counts_since_startup = {
+            'junk': 0,
+            'common': 0,
+            'unusual': 0,
+            'scarce': 0,
+            'legendary': 0,
+            'mythical': 0,
+            'divine': 0,
+            'prismatic': 0
+        }
+
         # Benchmarking
         self.report_interval = 1
         self.frame_times = []
@@ -259,6 +271,17 @@ class DigTool:
             self.automation_manager.walk_pattern_index = 0
             self.automation_manager.sell_count = 0
             
+            self.item_counts_since_startup = {
+                'junk': 0,
+                'common': 0,
+                'unusual': 0,
+                'scarce': 0,
+                'legendary': 0,
+                'mythical': 0,
+                'divine': 0,
+                'prismatic': 0
+            }
+            
             self.manual_dig_target_disengaged_time = 0
             self.manual_dig_was_engaged = False
             
@@ -313,6 +336,23 @@ class DigTool:
 
     def _update_time_cache(self):
         update_time_cache(self)
+
+    def reset_item_counts_for_startup(self):
+        self.item_counts_since_startup = {
+            'junk': 0,
+            'common': 0,
+            'unusual': 0,
+            'scarce': 0,
+            'legendary': 0,
+            'mythical': 0,
+            'divine': 0,
+            'prismatic': 0
+        }
+
+    def count_item_rarity(self, rarity):
+        if rarity and rarity.lower() in self.item_counts_since_startup:
+            self.item_counts_since_startup[rarity.lower()] += 1
+            logger.debug(f"Item counted: {rarity} (total: {self.item_counts_since_startup[rarity.lower()]})")
 
     def run_main_loop(self):
         screenshot_fps = get_param(self, "screenshot_fps")
@@ -1133,6 +1173,10 @@ class DigTool:
 
                 auto_walk_state = "move"
                 check_milestone_notifications(self)
+                
+                if get_param(self, "enable_item_detection"):
+                    from core.notifications import check_item_notifications
+                    check_item_notifications(self)
 
             elif not get_param(self, "auto_walk_enabled") and self.running:
                 if self.target_engaged:
@@ -1171,6 +1215,10 @@ class DigTool:
                                 ).start()
                         
                         check_milestone_notifications(self)
+                        
+                        if get_param(self, "enable_item_detection"):
+                            from core.notifications import check_item_notifications
+                            check_item_notifications(self)
 
             if self.results_queue.empty():
                 preview_img = screenshot.copy()

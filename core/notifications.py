@@ -86,17 +86,14 @@ class DiscordNotifier:
         from datetime import datetime
         return datetime.utcnow().isoformat()
     
-    def _send_webhook_request(self, payload, include_screenshot=False, provided_screenshot=None):
+    def _send_webhook_request(self, payload, include_screenshot=False):
         try:
             buffer = None
             files = {}
             
             if include_screenshot:
                 try:
-                    if provided_screenshot:
-                        screenshot = provided_screenshot
-                    else:
-                        screenshot = ImageGrab.grab()
+                    screenshot = ImageGrab.grab()
                     buffer = io.BytesIO()
                     screenshot.save(buffer, format='PNG')
                     buffer.seek(0)
@@ -139,23 +136,23 @@ class DiscordNotifier:
                     pass
 
     def send_startup_notification(self, user_id=None):
-        return self.send_notification("🟢 Bot started and ready!", user_id, 0x00FF00)
+        return self.send_notification("Bot started and ready", user_id, 0x00FF00)
 
     def send_shutdown_notification(self, user_id=None):
-        return self.send_notification("🔴 Bot stopped.", user_id, 0xFF0000)
+        return self.send_notification("Bot stopped", user_id, 0xFF0000)
 
-    def send_milestone_notification(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None):
+    def send_milestone_notification(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, item_counts=None):
         embed = {
-            "title": "🎯 Milestone Reached!",
+            "title": "Milestone Reached",
             "color": 0x00FF00,
             "fields": [
                 {
-                    "name": "⛏️ Digs",
+                    "name": "Digs",
                     "value": f"{digs:,}",
                     "inline": True
                 },
                 {
-                    "name": "🖱️ Clicks", 
+                    "name": "Clicks", 
                     "value": f"{clicks:,}",
                     "inline": True
                 }
@@ -168,10 +165,30 @@ class DiscordNotifier:
         
         if money_value:
             embed["fields"].append({
-                "name": "💰 Current Money",
+                "name": "Current Money",
                 "value": money_value,
                 "inline": True
             })
+        
+        if item_counts:
+            items_found = []
+            # Only include scarce and above rarities (exclude junk, common, unusual)
+            for rarity, count in item_counts.items():
+                if count > 0 and rarity.lower() in ['scarce', 'legendary', 'mythical', 'divine', 'prismatic']:
+                    items_found.append(f"{count} {rarity.title()}")
+            
+            if items_found:
+                embed["fields"].append({
+                    "name": "Rare Items Found",
+                    "value": ", ".join(items_found),
+                    "inline": False
+                })
+            else:
+                embed["fields"].append({
+                    "name": "Rare Items Found",
+                    "value": "No rare items found",
+                    "inline": False
+                })
         
         if include_screenshot:
             embed["image"] = {
@@ -187,56 +204,30 @@ class DiscordNotifier:
             
         return self._send_webhook_request(payload, include_screenshot)
 
-    def send_milestone_notification_with_money(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, ocr_screenshot=None):
-        embed = {
-            "title": "🎯 Milestone Reached!",
-            "color": 0x00FF00,
-            "fields": [
-                {
-                    "name": "⛏️ Digs",
-                    "value": f"{digs:,}",
-                    "inline": True
-                },
-                {
-                    "name": "🖱️ Clicks", 
-                    "value": f"{clicks:,}",
-                    "inline": True
-                }
-            ],
-            "timestamp": self._get_timestamp(),
-            "footer": {
-                "text": "Dig Tool"
-            }
-        }
-        
-        if money_value:
-            embed["fields"].append({
-                "name": "💰 Current Money",
-                "value": money_value,
-                "inline": True
-            })
-        
-        if include_screenshot:
-            embed["image"] = {
-                "url": "attachment://screenshot.png"
-            }
-            
-        payload: dict = {
-            "embeds": [embed]
-        }
-        
-        if user_id:
-            payload["content"] = f"<@{user_id}>"
-            
-        return self._send_webhook_request(payload, include_screenshot, ocr_screenshot)
-
 
     def send_error_notification(self, error_message, user_id=None):
-        message = f"⚠️ Error occurred: {error_message}"
+        message = f"Error occurred: {error_message}"
         return self.send_notification(message, user_id, 0xFF9900)
 
     def test_webhook(self, user_id=None, include_screenshot=False):
-        return self.send_notification("🧪 Test notification - Discord integration is working!", user_id, 0x9900ff, include_screenshot)
+        return self.send_notification("Test notification - Discord integration is working", user_id, 0x9900ff, include_screenshot)
+
+    def send_item_notification(self, rarity, user_id=None, include_screenshot=False):
+        rarity_colors = {
+            'legendary': 0xFF8C00,
+            'mythical': 0xFF1493,
+            'divine': 0x9932CC,
+            'prismatic': 0x00FFFF,
+            'scarce': 0x0080FF,
+            'unusual': 0x32CD32,
+            'common': 0x808080,
+            'junk': 0x8B4513
+        }
+        
+        color = rarity_colors.get(rarity.lower(), 0x00FF00)
+        message = f"You dug up a {rarity} item"
+        
+        return self.send_notification(message, user_id, color, include_screenshot)
 
 
 def test_discord_ping(dig_tool_instance):
@@ -335,23 +326,13 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
     def send_milestone():
         try:
             money_value = None
-            shared_screenshot = None
-            
-            if include_screenshot:
-                try:
-                    shared_screenshot = ImageGrab.grab()
-                except Exception as e:
-                    logger.error(f"Error capturing shared screenshot: {e}")
             
             if not skip_ocr and dig_tool_instance.money_ocr.initialized and dig_tool_instance.money_ocr.money_area:
                 try:
                     import time
                     time.sleep(0.2)
                     logger.info("Reading money value for milestone notification")
-                    if shared_screenshot:
-                        money_value = dig_tool_instance.money_ocr.read_money_from_screenshot(shared_screenshot)
-                    else:
-                        money_value = dig_tool_instance.money_ocr.read_money_value()
+                    money_value = dig_tool_instance.money_ocr.read_money_value()
                     if money_value:
                         logger.info(f"Money value detected: {money_value}")
                     else:
@@ -359,16 +340,17 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
                 except Exception as e:
                     logger.error(f"Error reading money value: {e}")
             
-            success = dig_tool_instance.discord_notifier.send_milestone_notification_with_money(
+            success = dig_tool_instance.discord_notifier.send_milestone_notification(
                 dig_tool_instance.dig_count,
                 dig_tool_instance.click_count,
                 user_id if user_id else None,
                 include_screenshot,
                 money_value,
-                shared_screenshot
+                dig_tool_instance.item_counts_since_startup.copy()
             )
             if success:
                 logger.info(f"Milestone notification sent successfully for {dig_tool_instance.dig_count} digs")
+                # Note: Item counts no longer reset after milestone - only reset when bot stops/starts
             else:
                 logger.error(f"Failed to send milestone notification for {dig_tool_instance.dig_count} digs")
         except Exception as e:
@@ -400,6 +382,93 @@ def send_startup_notification(dig_tool_instance):
             logger.debug("Startup notification skipped: No webhook URL set")
     except Exception as e:
         logger.error(f"Error in send_startup_notification: {e}")
+
+
+def check_item_notifications(dig_tool_instance):
+    try:
+        import tkinter as tk
+        webhook_url = dig_tool_instance.param_vars.get('webhook_url', tk.StringVar()).get()
+        include_screenshot = dig_tool_instance.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
+        user_id = dig_tool_instance.param_vars.get('user_id', tk.StringVar()).get()
+
+        if not webhook_url:
+            logger.debug("Item notification skipped: No webhook URL set")
+            return
+
+        if not hasattr(dig_tool_instance, 'item_ocr'):
+            from utils.ocr_integration import ItemOCR
+            dig_tool_instance.item_ocr = ItemOCR()
+
+        if not dig_tool_instance.item_ocr.initialized:
+            if dig_tool_instance.item_ocr.initialize_ocr():
+                logger.debug("Item OCR initialized successfully")
+            else:
+                logger.debug("Item OCR initialization failed")
+                return
+
+        if not dig_tool_instance.item_ocr.item_area:
+            logger.info("Item area not set, prompting user to select area")
+            dig_tool_instance.update_status("Select item area for Discord notifications...")
+            
+            def select_area_and_continue():
+                try:
+                    if dig_tool_instance.item_ocr.select_item_area():
+                        logger.info("Item area selected successfully")
+                        dig_tool_instance.update_status("Item area selected")
+                        _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot)
+                    else:
+                        logger.warning("Item area selection cancelled")
+                        dig_tool_instance.update_status("Item area not selected")
+                except Exception as e:
+                    logger.error(f"Error in item area selection: {e}")
+            
+            threading.Thread(target=select_area_and_continue, daemon=True).start()
+        else:
+            _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot)
+
+    except Exception as e:
+        logger.error(f"Error in check_item_notifications: {e}")
+
+
+def _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot):
+    dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+    
+    def check_item():
+        try:
+            import time
+            time.sleep(0.2)
+            logger.info("Reading item text for notification check")
+            item_text = dig_tool_instance.item_ocr.read_item_text()
+            
+            if item_text:
+                rarity = dig_tool_instance.item_ocr.extract_rarity(item_text)
+                
+                if rarity:
+                    dig_tool_instance.count_item_rarity(rarity)
+                    
+                    if rarity.lower() in ['legendary', 'mythical', 'divine', 'prismatic', 'scarce']:
+                        logger.info(f"Rare item detected: {rarity}")
+                        success = dig_tool_instance.discord_notifier.send_item_notification(
+                            rarity,
+                            user_id if user_id else None,
+                            include_screenshot
+                        )
+                        if success:
+                            logger.info(f"Item notification sent successfully for {rarity} item")
+                            dig_tool_instance.update_status(f"Notified: {rarity} item found!")
+                        else:
+                            logger.error(f"Failed to send item notification for {rarity} item")
+                    else:
+                        logger.debug(f"Common item detected: {rarity}")
+                else:
+                    logger.debug("Item text detected but no rarity found")
+            else:
+                logger.debug("No item text detected")
+                
+        except Exception as e:
+            logger.error(f"Error in item check thread: {e}")
+    
+    threading.Thread(target=check_item, daemon=True).start()
 
 
 def send_shutdown_notification(dig_tool_instance):
