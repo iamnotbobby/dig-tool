@@ -55,7 +55,7 @@ jobs:
          
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --distpath=dist --workpath=build --specpath=. --clean main.py
+          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --hidden-import=winrt.windows.foundation --hidden-import=winrt.windows.media.ocr --hidden-import=winrt.windows.graphics.imaging --hidden-import=winrt.windows.storage.streams --distpath=dist --workpath=build --specpath=. --clean main.py
          
       - name: Get executable info and generate checksums
         id: get_exe_info

@@ -222,3 +222,41 @@ def process_pattern_steps(raw_pattern):
             )
 
     return True, pattern
+
+
+def open_custom_pattern_manager(dig_tool_instance):
+    if dig_tool_instance.custom_pattern_window is None:
+        from interface.custom_pattern_window import CustomPatternWindow
+        dig_tool_instance.custom_pattern_window = CustomPatternWindow(
+            dig_tool_instance, dig_tool_instance.automation_manager
+        )
+    dig_tool_instance.custom_pattern_window.show_window()
+
+def update_walk_pattern_dropdown(dig_tool_instance):
+    if hasattr(dig_tool_instance.main_window, "walk_pattern_combo"):
+        current_value = dig_tool_instance.main_window.walk_pattern_combo.get()
+        pattern_info = dig_tool_instance.automation_manager.get_pattern_list()
+        pattern_names = list(pattern_info.keys())
+
+        dig_tool_instance.main_window.walk_pattern_combo["values"] = pattern_names
+
+        if current_value in pattern_names:
+            dig_tool_instance.main_window.walk_pattern_combo.set(current_value)
+        elif pattern_names:
+            dig_tool_instance.main_window.walk_pattern_combo.set(pattern_names[0])
+
+    if dig_tool_instance.autowalk_overlay and dig_tool_instance.autowalk_overlay.visible:
+        dig_tool_instance.autowalk_overlay.update_path_visualization()
+
+def on_walk_pattern_changed(dig_tool_instance, *args):
+    if (
+        hasattr(dig_tool_instance, "autowalk_overlay")
+        and dig_tool_instance.autowalk_overlay
+        and dig_tool_instance.autowalk_overlay.visible
+    ):
+        dig_tool_instance.autowalk_overlay.update_pattern_name()
+        dig_tool_instance.autowalk_overlay.update_path_visualization()
+
+    dig_tool_instance.root.after_idle(
+        lambda: dig_tool_instance.settings_manager.auto_save_setting("coordinates")
+    )

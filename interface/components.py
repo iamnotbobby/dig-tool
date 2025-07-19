@@ -1,3 +1,5 @@
+from utils.config_management import get_param
+from utils.system_utils import get_cached_system_latency
 import tkinter as tk
 from tkinter import Label, Frame, ttk, Canvas
 import win32gui, win32con
@@ -95,7 +97,7 @@ class CollapsiblePane(Frame):
 
     def open(self):
         if not self.is_open.get():
-            self.sub_frame.pack(fill="x", pady=2, padx=2)
+            self.sub_frame.pack(fill="x", pady=1, padx=1)  
             self.toggle_button.configure(text=f"− {self.text}")
             self.is_open.set(True)
 
@@ -121,9 +123,63 @@ class AccordionManager:
                     pane.close()
                 else:
                     pane.open()
+                    self.dig_tool_instance.root.after(50, lambda: self._auto_scroll_to_pane(pane))
             else:
                 pane.close()
-        self.dig_tool_instance.resize_for_content()
+        from utils.ui_management import resize_for_content
+        resize_for_content(self.dig_tool_instance)
+
+    def _auto_scroll_to_pane(self, pane):
+        try:
+            canvas = None
+            
+            if hasattr(self.dig_tool_instance, 'root'):
+                for child in self.dig_tool_instance.root.winfo_children():
+                    canvas = self._find_canvas_widget(child)
+                    if canvas:
+                        break
+            
+            if not canvas:
+                return
+            
+            pane.update_idletasks()
+            self.dig_tool_instance.root.update_idletasks()
+            
+            pane_y = pane.winfo_y()
+            pane_height = pane.winfo_height()
+            
+            canvas_height = canvas.winfo_height()
+            
+            scroll_top = pane_y - (canvas_height // 4) 
+            
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            scroll_region = canvas.cget("scrollregion")
+            if scroll_region:
+                _, _, _, total_height = map(int, scroll_region.split())
+                
+                if total_height > canvas_height:
+                    scroll_top = max(0, scroll_top)
+                    scroll_fraction = scroll_top / (total_height - canvas_height)
+                    scroll_fraction = max(0.0, min(1.0, scroll_fraction))
+                    
+                    canvas.yview_moveto(scroll_fraction)
+                    
+        except Exception as e:
+            pass
+    
+    def _find_canvas_widget(self, widget):
+        if isinstance(widget, tk.Canvas):
+            return widget
+        
+        try:
+            for child in widget.winfo_children():
+                result = self._find_canvas_widget(child)
+                if result:
+                    return result
+        except:
+            pass
+        
+        return None
 
 
 class GameOverlay:
@@ -156,20 +212,29 @@ class GameOverlay:
 
     def _setup_overlay_content(self):
         try:
+            if not self.overlay:
+                logger.error("Overlay not available for setup")
+                return
+                
             icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-            if icon:
+            if icon and self.overlay:
                 self.overlay.iconphoto(False, icon)
 
             self._create_overlay_widgets()
             self.position_overlay()
 
-            self.overlay.after(50, self._apply_window_style)
-            self.overlay.after(200, self._show_overlay)
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
         except Exception as e:
             logger.error(f"Error setting up overlay content: {e}")
 
     def _show_overlay(self):
         try:
+            if not self.overlay:
+                logger.error("Overlay not available to show")
+                return
+                
             self.overlay.deiconify()
             self.visible = True
             logger.debug("Overlay shown successfully")
@@ -178,6 +243,10 @@ class GameOverlay:
 
     def _apply_window_style(self):
         try:
+            if not self.overlay:
+                logger.debug("Overlay not available for window style application")
+                return
+                
             hwnd = self.overlay.winfo_id()
 
             ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -193,6 +262,10 @@ class GameOverlay:
             logger.debug(f"Could not apply window style: {e}")
 
     def _create_overlay_widgets(self):
+        if not self.overlay:
+            logger.error("Overlay not available for widget creation")
+            return
+            
         self.overlay.minsize(200, 0)
 
         self.title_frame = Frame(self.overlay, bg="black", cursor="fleur")
@@ -289,7 +362,7 @@ class GameOverlay:
 
         self.latency_label = Label(
             stats_frame,
-            text=f"LAT: {self.parent.get_cached_system_latency()}ms",
+            text=f"LAT: {get_cached_system_latency(self.parent)}ms",
             fg="#a78bfa",
             bg="black",
             font=("Consolas", 9),
@@ -409,13 +482,13 @@ class GameOverlay:
             self.dig_label.config(text=f"DIGS: {dig_count}")
             self.clicks_label.config(text=f"CLICKS: {click_count}")
 
-            is_pred = self.parent.get_param("prediction_enabled")
+            is_pred = get_param(self.parent, "prediction_enabled")
             self.pred_label.config(
                 text=f"PRED: {'ON' if is_pred else 'OFF'}",
                 fg="#4ecdc4" if is_pred else "#ff4757",
             )
             self.latency_label.config(
-                text=f"LAT: {self.parent.get_cached_system_latency()}ms"
+                text=f"LAT: {get_cached_system_latency(self.parent)}ms"
             )
 
             bot_key = self.parent.keybind_vars["toggle_bot"].get().upper()
@@ -433,8 +506,8 @@ class GameOverlay:
                         cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB)
                     )
                     photo = ImageTk.PhotoImage(image=img)
-                    self.preview_label_overlay.configure(image=photo)
-                    self.preview_label_overlay.image = photo
+                    self.preview_label_overlay.config(image=photo)  # type: ignore
+                    setattr(self.preview_label_overlay, '_image_ref', photo)
                 except Exception as e:
                     logger.debug(f"Error updating preview thumbnail: {e}")
         except Exception as e:
@@ -479,20 +552,29 @@ class AutoWalkOverlay:
 
     def _setup_overlay_content(self):
         try:
+            if not self.overlay:
+                logger.error("Auto walk overlay not available for setup")
+                return
+                
             icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
-            if icon:
+            if icon and self.overlay:
                 self.overlay.iconphoto(False, icon)
 
             self._create_overlay_widgets()
             self.position_overlay()
 
-            self.overlay.after(50, self._apply_window_style)
-            self.overlay.after(200, self._show_overlay)
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
         except Exception as e:
             logger.error(f"Error setting up auto walk overlay content: {e}")
 
     def _show_overlay(self):
         try:
+            if not self.overlay:
+                logger.error("Auto walk overlay not available to show")
+                return
+                
             self.overlay.deiconify()
             self.visible = True
             logger.debug("Auto Walk overlay shown successfully")
@@ -501,6 +583,10 @@ class AutoWalkOverlay:
 
     def _apply_window_style(self):
         try:
+            if not self.overlay:
+                logger.debug("Auto walk overlay not available for window style application")
+                return
+                
             hwnd = self.overlay.winfo_id()
 
             ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -637,17 +723,17 @@ class AutoWalkOverlay:
             return
         try:
             dig_count = kwargs.get("dig_count", 0)
-            initial_items = self.parent.get_param("initial_item_count") or 0
+            initial_items = get_param(self.parent, "initial_item_count") or 0
             total_items = dig_count + initial_items
 
-            if self.parent.get_param("dynamic_walkspeed_enabled"):
+            if get_param(self.parent, "dynamic_walkspeed_enabled"):
                 formula_reduction = (
                     self.parent.automation_manager.calculate_walkspeed_multiplier(
                         total_items
                     )
                 )
                 initial_decrease = (
-                    self.parent.get_param("initial_walkspeed_decrease") or 0.0
+                    get_param(self.parent, "initial_walkspeed_decrease") or 0.0
                 )
                 total_reduction = min(formula_reduction + initial_decrease, 0.99)
 
@@ -657,12 +743,12 @@ class AutoWalkOverlay:
                 )
 
                 duration_multiplier = 1.0 + total_reduction
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
+                base_duration = get_param(self.parent, "walk_duration") / 1000.0
                 actual_duration = base_duration * duration_multiplier
                 self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s")
             else:
                 self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%")
-                base_duration = self.parent.get_param("walk_duration") / 1000.0
+                base_duration = get_param(self.parent, "walk_duration") / 1000.0
                 self.duration_label.config(text=f"DURATION: {base_duration:.3f}s")
 
             self.update_pattern_name()
@@ -679,10 +765,10 @@ class AutoWalkOverlay:
             elif not is_walking:
                 self._animation_running = False
 
-            auto_sell_enabled = self.parent.get_param("auto_sell_enabled")
+            auto_sell_enabled = get_param(self.parent, "auto_sell_enabled")
             if auto_sell_enabled:
                 dig_count = kwargs.get("dig_count", 0)
-                sell_interval = self.parent.get_param("sell_every_x_digs")
+                sell_interval = get_param(self.parent, "sell_every_x_digs")
                 if sell_interval and sell_interval > 0:
                     current_progress = dig_count % sell_interval
                     self.autosell_label.config(
@@ -740,6 +826,7 @@ class AutoWalkOverlay:
                 is_walking
                 and self.visible
                 and getattr(self, "_animation_running", False)
+                and self.overlay
             ):
                 self.overlay.after(200, self.animate_path_step)
             else:
@@ -802,8 +889,8 @@ class AutoWalkOverlay:
 
             scale = 12.0
 
-            raw_points = [(0, 0)]
-            x, y = 0, 0
+            raw_points: list[tuple[float, float]] = [(0.0, 0.0)]
+            x, y = 0.0, 0.0
 
             for step in current_pattern:
                 dx, dy = self.get_direction_vector(step)
@@ -960,3 +1047,317 @@ class AutoWalkOverlay:
             dy *= factor
 
         return (dx, dy)
+
+
+class ColorModulesOverlay:
+    def __init__(self, parent):
+        self.parent = parent
+        self.overlay = None
+        self.visible = False
+        self.preview_mode = False
+        self.target_preview_mode = False
+
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.is_dragging = False
+
+    def create_overlay(self):
+        if self.overlay:
+            return
+
+        try:
+            self.overlay = tk.Toplevel()
+            self.overlay.withdraw()
+            self.overlay.title("Color Modules")
+            self.overlay.wm_overrideredirect(True)
+            self.overlay.attributes("-topmost", True)
+            self.overlay.attributes("-alpha", 1.0)
+            self.overlay.configure(bg="black", bd=2, relief="solid")
+
+            self.overlay.after_idle(self._setup_overlay_content)
+        except Exception as e:
+            logger.error(f"Error creating color modules overlay: {e}")
+
+    def _setup_overlay_content(self):
+        try:
+            if not self.overlay:
+                logger.error("Color modules overlay not available for setup")
+                return
+                
+            icon = self.parent.settings_manager.load_icon("assets/icon.png", (16, 16))
+            if icon and self.overlay:
+                self.overlay.iconphoto(False, icon)
+
+            self._create_overlay_widgets()
+            self.position_overlay()
+
+            if self.overlay:
+                self.overlay.after(50, self._apply_window_style)
+                self.overlay.after(200, self._show_overlay)
+        except Exception as e:
+            logger.error(f"Error setting up color modules overlay content: {e}")
+
+    def _show_overlay(self):
+        try:
+            if not self.overlay:
+                logger.error("Color modules overlay not available to show")
+                return
+                
+            self.overlay.deiconify()
+            self.visible = True
+            logger.debug("Color modules overlay shown successfully")
+        except Exception as e:
+            logger.error(f"Error showing color modules overlay: {e}")
+
+    def _apply_window_style(self):
+        try:
+            if not self.overlay:
+                logger.debug("Color modules overlay not available for window style application")
+                return
+                
+            hwnd = self.overlay.winfo_id()
+
+            ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            ex_style |= win32con.WS_EX_TOOLWINDOW | win32con.WS_EX_NOACTIVATE
+            win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
+
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            style &= ~win32con.WS_MINIMIZEBOX
+            style &= ~win32con.WS_MAXIMIZEBOX
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+
+        except Exception as e:
+            logger.debug(f"Could not apply color modules window style: {e}")
+
+    def _create_overlay_widgets(self):
+        self.title_frame = Frame(self.overlay, bg="black", cursor="fleur")
+        self.title_frame.pack(fill="x", padx=2, pady=(2, 0))
+
+        title_label = Label(
+            self.title_frame,
+            text="Color Modules",
+            fg="white",
+            bg="black",
+            font=("Consolas", 11, "bold"),
+            cursor="fleur",
+        )
+        title_label.pack(pady=3)
+
+        self.title_frame.bind("<Button-1>", self.start_drag)
+        self.title_frame.bind("<B1-Motion>", self.on_drag)
+        self.title_frame.bind("<ButtonRelease-1>", self.stop_drag)
+        title_label.bind("<Button-1>", self.start_drag)
+        title_label.bind("<B1-Motion>", self.on_drag)
+        title_label.bind("<ButtonRelease-1>", self.stop_drag)
+
+        auto_sell_frame = Frame(self.overlay, bg="black")
+        auto_sell_frame.pack(pady=(5, 10), padx=10, fill="x")
+
+        modules_container = Frame(auto_sell_frame, bg="black")
+        modules_container.pack(fill="x")
+
+        auto_sell_section = Frame(modules_container, bg="black")
+        auto_sell_section.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        label_frame = Frame(auto_sell_section, bg="black")
+        label_frame.pack(fill="x", pady=(0, 5))
+
+        self.auto_sell_label = Label(
+            label_frame,
+            text="Auto-Sell",
+            fg="white",
+            bg="black",
+            font=("Consolas", 10, "bold")
+        )
+        self.auto_sell_label.pack(side="left")
+
+        self.preview_btn = Label(
+            label_frame,
+            text="●",
+            fg="#666666",
+            bg="black",
+            font=("Consolas", 12, "bold"),
+            cursor="hand2",
+            relief="solid",
+            bd=1,
+            padx=3,
+            pady=1
+        )
+        self.preview_btn.pack(side="right")
+        self.preview_btn.bind("<Button-1>", self.on_preview_click)
+        self.preview_btn.bind("<Enter>", lambda e: self.preview_btn.config(fg="#ffffff" if not self.preview_mode else "#8B4BAE"))
+        self.preview_btn.bind("<Leave>", lambda e: self.preview_btn.config(fg="#666666" if not self.preview_mode else "#8B4BAE"))
+
+        self.auto_sell_indicator = Label(
+            auto_sell_section,
+            text="",
+            fg="white",
+            bg="black",
+            font=("Consolas", 10, "bold"),
+            width=12,
+            height=2,
+            relief="solid",
+            bd=2
+        )
+        self.auto_sell_indicator.pack(expand=True)
+
+        target_section = Frame(modules_container, bg="black")
+        target_section.pack(side="right", fill="x", expand=True, padx=(5, 0))
+
+        target_label_frame = Frame(target_section, bg="black")
+        target_label_frame.pack(fill="x", pady=(0, 5))
+
+        self.target_label = Label(
+            target_label_frame,
+            text="Target",
+            fg="white",
+            bg="black",
+            font=("Consolas", 10, "bold")
+        )
+        self.target_label.pack(side="left")
+
+        self.target_preview_btn = Label(
+            target_label_frame,
+            text="●",
+            fg="#666666",
+            bg="black",
+            font=("Consolas", 12, "bold"),
+            cursor="hand2",
+            relief="solid",
+            bd=1,
+            padx=3,
+            pady=1
+        )
+        self.target_preview_btn.pack(side="right")
+        self.target_preview_btn.bind("<Button-1>", self.on_target_preview_click)
+        self.target_preview_btn.bind("<Enter>", lambda e: self.target_preview_btn.config(fg="#ffffff" if not self.target_preview_mode else "#00FF00"))
+        self.target_preview_btn.bind("<Leave>", lambda e: self.target_preview_btn.config(fg="#666666" if not self.target_preview_mode else "#00FF00"))
+
+        self.target_indicator = Label(
+            target_section,
+            text="",
+            fg="white",
+            bg="black",
+            font=("Consolas", 10, "bold"),
+            width=12,
+            height=2,
+            relief="solid",
+            bd=2
+        )
+        self.target_indicator.pack(expand=True)
+
+        self.position_overlay()
+
+    def start_drag(self, event):
+        if not self.overlay:
+            return
+        self.is_dragging = True
+        self.drag_start_x = event.x_root
+        self.drag_start_y = event.y_root
+
+    def on_drag(self, event):
+        if not self.is_dragging or not self.overlay:
+            return
+        try:
+            dx = event.x_root - self.drag_start_x
+            dy = event.y_root - self.drag_start_y
+
+            if abs(dx) < 1 and abs(dy) < 1:
+                return
+
+            x = self.overlay.winfo_x() + dx
+            y = self.overlay.winfo_y() + dy
+
+            self.overlay.geometry(f"+{x}+{y}")
+
+            self.drag_start_x = event.x_root
+            self.drag_start_y = event.y_root
+        except tk.TclError:
+            pass
+
+    def stop_drag(self, event):
+        self.is_dragging = False
+
+    def position_overlay(self):
+        if not self.overlay or not self.parent.game_area:
+            return
+        x1, y1, x2, y2 = self.parent.game_area
+        self.overlay.geometry(
+            f"+{max(10, x1 - 150)}+{min(y1 + 100, self.parent.root.winfo_screenheight() - 150)}"
+        )
+
+    def update_info(self, **kwargs):
+        if not self.visible or not self.overlay:
+            return
+        try:
+            if self.preview_mode:
+                self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+            else:
+                automation_status = kwargs.get("automation_status", "STOPPED")
+                is_selling = automation_status in ["SELLING"] or "SELL" in automation_status.upper()
+                
+                if is_selling:
+                    self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+                else:
+                    self.auto_sell_indicator.config(bg="black", fg="white")
+
+            if self.target_preview_mode:
+                self.target_indicator.config(bg="#00FF00", fg="white")
+            else:
+                target_engaged = kwargs.get("target_engaged", False)
+                
+                if target_engaged:
+                    self.target_indicator.config(bg="#00FF00", fg="white")
+                else:
+                    self.target_indicator.config(bg="black", fg="white")
+
+        except Exception as e:
+            logger.debug(f"Error updating color modules overlay: {e}")
+
+    def on_preview_click(self, event):
+        self.toggle_preview_mode()
+
+    def on_target_preview_click(self, event):
+        self.toggle_target_preview_mode()
+
+    def toggle_preview_mode(self):
+        self.preview_mode = not self.preview_mode
+        
+        if self.preview_mode:
+            self.preview_btn.config(fg="#8B4BAE", text="●")
+            self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+        else:
+            self.preview_btn.config(fg="#666666", text="●")
+            self.auto_sell_indicator.config(bg="black", fg="white")
+
+    def toggle_target_preview_mode(self):
+        self.target_preview_mode = not self.target_preview_mode
+        
+        if self.target_preview_mode:
+            self.target_preview_btn.config(fg="#00FF00", text="●")
+            self.target_indicator.config(bg="#00FF00", fg="white")
+        else:
+            self.target_preview_btn.config(fg="#666666", text="●")
+            self.target_indicator.config(bg="black", fg="white")
+
+    def preview_overlay(self):
+        if not self.overlay:
+            self.create_overlay()
+        
+        if not self.visible and self.overlay:
+            self.overlay.deiconify()
+            self.visible = True
+        
+        self.toggle_preview_mode()
+
+    def _reset_preview(self):
+        pass
+
+    def destroy_overlay(self):
+        self.visible = False
+        if self.overlay:
+            try:
+                self.overlay.destroy()
+            except Exception:
+                pass
+            self.overlay = None

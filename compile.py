@@ -1,4 +1,15 @@
+hiddenimports = [
+    'winrt.windows.foundation',
+    'winrt.windows.media.ocr',
+    'winrt.windows.graphics.imaging',
+    'winrt.windows.storage.streams',
+]
+
 import PyInstaller.__main__
+
+hidden_imports_args = []
+for imp in hiddenimports:
+    hidden_imports_args.extend(['--hidden-import', imp])
 
 PyInstaller.__main__.run([
     'main.py',
@@ -15,4 +26,4 @@ PyInstaller.__main__.run([
     '--specpath=.',
     '--collect-all=autoit',
     '--clean',
-])
+] + hidden_imports_args)
