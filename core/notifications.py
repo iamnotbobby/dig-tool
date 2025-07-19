@@ -519,7 +519,7 @@ def _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot
                             rarity,
                             user_id if user_id else None,
                             include_screenshot,
-                            dig_tool_instance.item_ocr.item_area if include_screenshot else None
+                            dig_tool_instance.item_ocr.item_area
                         )
                         if success:
                             logger.info(f"Item notification sent successfully for {rarity} item")
