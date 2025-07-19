@@ -58,7 +58,7 @@ def test_money_ocr(dig_tool_instance):
         
         def test_ocr_worker():
             try:
-                money_value = dig_tool_instance.money_ocr.read_money_value()
+                money_value = dig_tool_instance.money_ocr.test_money_ocr()
                 
                 if money_value:
                     dig_tool_instance.update_status(f"Money detected: {money_value}")

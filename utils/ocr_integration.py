@@ -141,6 +141,50 @@ class MoneyOCR:
         # self._save_debug_images(screenshot, enhanced_images, max_retries, debug_ocr_results)
         return None
     
+    def test_money_ocr(self):
+        if not self.initialized or not self.money_area:
+            return None
+        
+        try:
+            x, y, width, height = self.money_area
+            screenshot = pyautogui.screenshot(region=(x, y, width, height))
+            
+            enhanced_images = self._enhance_for_green_text(screenshot)
+            
+            for name, img in enhanced_images:
+                try:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_closed():
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    result = loop.run_until_complete(self._ocr_single_image(img, name))
+                    
+                    if result and result.strip():
+                        clean_text = self._clean_money_text(result)
+                        if clean_text:
+                            formatted_money = self._format_money_value(clean_text)
+                            logger.info(f"Test OCR successful - Money: {formatted_money} (method: {name})")
+                            return formatted_money
+                        else:
+                            logger.debug(f"OCR text '{result}' from {name} didn't match money patterns")
+                    else:
+                        logger.debug(f"No text detected from {name}")
+                except Exception as e:
+                    logger.debug(f"OCR failed for {name}: {e}")
+                    continue
+            
+            logger.warning("Test OCR failed - no money value detected with any method")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Test OCR error: {e}")
+            return None
+
     def read_money_from_screenshot(self, full_screenshot, max_retries=3, retry_delay=0.5):
         if not self.initialized or not self.money_area:
             return None
