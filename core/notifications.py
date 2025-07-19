@@ -212,7 +212,7 @@ class DiscordNotifier:
     def test_webhook(self, user_id=None, include_screenshot=False):
         return self.send_notification("🧪 Test notification - Discord integration is working!", user_id, 0x9900ff, include_screenshot)
 
-    def send_item_notification(self, rarity, user_id=None, include_screenshot=False):
+    def send_item_notification(self, rarity, user_id=None, include_screenshot=False, item_area=None):
         rarity_colors = {
             'legendary': 0xFF8C00,
             'mythical': 0xFF1493,
@@ -227,7 +227,74 @@ class DiscordNotifier:
         color = rarity_colors.get(rarity.lower(), 0x00FF00)
         message = f"🎉 You dug up a {rarity} item!"
         
-        return self.send_notification(message, user_id, color, include_screenshot)
+        # For item notifications, use cropped screenshot if area is provided
+        if include_screenshot and item_area:
+            return self._send_item_notification_with_cropped_screenshot(message, user_id, color, item_area)
+        else:
+            return self.send_notification(message, user_id, color, include_screenshot)
+    
+    def _send_item_notification_with_cropped_screenshot(self, message, user_id, color, item_area):
+        if not self.webhook_url:
+            logger.warning("Discord webhook URL not set!")
+            return False
+        
+        buffer = None
+        try:
+            # Capture only the item area
+            x, y, width, height = item_area
+            screenshot = ImageGrab.grab(bbox=(x, y, x + width, y + height))
+            buffer = io.BytesIO()
+            screenshot.save(buffer, format='PNG')
+            buffer.seek(0)
+        except Exception as e:
+            logger.error(f"Error capturing item area screenshot: {e}")
+            # Fallback to regular notification without screenshot
+            return self.send_notification(message, user_id, color, False)
+
+        try:
+            content = f"<@{user_id}>" if user_id else ""
+            embed = {
+                "title": "Dig Tool Notification",
+                "description": message,
+                "color": color,
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
+                "image": {
+                    "url": "attachment://screenshot.png"
+                }
+            }
+
+            payload = {
+                "content": content,
+                "embeds": [embed]
+            }
+
+            files = {
+                "payload_json": (None, json.dumps(payload), "application/json"),
+                "file": ("screenshot.png", buffer, "image/png")
+            }
+            
+            response = requests.post(
+                str(self.webhook_url),
+                files=files,
+                timeout=10
+            )
+
+            if response.status_code == 204 or response.status_code == 200:
+                logger.info("Discord item notification with cropped screenshot sent successfully")
+                return True
+            else:
+                logger.error(f"Discord item notification failed: {response.status_code}")
+                return False
+              
+        except Exception as e:
+            logger.error(f"Error sending Discord item notification: {e}")
+            return False
+        finally:
+            if buffer:
+                try:
+                    buffer.close()
+                except:
+                    pass
 
 
 def test_discord_ping(dig_tool_instance):
@@ -451,7 +518,8 @@ def _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot
                         success = dig_tool_instance.discord_notifier.send_item_notification(
                             rarity,
                             user_id if user_id else None,
-                            include_screenshot
+                            include_screenshot,
+                            dig_tool_instance.item_ocr.item_area if include_screenshot else None
                         )
                         if success:
                             logger.info(f"Item notification sent successfully for {rarity} item")
