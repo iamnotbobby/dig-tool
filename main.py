@@ -1145,6 +1145,7 @@ class DigTool:
                 and auto_walk_state == "digging"
                 and target_disengaged_time > 0
                 and current_time_ms - target_disengaged_time > 1500
+                and not self.automation_manager.is_selling
             ):
                 self.dig_count += 1
                 self.automation_manager.update_dig_activity()
@@ -1185,7 +1186,7 @@ class DigTool:
                 elif self.manual_dig_was_engaged and not self.target_engaged:
                     if self.manual_dig_target_disengaged_time == 0:
                         self.manual_dig_target_disengaged_time = current_time_ms
-                    elif current_time_ms - self.manual_dig_target_disengaged_time > 1500:
+                    elif current_time_ms - self.manual_dig_target_disengaged_time > 1500 and not self.automation_manager.is_selling:
                         self.dig_count += 1
                         self.automation_manager.update_dig_activity()
                         self.manual_dig_was_engaged = False

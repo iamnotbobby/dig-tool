@@ -1,3 +1,8 @@
+# NOTE: During manual mode, reset these variables at auto-sell start, after auto-sell completion, and auto-sell fail:
+# self.dig_tool.manual_dig_was_engaged = False
+# self.dig_tool.manual_dig_target_disengaged_time = 0
+# Opening inventory can cause false positive line detection, making Dig Tool engage incorrectly. Auto-walk mode doesn't have this issue due to state synchronization.
+
 import time
 import threading
 import autoit
@@ -161,6 +166,9 @@ class AutoSellManager:
             logger.info(f"Starting auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling...")
+            
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
 
             time.sleep(0.1)
 
@@ -223,6 +231,9 @@ class AutoSellManager:
 
             self.is_selling = False
             
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
+            
             if get_param(self.dig_tool, "auto_walk_enabled"):
                 self._monitor_post_sell_engagement()
             else:
@@ -231,6 +242,8 @@ class AutoSellManager:
 
         except Exception as e:
             self.is_selling = False
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
             self._restore_shifts_on_error()
             error_msg = f"Error in auto-sell: {e}"
             logger.error(error_msg)
@@ -249,6 +262,9 @@ class AutoSellManager:
             logger.info(f"Starting UI navigation auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling (UI Navigation)...")
+            
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
 
             time.sleep(0.1)
 
@@ -303,6 +319,9 @@ class AutoSellManager:
 
             self.is_selling = False
             
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
+            
             if get_param(self.dig_tool, "auto_walk_enabled"):
                 self._monitor_post_sell_engagement()
             else:
@@ -311,6 +330,8 @@ class AutoSellManager:
 
         except Exception as e:
             self.is_selling = False
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
             self._restore_shifts_on_error()
             error_msg = f"Error in UI navigation auto-sell: {e}"
             logger.error(error_msg)

@@ -66,7 +66,7 @@ class SettingsManager:
             "color_tolerance": 30,
             "auto_walk_enabled": False,
             "walk_duration": 500,
-            "dynamic_walkspeed_enabled": True,
+            "dynamic_walkspeed_enabled": False,
             "initial_item_count": 0,
             "initial_walkspeed_decrease": 0.0,
             "auto_shovel_enabled": False,
