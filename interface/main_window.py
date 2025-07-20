@@ -201,20 +201,8 @@ class MainWindow:
         self.disabled_tooltips = []
         self.status_tooltips = []
 
-    def validate_param_entry(self, var_key, value):
-        if not hasattr(self, '_validation_throttle'):
-            self._validation_throttle = {}
-        
-        import time
-        current_time = time.time()
-        
-        if var_key in self._validation_throttle:
-            if current_time - self._validation_throttle[var_key] < 0.1:
-                return True
-        
-        self._validation_throttle[var_key] = current_time
-        
-        if not value or value.strip() == "":
+    def validate_on_focus_out(self, var_key, value):
+        if value == "" or (hasattr(value, 'strip') and value.strip() == ""):
             self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
             return False
         
@@ -222,11 +210,22 @@ class MainWindow:
             if not self.dig_tool.settings_manager.validate_param_value(var_key, value):
                 self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
                 return False
+            else:
+                self.dig_tool.root.after_idle(lambda: self._save_param_value(var_key, value))
         except:
             self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
             return False
         
         return True
+    
+    def _save_param_value(self, var_key, value):
+        try:
+            if hasattr(self.dig_tool.settings_manager, 'save_param_value'):
+                self.dig_tool.settings_manager.save_param_value(var_key, value)
+            elif hasattr(self.dig_tool.settings_manager, 'save_settings'):
+                self.dig_tool.settings_manager.save_settings()
+        except:
+            pass
     
     def _restore_default_value(self, var_key):
         try:
@@ -733,10 +732,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key] = default_value
 
             if var_type != tk.BooleanVar:
-                vcmd = (self.dig_tool.root.register(lambda value, key=var_key: self.validate_param_entry(key, value)), '%P')
                 entry = tk.Entry(frame, textvariable=self.dig_tool.param_vars[var_key], font=(FONT_FAMILY, 9),
-                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1,
-                                 validate='focusout', validatecommand=vcmd)
+                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1)
+                entry.bind('<FocusOut>', lambda event, key=var_key: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry.bind('<Return>', lambda event, key=var_key: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry.pack(side='right', ipady=3)
 
                 if dependent_list is not None: dependent_list.append(entry)
@@ -767,10 +766,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key1] = default_value1
 
             if var_type1 != tk.BooleanVar:
-                vcmd1 = (self.dig_tool.root.register(lambda value, key=var_key1: self.validate_param_entry(key, value)), '%P')
                 entry1 = tk.Entry(left_frame, textvariable=self.dig_tool.param_vars[var_key1], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
-                                  validate='focusout', validatecommand=vcmd1)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                entry1.bind('<FocusOut>', lambda event, key=var_key1: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry1.bind('<Return>', lambda event, key=var_key1: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry1.pack(side='right', ipady=3, padx=(4, 8))
                 if dependent_list is not None: dependent_list.append(entry1)
                 if widget_type:
@@ -796,10 +795,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key2] = default_value2
 
             if var_type2 != tk.BooleanVar:
-                vcmd2 = (self.dig_tool.root.register(lambda value, key=var_key2: self.validate_param_entry(key, value)), '%P')
                 entry2 = tk.Entry(right_frame, textvariable=self.dig_tool.param_vars[var_key2], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
-                                  validate='focusout', validatecommand=vcmd2)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                entry2.bind('<FocusOut>', lambda event, key=var_key2: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry2.bind('<Return>', lambda event, key=var_key2: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry2.pack(side='right', ipady=3)
                 if dependent_list is not None: dependent_list.append(entry2)
                 if widget_type:
