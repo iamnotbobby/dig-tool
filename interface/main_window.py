@@ -1115,8 +1115,9 @@ class MainWindow:
                 for widget in self.sell_delay_widgets:
                     widget.pack_forget()  # type: ignore
                 for widget in self.sell_button_widgets:
-                    widget.pack_forget()  # type: ignore        self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
-        
+                    widget.pack_forget()  # type: ignore
+                    
+        self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
         self.dig_tool.root.after_idle(update_test_button_text)
 
         # ===== DISCORD PANE =====
