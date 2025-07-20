@@ -51,7 +51,8 @@ class SettingsManager:
             "sell_delay": 1000,
             "auto_sell_method": "button_click",
             "auto_sell_ui_sequence": "down,up,enter",
-            "auto_sell_target_engagement_timeout": 10.0, 
+            "auto_sell_target_engagement_enabled": True,
+            "auto_sell_target_engagement_timeout": 120.0, 
             # Otsu detection parameters
             "use_otsu_detection": False,
             "otsu_min_area": 50,
@@ -86,7 +87,7 @@ class SettingsManager:
             "line_sensitivity": "How sharp the contrast must be to be considered a line. Higher values = less sensitive to weak edges.",
             "line_detection_offset": "Pixels to offset the detected line position. Positive = right, negative = left. Decimals allowed for precise positioning.",
             "zone_min_width": "The minimum pixel width for a valid target zone. Smaller zones will be ignored.",
-            "max_zone_width_percent": "The maximum width of a target zone as a percent of the capture width. Prevents detecting overly large areas.",
+            "max_zone_width_percent": "The maximum width of a target zone as a percent of the capture width. Values above 100% allow detecting zones wider than the capture area (max 200%).",
             "min_zone_height_percent": "A target zone must span this percentage of the capture height to be valid. 100% = full height required.",
             "saturation_threshold": "How colorful a pixel must be to be part of the initial target zone search. Higher = more colorful required.",
             "zone_smoothing_factor": "How much to smooth the movement of the target zone. 1.0 = no smoothing, lower = more smoothing.",
@@ -108,6 +109,7 @@ class SettingsManager:
             "sell_delay": "Delay in milliseconds before clicking the sell button.",
             "auto_sell_method": "Method for auto-selling: 'button_click' (click specific position) or 'ui_navigation' (use keyboard shortcuts).",
             "auto_sell_ui_sequence": "Keyboard sequence for UI navigation auto-sell. Use comma-separated keys from: down, up, left, right, enter. Example: 'down,up,enter'. Backslash keys are automatically added.",
+            "auto_sell_target_engagement_enabled": "Enable waiting for target engagement after auto-sell completion. When disabled, auto-sell will not wait for re-engagement. Helpful in casews where inventory might stay open.",
             "auto_sell_target_engagement_timeout": "Time to wait for target engagement after auto-sell completion (seconds). If no engagement detected, applies auto-sell fallback to re-close inventory.",
             "auto_walk_enabled": "Automatically move around while digging.",
             "walk_duration": "Default duration to hold down key presses (milliseconds). Used as base duration unless custom durations are set for individual keys.",
@@ -192,6 +194,8 @@ class SettingsManager:
             return "DISABLED: Cannot use Custom Cursor while Auto-Walk is enabled. Disable Auto-Walk first."
         elif setting_key == "auto_walk_enabled":
             return "DISABLED: Cannot use Auto-Walk while Custom Cursor is enabled. Disable Custom Cursor first."
+        elif setting_key == "auto_sell_target_engagement_timeout":
+            return "DISABLED: Target engagement timeout is disabled. Enable 'Auto Sell Target Engagement' first."
         return ""
 
     def is_setting_conflicted(self, setting_key):
@@ -203,10 +207,14 @@ class SettingsManager:
             return self.dig_tool.param_vars.get(
                 "use_custom_cursor", tk.BooleanVar()
             ).get()
+        elif setting_key == "auto_sell_target_engagement_timeout":
+            return not self.dig_tool.param_vars.get(
+                "auto_sell_target_engagement_enabled", tk.BooleanVar()
+            ).get()
         return False
 
     def update_setting_states(self):
-        conflicting_settings = ["use_custom_cursor", "auto_walk_enabled"]
+        conflicting_settings = ["use_custom_cursor", "auto_walk_enabled", "auto_sell_target_engagement_timeout"]
 
         for setting_key in conflicting_settings:
             if (
@@ -322,9 +330,10 @@ class SettingsManager:
                 if key in [
                     "min_zone_height_percent",
                     "sweet_spot_width_percent",
-                    "max_zone_width_percent",
                 ]:
                     return 0 <= val <= 100
+                elif key == "max_zone_width_percent":
+                    return 0 <= val <= 200
                 elif key in [
                     "line_sensitivity",
                     "zone_min_width",
@@ -379,6 +388,7 @@ class SettingsManager:
                 "debug_on_top",
                 "debug_clicks_enabled",
                 "auto_sell_enabled",
+                "auto_sell_target_engagement_enabled",
                 "auto_walk_enabled",
                 "use_custom_cursor",
                 "auto_shovel_enabled",

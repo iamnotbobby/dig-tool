@@ -197,6 +197,7 @@ class MainWindow:
         self.velocity_dependent_widgets = []
         self.otsu_dependent_widgets = []
         self.color_picker_dependent_widgets = []
+        self.engagement_timeout_dependent_widgets = []
         self.disabled_tooltips = []
         self.status_tooltips = []
 
@@ -255,26 +256,32 @@ class MainWindow:
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def validate_auto_sell_toggle(self, *args):
-        if not self.dig_tool.automation_manager.sell_button_position:
-            if self.dig_tool.param_vars['auto_sell_enabled'].get():
+        if hasattr(self, '_validating_auto_sell') and self._validating_auto_sell:
+            return
+        
+        if self.dig_tool.param_vars['auto_sell_enabled'].get():
+            if not self.dig_tool.automation_manager.sell_button_position:
                 self.dig_tool.param_vars['auto_sell_enabled'].set(False)
                 self.dig_tool.update_status("Error: Set sell button first before enabling auto-sell!")
                 return
 
-        if self.dig_tool.param_vars['auto_sell_enabled'].get():
             auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
             if not auto_walk_enabled:
-                import tkinter.messagebox as messagebox
-                result = messagebox.askyesno(
-                    "Auto-Sell Warning",
-                    "Enabling auto-sell without the usage of auto-walk MAY cause problems!\n\n"
-                    "Only enable this if you are automating Dig Tool through another way or will not interfere with the auto-sell process.\n\n"
-                    "Are you sure you want to enable auto-sell?",
-                    icon='warning'
-                )
-                if not result:
-                    self.dig_tool.param_vars['auto_sell_enabled'].set(False)
-                    return
+                self._validating_auto_sell = True
+                try:
+                    import tkinter.messagebox as messagebox
+                    result = messagebox.askyesno(
+                        "Auto-Sell Warning",
+                        "Enabling auto-sell without the usage of auto-walk MAY cause problems!\n\n"
+                        "Only enable this if you are automating Dig Tool through another way or will not interfere with the auto-sell process.\n\n"
+                        "Are you sure you want to enable auto-sell?",
+                        icon='warning'
+                    )
+                    if not result:
+                        self.dig_tool.root.after_idle(lambda: self.dig_tool.param_vars['auto_sell_enabled'].set(False))
+                        return
+                finally:
+                    self._validating_auto_sell = False
 
     def is_sell_button_set(self):
         return self.dig_tool.automation_manager.sell_button_position is not None
@@ -454,7 +461,18 @@ class MainWindow:
                     logger.debug("Enabled color picker detection")  
                     
                     if hasattr(self, 'picked_color_display') and self.picked_color_display:
-                        self.picked_color_display.config(bg=picked_color, text=picked_color)
+                        self.picked_color_display.config(bg=picked_color, text="")
+                        
+                        if hasattr(self, 'picked_color_text') and self.picked_color_text:
+                            hex_clean = picked_color[1:]
+                            r = int(hex_clean[0:2], 16)
+                            g = int(hex_clean[2:4], 16) 
+                            b = int(hex_clean[4:6], 16)
+                            
+                            text_color = "black"
+                            
+                            self.picked_color_text.config(text=picked_color, fg=text_color)
+                        
                         logger.debug("Updated color display widget")
                     else:
                         logger.debug("Color display widget not found")
@@ -513,17 +531,33 @@ class MainWindow:
         for widget in self.color_picker_dependent_widgets:
             widget.config(state='normal' if color_picker_enabled else 'disabled')
 
+        engagement_enabled = self.dig_tool.param_vars.get('auto_sell_target_engagement_enabled', tk.BooleanVar()).get()
+        sell_enabled = self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
+        engagement_timeout_enabled = sell_enabled and engagement_enabled
+        for widget in self.engagement_timeout_dependent_widgets:
+            widget.config(state='normal' if engagement_timeout_enabled else 'disabled')
+
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
                 if tooltip.widget_type == 'shovel':
                     tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
                 elif tooltip.widget_type == 'sell':
-                    sell_button_set = self.dig_tool.automation_manager.sell_button_position is not None
-                    tooltip.set_disabled(not sell_button_set, "Disabled: Set sell button position first")
+                    if not sell_enabled:
+                        tooltip.set_disabled(True, "Disabled: Auto-sell must be enabled first.")
+                    else:
+                        sell_button_set = self.dig_tool.automation_manager.sell_button_position is not None
+                        tooltip.set_disabled(not sell_button_set, "Disabled: Set sell button position first.")
                 elif tooltip.widget_type == 'cursor':
-                    tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first")
+                    tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first.")
                 elif tooltip.widget_type == 'velocity':
-                    tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first")
+                    tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first.")
+                elif tooltip.widget_type == 'engagement_timeout':
+                    if not sell_enabled:
+                        tooltip.set_disabled(True, "Disabled: Auto-sell must be enabled first.")
+                    elif not engagement_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Post-Sell Engagement Monitoring first.")
+                    else:
+                        tooltip.set_disabled(False, "")
 
     def create_ui(self):
         BG_COLOR = "#f0f0f0"  # Light gray main background
@@ -840,7 +874,7 @@ class MainWindow:
 
             if dependent_list is not None: dependent_list.append(btn)
             if widget_type:
-                disabled_tooltip = DisabledTooltip(btn, "", f"Test button for {text.lower()}")
+                disabled_tooltip = DisabledTooltip(btn, "", f"Test button for {text.lower()}.")
                 disabled_tooltip.widget_type = widget_type
                 self.disabled_tooltips.append(disabled_tooltip)
 
@@ -884,16 +918,19 @@ class MainWindow:
         color_frame.pack(fill='x', padx=5, pady=2)
         
         Label(color_frame, text="Sampled Color:", font=("Segoe UI", 9)).pack(side='left', padx=(0, 5))
-        self.picked_color_display = Label(color_frame, text="None", bg='lightgray', relief='solid', bd=1, width=10)
-        self.picked_color_display.pack(side='left', padx=(0, 5))
+        
+        color_display_container = Frame(color_frame, bg=color_frame.cget('bg'))
+        color_display_container.pack(side='left', padx=(0, 5))
+        
+        self.picked_color_display = Label(color_display_container, text="  ", bg='lightgray', relief='solid', bd=1, width=4, height=1)
+        self.picked_color_display.pack()
+        
+        self.picked_color_text = Label(color_display_container, text="None", font=("Segoe UI", 8), bg=color_frame.cget('bg'), fg="black")
+        self.picked_color_text.pack()
         
         self.pick_color_btn = Button(color_frame, text="Sample Area", command=self.pick_color_from_screen)
-        self.pick_color_btn.pack(side='left', padx=(5, 0))
+        self.pick_color_btn.pack(side='left', padx=(5, 0), pady=2)
         self.color_picker_dependent_widgets.append(self.pick_color_btn)
-        
-        test_color_btn = Button(color_frame, text="Test", command=self.test_color_param)
-        test_color_btn.pack(side='left', padx=(5, 0))
-        self.color_picker_dependent_widgets.append(test_color_btn)
         
         create_param_entry(color_picker_subsection.content, "Color Tolerance:", 'color_tolerance',
                           self.color_picker_dependent_widgets, 'color_picker')
@@ -1005,6 +1042,17 @@ class MainWindow:
         StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
                       "Sell button position is set. Click to change it.", self.is_sell_button_set)
         
+        sell_button_frame = sell_button_btn.master
+        sell_button_frame.pack_forget() # type: ignore
+        
+        self.sell_button_widgets = [sell_button_frame]
+        
+        self.sell_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.sell_delay_entry = create_param_entry(self.sell_delay_frame, "Sell Delay (ms):", 'sell_delay',
+                                                  self.sell_dependent_widgets, 'sell')
+        
+        self.sell_delay_widgets = [self.sell_delay_frame]
+        
         create_dropdown_param(auto_sell_subsection.content, "Auto-Sell Method:", 'auto_sell_method',
                              ['button_click', 'ui_navigation'],
                              self.sell_dependent_widgets, 'sell')
@@ -1022,17 +1070,12 @@ class MainWindow:
         create_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
                           self.sell_dependent_widgets, 'sell')
         
-        
-        self.sell_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
-        
-        self.sell_delay_entry = create_param_entry(self.sell_delay_frame, "Sell Delay (ms):", 'sell_delay',
-                                                  self.sell_dependent_widgets, 'sell')
-        
-       
-        self.sell_delay_widgets = [self.sell_delay_frame]
+        create_checkbox_param(auto_sell_subsection.content, "Enable Post-Sell Engagement Monitoring",
+                             'auto_sell_target_engagement_enabled',
+                             self.sell_dependent_widgets, 'sell')
         
         create_param_entry(auto_sell_subsection.content, "Post-Sell Engagement Timeout (s):", 'auto_sell_target_engagement_timeout',
-                          self.sell_dependent_widgets, 'sell')
+                          self.engagement_timeout_dependent_widgets, 'engagement_timeout')
 
         self.test_sell_button = create_section_button(auto_sell_subsection.content, "Test Sell Click",
                               lambda: test_sell_button_click(self.dig_tool),
@@ -1044,26 +1087,35 @@ class MainWindow:
                 self.test_sell_button.config(text="Test Sell Click")
              
                 for widget in self.ui_sequence_widgets:
-                    widget.pack_forget()
+                    widget.pack_forget()  # type: ignore
                
+                for widget in self.sell_button_widgets:
+                    widget.pack(fill='x', padx=10, pady=5)  # type: ignore
+                
                 for widget in self.sell_delay_widgets:
-                    widget.pack(fill='x', padx=10, pady=2)
+                    widget.pack(fill='x', padx=10, pady=2)  # type: ignore
             elif method == "ui_navigation":
                 self.test_sell_button.config(text="Test UI Navigation")
              
                 for widget in self.ui_sequence_widgets:
-                    widget.pack(fill='x', padx=10, pady=2)
+                    widget.pack(fill='x', padx=10, pady=2)  # type: ignore
             
                 for widget in self.sell_delay_widgets:
-                    widget.pack_forget()
+                    widget.pack_forget()  # type: ignore
+                
+                for widget in self.sell_button_widgets:
+                    widget.pack_forget()  # type: ignore
+            
+                for widget in self.sell_delay_widgets:
+                    widget.pack_forget()  # type: ignore
             else:
                 self.test_sell_button.config(text="Test Sell")
                 for widget in self.ui_sequence_widgets:
-                    widget.pack_forget()
+                    widget.pack_forget()  # type: ignore
                 for widget in self.sell_delay_widgets:
-                    widget.pack_forget()
-        
-        self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
+                    widget.pack_forget()  # type: ignore
+                for widget in self.sell_button_widgets:
+                    widget.pack_forget()  # type: ignore        self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
         
         self.dig_tool.root.after_idle(update_test_button_text)
 
@@ -1175,6 +1227,8 @@ class MainWindow:
         self.dig_tool.param_vars['use_custom_cursor'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_otsu_detection'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['velocity_based_width_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['auto_sell_target_engagement_enabled'].trace_add('write', self.update_dependent_widgets_state)
 
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
@@ -1280,7 +1334,7 @@ class MainWindow:
             picked_color = self.dig_tool.param_vars.get('picked_color_rgb', tk.StringVar()).get()
             color_tolerance = self.dig_tool.param_vars.get('color_tolerance', tk.DoubleVar()).get()
             
-            logger.info(f"=== Color Parameter Test ===")
+            logger.info(f"=== Color Parameter Debug Info ===")
             logger.info(f"use_color_picker_detection: {use_color_picker}")
             logger.info(f"picked_color_rgb: '{picked_color}'")
             logger.info(f"color_tolerance: {color_tolerance}")
@@ -1289,13 +1343,9 @@ class MainWindow:
             picked_via_get_param = get_param(self.dig_tool, 'picked_color_rgb')
             logger.info(f"Via get_param: '{picked_via_get_param}'")
             
-            test_color = "#00FF00"  
-            self.dig_tool.param_vars['picked_color_rgb'].set(test_color)
-            after_set = get_param(self.dig_tool, 'picked_color_rgb')
-            logger.info(f"After setting {test_color}: '{after_set}'")
-            
-            self.dig_tool.update_status(f"Color test complete - current: {after_set}")
+
+            self.dig_tool.update_status(f"Current sampled color: {picked_color} (tolerance: {color_tolerance})")
             
         except Exception as e:
-            logger.error(f"Error in color test: {e}")
+            logger.error(f"Error in color debug: {e}")
             self.dig_tool.update_status(f"Color test error: {e}")
