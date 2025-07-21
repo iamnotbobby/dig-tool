@@ -394,6 +394,169 @@ def _toggle_color_modules_overlay_thread_safe(dig_tool_instance):
         logger.error(f"Error toggling color modules overlay: {e}")
 
 
+def select_item_area(dig_tool_instance):
+    try:
+        dig_tool_instance.update_status("Select item notification area...")
+        
+        def select_area_worker():
+            try:
+                dig_tool_instance.root.iconify()
+                
+                if not dig_tool_instance.item_ocr.initialized:
+                    logger.info("Initializing OCR for item area selection")
+                    if not dig_tool_instance.item_ocr.initialize_ocr():
+                        dig_tool_instance.root.deiconify()
+                        dig_tool_instance.update_status("Item OCR initialization failed")
+                        return
+                
+                if dig_tool_instance.item_ocr.select_item_area():
+                    if dig_tool_instance.item_ocr.item_area:
+                        if 'item_area' not in dig_tool_instance.param_vars:
+                            dig_tool_instance.param_vars['item_area'] = dig_tool_instance.settings_manager.get_param_type('item_area')()
+                        dig_tool_instance.param_vars['item_area'].set(str(dig_tool_instance.item_ocr.item_area))
+                        dig_tool_instance.settings_manager.save_all_settings()
+                    
+                    dig_tool_instance.update_status("Item area selected successfully")
+                    logger.info("Item area selected for notifications")
+                    
+                    from interface.main_window import update_area_info
+                    update_area_info(dig_tool_instance)
+                else:
+                    dig_tool_instance.update_status("Item area selection cancelled")
+                    logger.warning("Item area selection was cancelled")
+                
+                dig_tool_instance.root.deiconify()
+                    
+            except Exception as e:
+                dig_tool_instance.root.deiconify()
+                dig_tool_instance.update_status(f"Item area selection error: {e}")
+                logger.error(f"Error in item area selection: {e}")
+        
+        threading.Thread(target=select_area_worker, daemon=True).start()
+        
+    except Exception as e:
+        dig_tool_instance.update_status(f"Item area selection error: {e}")
+        logger.error(f"Error in select_item_area: {e}")
+
+
+def test_item_ocr(dig_tool_instance):
+    try:
+        if not dig_tool_instance.item_ocr.initialized:
+            dig_tool_instance.update_status("Item OCR not initialized - select item area first")
+            return
+            
+        if not dig_tool_instance.item_ocr.item_area:
+            dig_tool_instance.update_status("Item area not set - select item area first")
+            return
+        
+        dig_tool_instance.update_status("Testing item OCR...")
+        
+        def test_ocr_worker():
+            try:
+                item_text = dig_tool_instance.item_ocr.read_item_text()
+                
+                if item_text:
+                    rarity = dig_tool_instance.item_ocr.extract_rarity(item_text)
+                    if rarity:
+                        dig_tool_instance.update_status(f"Item detected: {item_text}")
+                        logger.info(f"Test OCR successful - Rarity: {rarity}, Full text: {item_text}")
+                    else:
+                        dig_tool_instance.update_status(f"Text detected but no rarity found: {item_text[:100]}...")
+                        logger.info(f"Test OCR - No rarity found in: {item_text}")
+                else:
+                    dig_tool_instance.update_status("No item text detected - check area selection")
+                    logger.warning("Test OCR failed - no item text detected")
+                        
+            except Exception as e:
+                dig_tool_instance.update_status(f"Item OCR test error: {e}")
+                logger.error(f"Error in item OCR test: {e}")
+        
+        threading.Thread(target=test_ocr_worker, daemon=True).start()
+        
+    except Exception as e:
+        dig_tool_instance.update_status(f"Item OCR test error: {e}")
+        logger.error(f"Error in test_item_ocr: {e}")
+
+
+def select_money_area(dig_tool_instance):
+    try:
+        dig_tool_instance.update_status("Select money area for Discord notifications...")
+        
+        def select_area_worker():
+            try:
+                dig_tool_instance.root.iconify()
+                
+                if not dig_tool_instance.money_ocr.initialized:
+                    logger.info("Initializing OCR for money area selection")
+                    if not dig_tool_instance.money_ocr.initialize_ocr():
+                        dig_tool_instance.root.deiconify()
+                        dig_tool_instance.update_status("OCR initialization failed")
+                        return
+                
+                if dig_tool_instance.money_ocr.select_money_area():
+                    if dig_tool_instance.money_ocr.money_area:
+                        if 'money_area' not in dig_tool_instance.param_vars:
+                            dig_tool_instance.param_vars['money_area'] = dig_tool_instance.settings_manager.get_param_type('money_area')()
+                        dig_tool_instance.param_vars['money_area'].set(str(dig_tool_instance.money_ocr.money_area))
+                        dig_tool_instance.settings_manager.save_all_settings()
+                    
+                    dig_tool_instance.update_status("Money area selected successfully")
+                    logger.info("Money area selected for Discord notifications")
+                    
+                    from interface.main_window import update_area_info
+                    update_area_info(dig_tool_instance)
+                else:
+                    dig_tool_instance.update_status("Money area selection cancelled")
+                    logger.warning("Money area selection was cancelled")
+                
+                dig_tool_instance.root.deiconify()
+                    
+            except Exception as e:
+                dig_tool_instance.root.deiconify()
+                dig_tool_instance.update_status(f"Money area selection error: {e}")
+                logger.error(f"Error in money area selection: {e}")
+        
+        threading.Thread(target=select_area_worker, daemon=True).start()
+        
+    except Exception as e:
+        dig_tool_instance.update_status(f"Money area selection error: {e}")
+        logger.error(f"Error in select_money_area: {e}")
+
+
+def test_money_ocr(dig_tool_instance):
+    try:
+        if not dig_tool_instance.money_ocr.initialized:
+            dig_tool_instance.update_status("OCR not initialized - select money area first")
+            return
+            
+        if not dig_tool_instance.money_ocr.money_area:
+            dig_tool_instance.update_status("Money area not set - select money area first")
+            return
+        
+        dig_tool_instance.update_status("Testing money OCR...")
+        
+        def test_ocr_worker():
+            try:
+                money_value = dig_tool_instance.money_ocr.test_money_ocr()
+                
+                if money_value:
+                    dig_tool_instance.update_status(f"Money detected: {money_value}")
+                    logger.info(f"Test OCR successful - Money: {money_value}")
+                else:
+                    dig_tool_instance.update_status("No money detected - check area selection")
+                    logger.warning("Test OCR failed - no money value detected")
+                        
+            except Exception as e:
+                dig_tool_instance.update_status(f"Money OCR test error: {e}")
+                logger.error(f"Error in money OCR test: {e}")
+        
+        threading.Thread(target=test_ocr_worker, daemon=True).start()
+        
+    except Exception as e:
+        dig_tool_instance.update_status(f"Money OCR test error: {e}")
+        logger.error(f"Error in test_money_ocr: {e}")
+
+
 def toggle_gui(dig_tool_instance):
     dig_tool_instance.root.after(0, lambda: _toggle_gui_thread_safe(dig_tool_instance))
 

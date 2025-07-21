@@ -20,8 +20,6 @@ from utils.ui_management import (
     test_sell_button_click,
     show_settings_info,
     show_debug_console,
-)
-from utils.ui_management import (
     toggle_preview_window,
     toggle_debug_window,
     toggle_main_on_top,
@@ -37,11 +35,9 @@ from utils.input_management import (
     toggle_autowalk_overlay,
     toggle_color_modules_overlay,
 )
-from utils.ui_management import update_area_info, update_sell_info, update_cursor_info
 import os
 from core.notifications import test_discord_ping
-from utils.money_area_selection import select_money_area, test_money_ocr
-from utils.item_area_selection import select_item_area, test_item_ocr
+from utils.input_management import select_money_area, test_money_ocr, select_item_area, test_item_ocr
 
 
 class DisabledTooltip:
@@ -128,7 +124,7 @@ class StatusTooltip:
         self.tooltip_window = tk.Toplevel(self.widget)
         self.tooltip_window.wm_overrideredirect(True)
         self.tooltip_window.wm_attributes('-topmost', True)
-        bg_color = "#e8f5e8" if is_set else "#fff0e0"  # Light green if set, light orange if not set
+        bg_color = "#ffffe0"
         label = tk.Label(self.tooltip_window, text=text, justify='left', background=bg_color, relief='solid',
                          borderwidth=1, font=("Segoe UI", 9, "normal"), wraplength=300, padx=8, pady=6)
         label.pack()
@@ -198,6 +194,10 @@ class MainWindow:
         self.otsu_dependent_widgets = []
         self.color_picker_dependent_widgets = []
         self.engagement_timeout_dependent_widgets = []
+        self.money_detection_dependent_widgets = []
+        self.item_detection_dependent_widgets = []
+        self.money_test_button = None
+        self.item_test_button = None
         self.disabled_tooltips = []
         self.status_tooltips = []
 
@@ -254,6 +254,22 @@ class MainWindow:
             self.dig_tool.param_vars['use_otsu_detection'].set(False)
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
+    def validate_money_detection_toggle(self, *args):
+        if self.dig_tool.param_vars['enable_money_detection'].get():
+            if not self.is_money_area_set():
+                self.dig_tool.param_vars['enable_money_detection'].set(False)
+                self.dig_tool.update_status("Error: Set money area first before enabling money detection!")
+                return
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
+    def validate_item_detection_toggle(self, *args):
+        if self.dig_tool.param_vars['enable_item_detection'].get():
+            if not self.is_item_area_set():
+                self.dig_tool.param_vars['enable_item_detection'].set(False)
+                self.dig_tool.update_status("Error: Set item area first before enabling item detection!")
+                return
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
     def validate_auto_sell_toggle(self, *args):
         if hasattr(self, '_validating_auto_sell') and self._validating_auto_sell:
             return
@@ -287,6 +303,12 @@ class MainWindow:
 
     def is_cursor_position_set(self):
         return hasattr(self.dig_tool, 'cursor_position') and self.dig_tool.cursor_position is not None
+
+    def is_money_area_set(self):
+        return hasattr(self.dig_tool, 'money_ocr') and self.dig_tool.money_ocr.money_area is not None
+
+    def is_item_area_set(self):
+        return hasattr(self.dig_tool, 'item_ocr') and self.dig_tool.item_ocr.item_area is not None
 
     def pick_color_from_screen(self):
         import time
@@ -489,6 +511,28 @@ class MainWindow:
             self.dig_tool.root.deiconify()
             self.dig_tool.update_status(f"Error sampling colors: {e}")
 
+    def _update_multi_checkbox_param(self, var_key, options, checkbox_vars):
+        selected_options = []
+        for option, var in checkbox_vars.items():
+            if var.get():
+                selected_options.append(option)
+        
+        self.dig_tool.param_vars[var_key].set(json.dumps(selected_options))
+        self.dig_tool.last_known_good_params[var_key] = selected_options
+
+    def _update_multi_checkbox_display(self, var_key, options, checkbox_vars):
+        try:
+            current_value = self.dig_tool.param_vars[var_key].get()
+            if current_value:
+                selected_options = json.loads(current_value) if isinstance(current_value, str) else current_value
+            else:
+                selected_options = self.dig_tool.settings_manager.get_default_value(var_key)
+        except (json.JSONDecodeError, KeyError):
+            selected_options = self.dig_tool.settings_manager.get_default_value(var_key)
+        
+        for option, var in checkbox_vars.items():
+            var.set(option in selected_options)
+
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
@@ -536,6 +580,22 @@ class MainWindow:
         for widget in self.engagement_timeout_dependent_widgets:
             widget.config(state='normal' if engagement_timeout_enabled else 'disabled')
 
+        # Money detection widgets
+        money_detection_enabled = self.dig_tool.param_vars.get('enable_money_detection', tk.BooleanVar()).get()
+        for widget in self.money_detection_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if money_detection_enabled else 'disabled')
+            else:
+                logger.warning(f"Widget in money_detection_dependent_widgets has no config method: {type(widget)}")
+
+        # Item detection widgets
+        item_detection_enabled = self.dig_tool.param_vars.get('enable_item_detection', tk.BooleanVar()).get()
+        for widget in self.item_detection_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if item_detection_enabled else 'disabled')
+            else:
+                logger.warning(f"Widget in item_detection_dependent_widgets has no config method: {type(widget)}")
+
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
                 if tooltip.widget_type == 'shovel':
@@ -557,6 +617,20 @@ class MainWindow:
                         tooltip.set_disabled(True, "Disabled: Enable Post-Sell Engagement Monitoring first.")
                     else:
                         tooltip.set_disabled(False, "")
+
+        if self.money_test_button:
+            money_area_set = self.is_money_area_set()
+            if money_area_set:
+                self.money_test_button.config(state='normal', fg="#000000")
+            else:
+                self.money_test_button.config(state='disabled', fg="#666666")
+
+        if self.item_test_button:
+            item_area_set = self.is_item_area_set()
+            if item_area_set:
+                self.item_test_button.config(state='normal', fg="#000000")
+            else:
+                self.item_test_button.config(state='disabled', fg="#666666")
 
     def create_ui(self):
         BG_COLOR = "#f0f0f0"  # Light gray main background
@@ -879,6 +953,65 @@ class MainWindow:
 
             return btn
 
+        def create_multi_checkbox_param(parent, text, var_key, options, colors=None, dependent_list=None, widget_type=None, 
+                                       validation_callback=None, max_cols=2):
+            frame = Frame(parent, bg=parent.cget('bg'))
+            frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
+
+            label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=parent.cget('bg'), fg=TEXT_COLOR,
+                         width=LABEL_WIDTH, anchor='w')
+            label.pack(side='left')
+
+            tooltip_text = self.dig_tool.settings_manager.get_description(var_key)
+            Tooltip(label, tooltip_text)
+
+            default_value = self.dig_tool.settings_manager.get_default_value(var_key)
+            if var_key not in self.dig_tool.param_vars:
+                self.dig_tool.param_vars[var_key] = tk.StringVar(value=json.dumps(default_value))
+                self.dig_tool.last_known_good_params[var_key] = default_value
+
+            right_frame = Frame(frame, bg=parent.cget('bg'))
+            right_frame.pack(side='right', fill='x', expand=True)
+            
+            checkbox_vars = {}
+            checkbox_widgets = []
+            row, col = 0, 0
+            
+            for option in options:
+                var = tk.BooleanVar()
+                color = colors.get(option, TEXT_COLOR) if colors else TEXT_COLOR
+                
+                checkbox = Checkbutton(right_frame, text=option.title(), variable=var,
+                                     bg=parent.cget('bg'), fg=color, selectcolor=FRAME_BG,
+                                     activebackground=parent.cget('bg'), activeforeground=color,
+                                     font=(FONT_FAMILY, 9), anchor='w', width=12)
+                
+                checkbox.configure(command=lambda v=var_key, o=options, c=checkbox_vars: self._update_multi_checkbox_param(v, o, c))
+                
+                checkbox.grid(row=row, column=col, sticky='ew', padx=3, pady=1)
+                checkbox_vars[option] = var
+                checkbox_widgets.append(checkbox)
+                
+                col += 1
+                if col >= max_cols:
+                    col = 0
+                    row += 1
+
+            for i in range(max_cols):
+                right_frame.grid_columnconfigure(i, weight=1)
+
+            setattr(self, f'{var_key}_checkbox_vars', checkbox_vars)
+            
+            self._update_multi_checkbox_display(var_key, options, checkbox_vars)
+            
+            if dependent_list is not None:
+                dependent_list.extend(checkbox_widgets)
+            
+            if validation_callback:
+                self.dig_tool.param_vars[var_key].trace_add('write', validation_callback)
+
+            return frame
+
         create_dual_param_entry(panes['detection'].sub_frame, "Line Sensitivity:", 'line_sensitivity',
                                 "Line Detection Offset:", 'line_detection_offset')
         create_dual_param_entry(panes['detection'].sub_frame, "Zone Min Width:", 'zone_min_width',
@@ -1121,16 +1254,51 @@ class MainWindow:
 
         # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
+        create_param_entry(panes['discord'].sub_frame, "Discord Server ID:", 'server_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
         create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
                               'include_screenshot_in_discord')
-        create_checkbox_param(panes['discord'].sub_frame, "Enable Item Detection", 'enable_item_detection')
+
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
-        create_section_button(panes['discord'].sub_frame, "Select Money Area", lambda: select_money_area(self.dig_tool))
-        create_section_button(panes['discord'].sub_frame, "Test Money OCR", lambda: test_money_ocr(self.dig_tool))
-        create_section_button(panes['discord'].sub_frame, "Select Item Area", lambda: select_item_area(self.dig_tool))
-        create_section_button(panes['discord'].sub_frame, "Test Item OCR", lambda: test_item_ocr(self.dig_tool))
+
+        money_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Money Detection",
+                                                           "#e8f8e8")
+        create_checkbox_param(money_detection_subsection.content, "Enable Money Detection", 'enable_money_detection',
+                              validation_callback=self.validate_money_detection_toggle)
+        money_area_btn = create_section_button(money_detection_subsection.content, "Select Money Area", 
+                              lambda: select_money_area(self.dig_tool))
+        StatusTooltip(money_area_btn, "Click to select the money detection area",
+                      "Money area is set. Click to change it.", self.is_money_area_set)
+        self.money_test_button = create_section_button(money_detection_subsection.content, "Test Money OCR", 
+                              lambda: test_money_ocr(self.dig_tool))
+        StatusTooltip(self.money_test_button, "Money area must be set first before testing OCR.",
+                      "Click to test money OCR detection.", self.is_money_area_set)
+
+        item_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Item Detection",
+                                                          "#f0f8f0")
+        create_checkbox_param(item_detection_subsection.content, "Enable Item Detection", 'enable_item_detection',
+                              validation_callback=self.validate_item_detection_toggle)
+        item_area_btn = create_section_button(item_detection_subsection.content, "Select Item Area", 
+                              lambda: select_item_area(self.dig_tool))
+        StatusTooltip(item_area_btn, "Click to select the item detection area",
+                      "Item area is set. Click to change it.", self.is_item_area_set)
+        self.item_test_button = create_section_button(item_detection_subsection.content, "Test Item OCR", 
+                              lambda: test_item_ocr(self.dig_tool))
+        StatusTooltip(self.item_test_button, "Item area must be set first before testing OCR.",
+                      "Click to test item OCR detection.", self.is_item_area_set)
+
+        notification_rarity_colors = {
+            'scarce': "#BB68F3",
+            'legendary': '#FF8C00', 
+            'mythical': '#FF1493',
+            'divine': "#FF0000",
+            'prismatic': "#F34545"
+        }
+        create_multi_checkbox_param(item_detection_subsection.content, "Notification Rarities:", 'notification_rarities',
+                                   ["scarce", "legendary", "mythical", "divine", "prismatic"],
+                                   colors=notification_rarity_colors,
+                                   dependent_list=self.item_detection_dependent_widgets, widget_type='item_detection')
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
         self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))
@@ -1233,7 +1401,7 @@ class MainWindow:
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
         self.update_dependent_widgets_state()
-
+        
         from utils.ui_management import update_main_button_text
         update_main_button_text(self.dig_tool)
         toggle_main_on_top(self.dig_tool)
@@ -1253,13 +1421,6 @@ class MainWindow:
         
         self.dig_tool.update_status(base_status)
     
-    def update_game_area_indicator(self):
-        if hasattr(self.dig_tool, 'game_area_indicator'):
-            if hasattr(self.dig_tool, 'game_area') and self.dig_tool.game_area:
-                self.dig_tool.game_area_indicator.config(text="✓ Game Area: Set", fg="#00aa00")
-            else:
-                self.dig_tool.game_area_indicator.config(text="✗ Game Area: Not Set", fg="#cc0000")
-
     def setup_drag_drop(self):
         if not DND_AVAILABLE:
             logger.info("tkinterdnd2 not available, drag and drop disabled")
@@ -1328,24 +1489,9 @@ class MainWindow:
             logger.error(f"Error in drag and drop handler: {e}")
             self.dig_tool.update_status("Error: Failed to process dropped file")
 
-    def test_color_param(self):
-        try:
-            use_color_picker = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
-            picked_color = self.dig_tool.param_vars.get('picked_color_rgb', tk.StringVar()).get()
-            color_tolerance = self.dig_tool.param_vars.get('color_tolerance', tk.DoubleVar()).get()
-            
-            logger.info(f"=== Color Parameter Debug Info ===")
-            logger.info(f"use_color_picker_detection: {use_color_picker}")
-            logger.info(f"picked_color_rgb: '{picked_color}'")
-            logger.info(f"color_tolerance: {color_tolerance}")
-            
-            from utils.config_management import get_param
-            picked_via_get_param = get_param(self.dig_tool, 'picked_color_rgb')
-            logger.info(f"Via get_param: '{picked_via_get_param}'")
-            
 
-            self.dig_tool.update_status(f"Current sampled color: {picked_color} (tolerance: {color_tolerance})")
-            
-        except Exception as e:
-            logger.error(f"Error in color debug: {e}")
-            self.dig_tool.update_status(f"Color test error: {e}")
+def update_area_info(dig_tool_instance):
+    if hasattr(dig_tool_instance, 'main_window') and hasattr(dig_tool_instance.main_window, 'update_status_with_area_indicator'):
+        dig_tool_instance.main_window.update_status_with_area_indicator()
+    if hasattr(dig_tool_instance, 'main_window') and hasattr(dig_tool_instance.main_window, 'update_dependent_widgets_state'):
+        dig_tool_instance.main_window.update_dependent_widgets_state()

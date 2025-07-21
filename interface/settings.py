@@ -1,10 +1,13 @@
 import json
 import os
+import re
 import tkinter as tk
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import threading
 import time
+import ast
+import subprocess
 from utils.debug_logger import logger
 from utils.pattern_utils import update_walk_pattern_dropdown, open_custom_pattern_manager
 from utils.input_management import apply_keybinds
@@ -73,6 +76,7 @@ class SettingsManager:
             "shovel_slot": 1,
             "shovel_timeout": 5,
             "user_id": "",
+            "server_id": "",
             "webhook_url": "",
             "milestone_interval": 100,
             "money_area": None,
@@ -80,7 +84,9 @@ class SettingsManager:
             "use_custom_cursor": False,
             "shovel_equip_mode": "double",
             "include_screenshot_in_discord": False,
-            "enable_item_detection": False
+            "enable_money_detection": False,
+            "enable_item_detection": False,
+            "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"]
         }
 
         self.param_descriptions = {
@@ -128,10 +134,13 @@ class SettingsManager:
             "color_tolerance": "Tolerance for color matching. Higher values = more colors will match, lower = more precise matching.",
             "initial_walkspeed_decrease": "Additional walkspeed decrease factor (0.0-1.0) added on top of the formula. Higher = slower movement.",
             "user_id": "Discord user ID for notifications (optional - leave blank for no ping).",
+            "server_id": "Discord server ID for message links (optional - leave blank to disable message links).",
             "webhook_url": "Discord webhook URL for sending notifications.",
             "money_area": "Selected screen area for money detection in Discord notifications.",
             "item_area": "Selected screen area for item detection in Discord notifications.",
+            "enable_money_detection": "Enable automatic detection and notification of money values during digging.",
             "enable_item_detection": "Enable automatic detection and notification of rare items during digging.",
+            "notification_rarities": "Select which item rarities will trigger Discord notifications when found.",
             "auto_shovel_enabled": "Automatically re-equip shovel when no activity detected for specified time.",
             "shovel_slot": "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
             "shovel_timeout": "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
@@ -156,11 +165,14 @@ class SettingsManager:
             "toggle_autowalk_overlay": "Toggle the auto walk overlay display on/off.",
         }
 
+    def get_default(self, key, is_keybind=False):
+        return (self.default_keybinds if is_keybind else self.default_params).get(key)
+
     def get_default_value(self, key):
-        return self.default_params.get(key)
+        return self.get_default(key)
 
     def get_default_keybind(self, key):
-        return self.default_keybinds.get(key)
+        return self.get_default(key, True)
 
     def get_param_type(self, key):
         default_value = self.get_default_value(key)
@@ -173,11 +185,12 @@ class SettingsManager:
         else:
             return tk.StringVar
 
-    def get_description(self, key):
-        return self.param_descriptions.get(key, "No description available.")
+    def get_description(self, key, is_keybind=False):
+        descriptions = self.keybind_descriptions if is_keybind else self.param_descriptions
+        return descriptions.get(key, "No description available.")
 
     def get_keybind_description(self, key):
-        return self.keybind_descriptions.get(key, "No description available.")
+        return self.get_description(key, True)
 
     def load_icon(self, icon_path, size=(32, 32)):
         try:
@@ -189,34 +202,41 @@ class SettingsManager:
             logger.error(f"Error loading icon from {icon_path}: {e}")
         return None
 
+    def _get_conflict_rules(self):
+        return {
+            "use_custom_cursor": {
+                "conflicts_with": "auto_walk_enabled",
+                "tooltip": "DISABLED: Cannot use Custom Cursor while Auto-Walk is enabled. Disable Auto-Walk first."
+            },
+            "auto_walk_enabled": {
+                "conflicts_with": "use_custom_cursor", 
+                "tooltip": "DISABLED: Cannot use Auto-Walk while Custom Cursor is enabled. Disable Custom Cursor first."
+            },
+            "auto_sell_target_engagement_timeout": {
+                "depends_on": "auto_sell_target_engagement_enabled",
+                "tooltip": "DISABLED: Target engagement timeout is disabled. Enable 'Auto Sell Target Engagement' first."
+            }
+        }
+
     def get_conflict_tooltip(self, setting_key):
-        if setting_key == "use_custom_cursor":
-            return "DISABLED: Cannot use Custom Cursor while Auto-Walk is enabled. Disable Auto-Walk first."
-        elif setting_key == "auto_walk_enabled":
-            return "DISABLED: Cannot use Auto-Walk while Custom Cursor is enabled. Disable Custom Cursor first."
-        elif setting_key == "auto_sell_target_engagement_timeout":
-            return "DISABLED: Target engagement timeout is disabled. Enable 'Auto Sell Target Engagement' first."
-        return ""
+        rules = self._get_conflict_rules()
+        return rules.get(setting_key, {}).get("tooltip", "")
 
     def is_setting_conflicted(self, setting_key):
-        if setting_key == "use_custom_cursor":
-            return self.dig_tool.param_vars.get(
-                "auto_walk_enabled", tk.BooleanVar()
-            ).get()
-        elif setting_key == "auto_walk_enabled":
-            return self.dig_tool.param_vars.get(
-                "use_custom_cursor", tk.BooleanVar()
-            ).get()
-        elif setting_key == "auto_sell_target_engagement_timeout":
-            return not self.dig_tool.param_vars.get(
-                "auto_sell_target_engagement_enabled", tk.BooleanVar()
-            ).get()
+        rules = self._get_conflict_rules()
+        rule = rules.get(setting_key, {})
+        
+        if "conflicts_with" in rule:
+            return self.dig_tool.param_vars.get(rule["conflicts_with"], tk.BooleanVar()).get()
+        elif "depends_on" in rule:
+            return not self.dig_tool.param_vars.get(rule["depends_on"], tk.BooleanVar()).get()
+        
         return False
 
     def update_setting_states(self):
-        conflicting_settings = ["use_custom_cursor", "auto_walk_enabled", "auto_sell_target_engagement_timeout"]
-
-        for setting_key in conflicting_settings:
+        conflict_rules = self._get_conflict_rules()
+        
+        for setting_key in conflict_rules.keys():
             if (
                 hasattr(self.dig_tool, "setting_widgets")
                 and setting_key in self.dig_tool.setting_widgets
@@ -236,190 +256,150 @@ class SettingsManager:
             logger.error(f"Error getting parameter {key}: {e}")
             return self.default_params.get(key, 0)
 
-    def validate_game_area(self, area):
-        if not area or not isinstance(area, (list, tuple)) or len(area) != 4:
+    def _get_multi_checkbox_params(self):
+        return ["notification_rarities"]
+
+    def _normalize_multi_checkbox_value(self, value):
+        if isinstance(value, list):
+            return json.dumps(value)
+        elif isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                return json.dumps(parsed)
+            except (json.JSONDecodeError, TypeError):
+                return json.dumps([])
+        else:
+            return json.dumps([])
+
+    def _validate_coordinates(self, coords, expected_length, validate_area=False, validate_dimensions=False):
+        if not coords or not isinstance(coords, (list, tuple)) or len(coords) != expected_length:
             return False
         try:
-            x1, y1, x2, y2 = area
-            return (
-                isinstance(x1, (int, float))
-                and isinstance(y1, (int, float))
-                and isinstance(x2, (int, float))
-                and isinstance(y2, (int, float))
-                and x2 > x1
-                and y2 > y1
-                and x1 >= 0
-                and y1 >= 0
-            )
+            if not all(isinstance(x, (int, float)) and x >= 0 for x in coords):
+                return False
+            if validate_area and expected_length == 4:
+                x1, y1, x2, y2 = coords
+                return x2 > x1 and y2 > y1
+            if validate_dimensions and expected_length == 4:
+                x, y, width, height = coords
+                return width > 0 and height > 0
+            return True
         except (ValueError, TypeError):
             return False
+
+    def validate_game_area(self, area):
+        return self._validate_coordinates(area, 4, validate_area=True)
 
     def validate_position(self, position):
-        if not position:
-            return False
-        try:
-            if isinstance(position, (list, tuple)) and len(position) == 2:
-                x, y = position
-                return (
-                    isinstance(x, (int, float))
-                    and isinstance(y, (int, float))
-                    and x >= 0
-                    and y >= 0
-                )
-        except (ValueError, TypeError):
-            pass
-        return False
+        return self._validate_coordinates(position, 2)
 
     def validate_window_position(self, position):
-        if not position:
+        return self._validate_coordinates(position, 4, validate_dimensions=True)
+
+    def _get_validation_rules(self):
+        return {
+            "special_cases": {
+                "picked_color_rgb": lambda v: v in ["", None] or bool(re.match(r"^#[0-9A-Fa-f]{6}$", v)),
+                "otsu_max_area": lambda v: v in ["", None] or (isinstance(v, (int, str)) and int(v) >= 1),
+                "auto_sell_method": lambda v: isinstance(v, str) and v in ["button_click", "ui_navigation"],
+                "auto_sell_ui_sequence": self._validate_ui_sequence,
+                "notification_rarities": self._validate_rarities,
+                "money_area": lambda v: self._validate_area_param(v),
+                "item_area": lambda v: self._validate_area_param(v),
+                "initial_walkspeed_decrease": lambda v: 0.0 <= float(v) <= 1.0,
+                "initial_item_count": lambda v: int(v) >= 0
+            },
+            "int_ranges": {
+                ("min_zone_height_percent", "sweet_spot_width_percent"): (0, 100),
+                ("max_zone_width_percent",): (0, 200),
+                ("target_fps",): (1, 1000),
+                ("screenshot_fps",): (30, 500),
+                ("milestone_interval",): (1, None)
+            },
+            "int_params": [
+                "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
+                "sell_delay", "walk_duration", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance"
+            ],
+            "float_ranges": {
+                ("velocity_width_multiplier",): (0.0, 5.0),
+                ("zone_smoothing_factor",): (0.0, 2.0),
+                ("prediction_confidence_threshold",): (0.0, 1.0),
+                ("otsu_area_percentile",): (0.01, 10.0)
+            },
+            "float_params": ["saturation_threshold", "line_detection_offset", "line_exclusion_radius", "velocity_max_factor", "auto_sell_target_engagement_timeout"],
+            "bool_params": [
+                "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_clicks_enabled",
+                "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
+                "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "use_color_picker_detection",
+                "enable_money_detection", "enable_item_detection"
+            ],
+            "string_params": ["user_id", "server_id", "webhook_url"]
+        }
+
+    def _validate_ui_sequence(self, value):
+        if not isinstance(value, str) or not value.strip():
             return False
-        try:
-            if isinstance(position, (list, tuple)) and len(position) == 4:
-                x, y, width, height = position
-                return (
-                    isinstance(x, (int, float))
-                    and isinstance(y, (int, float))
-                    and isinstance(width, (int, float))
-                    and isinstance(height, (int, float))
-                    and width > 0
-                    and height > 0
-                    and x >= 0
-                    and y >= 0
-                )
-        except (ValueError, TypeError):
-            pass
+        valid_keys = {"down", "up", "left", "right", "enter"}
+        keys = [k.strip().lower() for k in value.split(',') if k.strip()]
+        return keys and all(k in valid_keys for k in keys)
+
+    def _validate_rarities(self, value):
+        valid_rarities = {"scarce", "legendary", "mythical", "divine", "prismatic"}
+        
+        if isinstance(value, list):
+            return all(isinstance(rarity, str) and rarity.lower() in valid_rarities for rarity in value)
+        elif isinstance(value, str):
+            if not value.strip():
+                return True
+            try:
+                parsed_list = json.loads(value)
+                return (isinstance(parsed_list, list) and 
+                       all(isinstance(rarity, str) and rarity.lower() in valid_rarities for rarity in parsed_list))
+            except (json.JSONDecodeError, TypeError):
+                return False
         return False
+
+    def _validate_area_param(self, value):
+        if value in [None, "None", ""]:
+            return True
+        if isinstance(value, str):
+            try:
+                value = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return False
+        return (isinstance(value, (list, tuple)) and len(value) == 4 and 
+                all(isinstance(x, (int, float)) and x >= 0 for x in value))
 
     def validate_param_value(self, key, value):
         try:
-            if key == "picked_color_rgb":
-                if value == "" or value is None:
-                    return True
-                import re
-
-                return bool(re.match(r"^#[0-9A-Fa-f]{6}$", value))
-
-            if key == "otsu_max_area":
-                if value == "" or value is None:
-                    return True
-                try:
-                    val = int(value)
-                    return val >= 1
-                except ValueError:
-                    return False
-
-            if key in [
-                "line_sensitivity",
-                "zone_min_width",
-                "saturation_threshold",
-                "min_zone_height_percent",
-                "sweet_spot_width_percent",
-                "post_click_blindness",
-                "max_zone_width_percent",
-                "sell_every_x_digs",
-                "sell_delay",
-                "walk_duration",
-                "milestone_interval",
-                "target_fps",
-                "screenshot_fps",
-                "otsu_min_area",
-                "otsu_morph_kernel_size",
-                "color_tolerance",
-            ]:
-                val = int(value)
-                if key in [
-                    "min_zone_height_percent",
-                    "sweet_spot_width_percent",
-                ]:
-                    return 0 <= val <= 100
-                elif key == "max_zone_width_percent":
-                    return 0 <= val <= 200
-                elif key in [
-                    "line_sensitivity",
-                    "zone_min_width",
-                    "saturation_threshold",
-                    "post_click_blindness",
-                    "sell_every_x_digs",
-                    "sell_delay",
-                    "walk_duration",
-                    "milestone_interval",
-                    "otsu_min_area",
-                    "otsu_morph_kernel_size",
-                    "auto_sell_target_engagement_timeout",
-                ]:
-                    return val >= 1 if key == "milestone_interval" else val >= 0
-                elif key == "target_fps":
-                    return 1 <= val <= 1000
-                elif key == "screenshot_fps":
-                    return 30 <= val <= 500
-                return True
-            elif key in [
-                "zone_smoothing_factor",
-                "prediction_confidence_threshold",
-                "line_detection_offset",
-                "line_exclusion_radius",
-                "velocity_width_multiplier",
-                "velocity_max_factor",
-                "otsu_area_percentile",
-                "auto_sell_target_engagement_timeout",
-            ]:
-                val = float(value)
-                if key == "velocity_width_multiplier":
-                    return 0.0 <= val <= 5.0
-                elif key == "velocity_max_factor":
-                    return 10.0 <= val <= 2000.0
-                if key == "zone_smoothing_factor":
-                    return 0.0 <= val <= 2.0
-                elif key == "prediction_confidence_threshold":
-                    return 0.0 <= val <= 1.0
-                elif key == "line_detection_offset":
-                    return True
-                elif key == "line_exclusion_radius":
-                    return val >= 0 
-                elif key == "otsu_area_percentile":
-                    return 0.01 <= val <= 10.0
-                elif key == "auto_sell_target_engagement_timeout":
-                    return 0.5 <= val <= 60.0  
-                return True
-            elif key in [
-                "prediction_enabled",
-                "main_on_top",
-                "preview_on_top",
-                "debug_on_top",
-                "debug_clicks_enabled",
-                "auto_sell_enabled",
-                "auto_sell_target_engagement_enabled",
-                "auto_walk_enabled",
-                "use_custom_cursor",
-                "auto_shovel_enabled",
-                "use_otsu_detection",
-                "otsu_adaptive_area",
-                "use_color_picker_detection",
-            ]:
+            rules = self._get_validation_rules()
+            
+            if key in rules["special_cases"]:
+                return rules["special_cases"][key](value)
+            
+            if key in rules["bool_params"]:
                 return isinstance(value, bool)
-            elif key in ["user_id", "webhook_url"]:
+            
+            if key in rules["string_params"]:
                 return isinstance(value, str)
-            elif key == "auto_sell_method":
-                return isinstance(value, str) and value in ["button_click", "ui_navigation"]
-            elif key == "auto_sell_ui_sequence":
-                if not isinstance(value, str) or not value.strip():
-                    return False
-                valid_keys = {"down", "up", "left", "right", "enter"}
-                keys = [k.strip().lower() for k in value.split(',') if k.strip()]
-                if not keys: 
-                    return False
-                for k in keys:
-                    if k not in valid_keys:
-                        return False
+            
+            if key in rules["int_params"]:
+                return int(value) >= 0
+            
+            for param_group, (min_val, max_val) in rules["int_ranges"].items():
+                if key in param_group:
+                    val = int(value)
+                    return (min_val is None or val >= min_val) and (max_val is None or val <= max_val)
+            
+            if key in rules["float_params"]:
+                float(value)
                 return True
-            elif key == "initial_walkspeed_decrease":
-                if isinstance(value, str):
-                    value = float(value)
-                return 0.0 <= value <= 1.0
-            elif key == "initial_item_count":
-                if isinstance(value, str):
-                    value = int(value)
-                return value >= 0
+            
+            for param_group, (min_val, max_val) in rules["float_ranges"].items():
+                if key in param_group:
+                    val = float(value)
+                    return min_val <= val <= max_val
+            
             return True
         except (ValueError, TypeError):
             return False
@@ -481,6 +461,12 @@ class SettingsManager:
                         if hasattr(self.dig_tool, "walk_pattern_var")
                         else "_KC_Nugget_v1"
                     )
+                    settings["money_area"] = getattr(
+                        self.dig_tool.money_ocr, "money_area", None
+                    ) if hasattr(self.dig_tool, "money_ocr") else None
+                    settings["item_area"] = getattr(
+                        self.dig_tool.item_ocr, "item_area", None
+                    ) if hasattr(self.dig_tool, "item_ocr") else None
 
                 feedback.add_section("PARAMETERS")
                 feedback.update_progress(20, "Processing parameters...")
@@ -491,7 +477,7 @@ class SettingsManager:
                         value = get_param(self.dig_tool, key)
 
                         if (
-                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord"]
+                            key in ["user_id", "server_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord", "notification_rarities"]
                             and export_options
                             and not export_options.get("discord", True)
                         ):
@@ -593,6 +579,28 @@ class SettingsManager:
                         feedback.add_text(f"✓ Walk Pattern: {pattern}", "success")
                     else:
                         feedback.add_text("✗ Walk Pattern: Not set", "warning")
+
+                    if (
+                        hasattr(self.dig_tool, "money_ocr")
+                        and self.dig_tool.money_ocr.money_area
+                    ):
+                        feedback.add_text(
+                            f"✓ Money Area: {self.dig_tool.money_ocr.money_area}",
+                            "success",
+                        )
+                    else:
+                        feedback.add_text("✗ Money Area: Not set", "warning")
+
+                    if (
+                        hasattr(self.dig_tool, "item_ocr")
+                        and self.dig_tool.item_ocr.item_area
+                    ):
+                        feedback.add_text(
+                            f"✓ Item Area: {self.dig_tool.item_ocr.item_area}",
+                            "success",
+                        )
+                    else:
+                        feedback.add_text("✗ Item Area: Not set", "warning")
                 else:
                     feedback.add_section("CONFIGURATION")
                     feedback.add_text("✗ Configuration: excluded", "warning")
@@ -714,9 +722,13 @@ class SettingsManager:
                                         float(str(value).replace("JS:", ""))
                                     )
                                     param_var.set(converted_value)
-                                else:  
-                                    converted_value = str(value)
-                                    param_var.set(converted_value)
+                                else:
+                                    if key in self._get_multi_checkbox_params():
+                                        converted_value = self._normalize_multi_checkbox_value(value)
+                                        param_var.set(converted_value)
+                                    else:
+                                        converted_value = str(value)
+                                        param_var.set(converted_value)
                                 
                                 feedback.add_change_entry(
                                     key, str(old_value), str(converted_value), "success"
@@ -892,6 +904,50 @@ class SettingsManager:
                 else:
                     feedback.add_text("✗ Walk Pattern: Not found", "warning")
 
+                money_area_loaded = False
+                if "money_area" in settings and self.validate_position(settings["money_area"]):
+                    try:
+                        pos = settings["money_area"]
+                        old_pos = getattr(self.dig_tool.money_ocr, "money_area", None) if hasattr(self.dig_tool, "money_ocr") else None
+                        if hasattr(self.dig_tool, "money_ocr"):
+                            self.dig_tool.money_ocr.money_area = tuple(pos)
+                            if 'money_area' not in self.dig_tool.param_vars:
+                                self.dig_tool.param_vars['money_area'] = self.get_param_type('money_area')()
+                            self.dig_tool.param_vars['money_area'].set(str(tuple(pos)))
+                            feedback.add_change_entry(
+                                "Money Area",
+                                str(old_pos) if old_pos else "None",
+                                str(tuple(pos)),
+                                "success",
+                            )
+                            money_area_loaded = True
+                    except Exception:
+                        feedback.add_text("✗ Money Area: Invalid position data", "warning")
+                else:
+                    feedback.add_text("✗ Money Area: Not found", "warning")
+
+                item_area_loaded = False
+                if "item_area" in settings and self.validate_position(settings["item_area"]):
+                    try:
+                        pos = settings["item_area"]
+                        old_pos = getattr(self.dig_tool.item_ocr, "item_area", None) if hasattr(self.dig_tool, "item_ocr") else None
+                        if hasattr(self.dig_tool, "item_ocr"):
+                            self.dig_tool.item_ocr.item_area = tuple(pos)
+                            if 'item_area' not in self.dig_tool.param_vars:
+                                self.dig_tool.param_vars['item_area'] = self.get_param_type('item_area')()
+                            self.dig_tool.param_vars['item_area'].set(str(tuple(pos)))
+                            feedback.add_change_entry(
+                                "Item Area",
+                                str(old_pos) if old_pos else "None",
+                                str(tuple(pos)),
+                                "success",
+                            )
+                            item_area_loaded = True
+                    except Exception:
+                        feedback.add_text("✗ Item Area: Invalid position data", "warning")
+                else:
+                    feedback.add_text("✗ Item Area: Not found", "warning")
+
                 feedback.update_progress(90, "Finalizing...")
 
                 apply_keybinds(self.dig_tool)
@@ -901,6 +957,13 @@ class SettingsManager:
 
                 total_failed = len(params_failed + keybinds_failed)
                 total_success = params_loaded + keybinds_loaded
+                
+                config_loaded = sum([
+                    area_loaded, sell_button_loaded, cursor_loaded, 
+                    pattern_loaded, money_area_loaded, item_area_loaded
+                ])
+                total_success += config_loaded
+                
                 total_items = total_success + total_failed
 
                 feedback.add_summary_stats(total_success, total_failed, total_items)
@@ -937,10 +1000,18 @@ class SettingsManager:
                     if key in self.dig_tool.param_vars:
                         try:
                             old_value = self.dig_tool.param_vars[key].get()
-                            self.dig_tool.param_vars[key].set(default_value)
-                            feedback.add_change_entry(
-                                key, str(old_value), str(default_value), "success"
-                            )
+                            
+                            if key in self._get_multi_checkbox_params():
+                                normalized_value = self._normalize_multi_checkbox_value(default_value)
+                                self.dig_tool.param_vars[key].set(normalized_value)
+                                feedback.add_change_entry(
+                                    key, str(old_value), str(default_value), "success"
+                                )
+                            else:
+                                self.dig_tool.param_vars[key].set(default_value)
+                                feedback.add_change_entry(
+                                    key, str(old_value), str(default_value), "success"
+                                )
                             params_reset += 1
                         except Exception as e:
                             feedback.add_change_entry(key, "", f"ERROR: {e}", "error")
@@ -1009,8 +1080,6 @@ class SettingsManager:
                         feedback.add_change_entry(
                             "Sell Button Position", old_pos, "None", "success"
                         )
-                        
-                        from interface.main_window import update_sell_info
                         update_sell_info(self.dig_tool)
                     except Exception as e:
                         feedback.add_text(f"✗ Sell Button Position: Reset failed - {e}", "error")
@@ -1023,8 +1092,7 @@ class SettingsManager:
                         feedback.add_change_entry(
                             "Cursor Position", old_pos, "None", "success"
                         )
-                       
-                        from interface.main_window import update_cursor_info
+                    
                         update_cursor_info(self.dig_tool)
                     except Exception as e:
                         feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
@@ -1056,6 +1124,13 @@ class SettingsManager:
 
                 apply_keybinds(self.dig_tool)
 
+                if hasattr(self.dig_tool, "main_window"):
+                    for param in self._get_multi_checkbox_params():
+                        if hasattr(self.dig_tool.main_window, f'{param}_checkbox_vars'):
+                            checkbox_vars = getattr(self.dig_tool.main_window, f'{param}_checkbox_vars')
+                            options = self.get_default_value(param)
+                            self.dig_tool.main_window._update_multi_checkbox_display(param, options, checkbox_vars)
+
                 self.save_all_settings()
 
                 feedback.update_progress(
@@ -1078,19 +1153,12 @@ class SettingsManager:
 
     def _setup_settings_directory(self):
         try:
-            # Try to get LOCALAPPDATA first
-            appdata_dir = os.environ.get("LOCALAPPDATA")
-            if appdata_dir and os.path.exists(appdata_dir):
-                self.settings_dir = os.path.join(appdata_dir, "DigTool")
-                return
+            for env_var in ["LOCALAPPDATA", "APPDATA"]:
+                appdata_dir = os.environ.get(env_var)
+                if appdata_dir and os.path.exists(appdata_dir):
+                    self.settings_dir = os.path.join(appdata_dir, "DigTool")
+                    return
 
-            # Fallback to APPDATA
-            appdata_dir = os.environ.get("APPDATA")
-            if appdata_dir and os.path.exists(appdata_dir):
-                self.settings_dir = os.path.join(appdata_dir, "DigTool")
-                return
-
-            # Final fallback to current directory
             self.settings_dir = os.path.join(os.getcwd(), "settings")
             logger.warning("Using current directory for settings storage as fallback")
         except Exception as e:
@@ -1099,11 +1167,15 @@ class SettingsManager:
 
     def _ensure_settings_directory(self):
         try:
-            os.makedirs(self.settings_dir, exist_ok=True)
-
-            self.auto_walk_dir = os.path.join(self.settings_dir, "Auto Walk")
-            os.makedirs(self.auto_walk_dir, exist_ok=True)
-
+            directories = [
+                self.settings_dir,
+                os.path.join(self.settings_dir, "Auto Walk")
+            ]
+            
+            for directory in directories:
+                os.makedirs(directory, exist_ok=True)
+            
+            self.auto_walk_dir = directories[1]
             logger.info(f"Settings directory ensured at: {self.settings_dir}")
             logger.info(f"Auto Walk directory ensured at: {self.auto_walk_dir}")
         except Exception as e:
@@ -1131,8 +1203,6 @@ class SettingsManager:
 
     def open_settings_directory(self):
         try:
-            import subprocess
-
             self._ensure_settings_directory()
 
             subprocess.run(
@@ -1166,7 +1236,10 @@ class SettingsManager:
                                 elif isinstance(param_var, tk.IntVar):
                                     param_var.set(int(value))
                                 elif isinstance(param_var, tk.StringVar):
-                                    param_var.set(str(value))
+                                    if key in self._get_multi_checkbox_params():
+                                        param_var.set(self._normalize_multi_checkbox_value(value))
+                                    else:
+                                        param_var.set(str(value))
                                 logger.debug(f"Loaded parameter {key}: {value}")
                             except Exception as e:
                                 logger.warning(f"Failed to load parameter {key}: {e}")
@@ -1310,7 +1383,6 @@ class SettingsManager:
                 try:
                     money_area_str = self.dig_tool.param_vars['money_area'].get()
                     if money_area_str and money_area_str != "None":
-                        import ast
                         money_area = ast.literal_eval(money_area_str)
                         if isinstance(money_area, (tuple, list)) and len(money_area) == 4:
                             self.dig_tool.money_ocr.money_area = tuple(money_area)
@@ -1324,7 +1396,6 @@ class SettingsManager:
                 try:
                     item_area_str = self.dig_tool.param_vars['item_area'].get()
                     if item_area_str and item_area_str != "None":
-                        import ast
                         item_area = ast.literal_eval(item_area_str)
                         if isinstance(item_area, (tuple, list)) and len(item_area) == 4:
                             self.dig_tool.item_ocr.item_area = tuple(item_area)
@@ -1333,6 +1404,9 @@ class SettingsManager:
                             logger.info(f"Loaded item area from settings: {item_area}")
                 except Exception as e:
                     logger.warning(f"Failed to load item area from settings: {e}")
+
+            if hasattr(self.dig_tool, "main_window") and self.dig_tool.main_window:
+                self.dig_tool.main_window.update_dependent_widgets_state()
 
             logger.info("Parameters applied successfully")
         except Exception as e:

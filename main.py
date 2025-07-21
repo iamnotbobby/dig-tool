@@ -84,6 +84,7 @@ check_display_scale()
 class DigTool:
     def __init__(self):
         logger.enable_logging_for_startup(30)
+        # Comment if in dev
         enable_console_logging() 
         
         # Test stdout and stderr
@@ -121,7 +122,7 @@ class DigTool:
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         
-        from utils.ocr_integration import MoneyOCR, ItemOCR
+        from core.ocr import MoneyOCR, ItemOCR
         self.money_ocr = MoneyOCR()
         self.item_ocr = ItemOCR()
 
@@ -204,7 +205,7 @@ class DigTool:
 
         self._click_thread_pool = []
         self._max_click_threads = 3
-
+        
         self.item_counts_since_startup = {
             'junk': 0,
             'common': 0,
@@ -867,9 +868,9 @@ class DigTool:
                             "Auto-sell wait timeout reached, continuing operation"
                         )
                     
-                    logger.info("Auto-sell completed, advancing walk pattern")
-                    self.automation_manager.advance_walk_pattern()
+                    logger.info("Auto-sell completed, returning to movement")
                     auto_walk_state = "move"
+                    move_completed_time = current_time_ms + 500 
                 else:
                     logger.warning(
                         "Auto-sell skipped: not ready (sell button, running state, or already selling)"
@@ -884,7 +885,9 @@ class DigTool:
             ):
                 if auto_walk_state == "move":
                     if (
-                        not self.automation_manager.is_selling and not pending_auto_sell
+                        not self.automation_manager.is_selling and 
+                        not pending_auto_sell and
+                        current_time_ms >= move_completed_time
                     ):
                         if walk_thread is None or not walk_thread.is_alive():
                             direction = (
