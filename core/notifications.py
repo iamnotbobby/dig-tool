@@ -146,12 +146,12 @@ class DiscordNotifier:
     def send_shutdown_notification(self, user_id=None):
         return self.send_notification("🔴 Bot stopped.", user_id, 0xFF0000)
 
-    def send_milestone_notification(self, digs_count, user_id=None, include_screenshot=False, item_counts=None, dig_tool_instance=None):
+    def send_milestone_notification(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, item_counts=None, dig_tool_instance=None):
         if not self.webhook_url:
             logger.warning("Discord webhook URL not set!")
             return False
 
-        notification_rarities = ['scarce', 'legendary', 'mythical', 'divine', 'prismatic'] 
+        notification_rarities = ['scarce', 'legendary', 'mythical', 'divine', 'prismatic']
         if dig_tool_instance:
             try:
                 config_rarities = get_param(dig_tool_instance, "notification_rarities")
@@ -165,42 +165,37 @@ class DiscordNotifier:
 
         embed = {
             "title": "🎉 Milestone Reached!",
-            "description": f"You've completed **{digs_count}** digs!",
             "color": 0x00ff00,
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
             "fields": [
                 {
-                    "name": "Dig Count",
-                    "value": str(digs_count),
-                    "inline": True
-                }
-            ]
-        }
-
-        if include_screenshot:
-            embed["image"] = {"url": "attachment://screenshot.png"}
-
-        if dig_tool_instance and hasattr(dig_tool_instance, 'stats'):
-            stats = dig_tool_instance.stats
-            embed["fields"].extend([
-                {
-                    "name": "Session Time",
-                    "value": stats.get_session_time_formatted(),
+                    "name": "⛏️ Digs",
+                    "value": f"{digs:,}",
                     "inline": True
                 },
                 {
-                    "name": "Average DPS",
-                    "value": f"{stats.get_average_dps():.2f}",
+                    "name": "🖱️ Clicks",
+                    "value": f"{clicks:,}",
                     "inline": True
                 }
-            ])
-        
+            ],
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
+            "footer": {
+                "text": "Dig Tool"
+            }
+        }
+
+        if money_value:
+            embed["fields"].append({
+                "name": "💰 Current Money",
+                "value": money_value,
+                "inline": True
+            })
+
         if item_counts:
             items_found = []
             for rarity, count in item_counts.items():
                 if count > 0 and rarity.lower() in [r.lower() for r in notification_rarities]:
                     items_found.append(f"{count} {rarity.title()}")
-            
             if items_found:
                 embed["fields"].append({
                     "name": "Rare Items Found",
@@ -214,13 +209,15 @@ class DiscordNotifier:
                     "inline": False
                 })
 
+        if include_screenshot:
+            embed["image"] = {"url": "attachment://screenshot.png"}
+
         content = f"<@{user_id}>" if user_id else ""
         payload = {
             "content": content,
             "embeds": [embed]
         }
 
-        
         return self._send_webhook_request(payload, include_screenshot)    
     def send_error_notification(self, error_message, user_id=None):
         message = f"⚠️ Error occurred: {error_message}"
