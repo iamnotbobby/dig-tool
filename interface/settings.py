@@ -47,7 +47,7 @@ class SettingsManager:
             "main_on_top": True,
             "preview_on_top": True,
             "debug_on_top": True,
-            "debug_clicks_enabled": False,
+            "debug_enabled": False,
             "screenshot_fps": 240,
             "auto_sell_enabled": False,
             "sell_every_x_digs": 10,
@@ -108,7 +108,7 @@ class SettingsManager:
             "main_on_top": "Keep the main window always on top of other windows.",
             "preview_on_top": "Keep the preview window always on top of other windows.",
             "debug_on_top": "Keep the debug window always on top of other windows.",
-            "debug_clicks_enabled": "Save screenshots and debug information for every click performed.",
+            "debug_enabled": "Save screenshots and debug information for every click performed.",
             "screenshot_fps": "Target frames per second for screenshot capture. Higher = lower latency but more CPU usage.",
             "auto_sell_enabled": "Automatically sell items after a certain number of digs.",
             "sell_every_x_digs": "Number of digs before auto-selling items.",
@@ -328,7 +328,7 @@ class SettingsManager:
             },
             "float_params": ["saturation_threshold", "line_detection_offset", "line_exclusion_radius", "velocity_max_factor", "auto_sell_target_engagement_timeout"],
             "bool_params": [
-                "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_clicks_enabled",
+                "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_enabled",
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
                 "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "use_color_picker_detection",
                 "enable_money_detection", "enable_item_detection"

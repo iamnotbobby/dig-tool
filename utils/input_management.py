@@ -81,7 +81,7 @@ def save_debug_screenshot_wrapper(
     prediction_used=False,
     confidence=0.0,
 ):
-    if not get_param(dig_tool_instance, "debug_clicks_enabled"):
+    if not get_param(dig_tool_instance, "debug_enabled"):
         return
     ensure_debug_directory(dig_tool_instance.debug_dir)
     filename = save_debug_screenshot(

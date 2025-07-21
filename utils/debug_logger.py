@@ -8,6 +8,8 @@ import os
 import cv2
 import sys
 import io
+import signal
+import atexit
 
 
 def setup_debug_directory():
@@ -15,23 +17,23 @@ def setup_debug_directory():
         # Try to get LOCALAPPDATA first
         appdata_dir = os.environ.get("LOCALAPPDATA")
         if appdata_dir and os.path.exists(appdata_dir):
-            debug_dir = os.path.join(appdata_dir, "DigTool", "debug_clicks")
+            debug_dir = os.path.join(appdata_dir, "DigTool", "debug")
             return debug_dir
 
         # Fallback to APPDATA
         appdata_dir = os.environ.get("APPDATA")
         if appdata_dir and os.path.exists(appdata_dir):
-            debug_dir = os.path.join(appdata_dir, "DigTool", "debug_clicks")
+            debug_dir = os.path.join(appdata_dir, "DigTool", "debug")
             return debug_dir
 
         # Final fallback to current directory
-        debug_dir = os.path.join(os.getcwd(), "debug_clicks")
+        debug_dir = os.path.join(os.getcwd(), "debug")
         logger.warning("Using current directory for debug storage as fallback") if 'logger' in globals() else None
         return debug_dir
     except Exception as e:
         if 'logger' in globals():
             logger.error(f"Error setting up debug directory: {e}")
-        debug_dir = os.path.join(os.getcwd(), "debug_clicks")
+        debug_dir = os.path.join(os.getcwd(), "debug")
         return debug_dir
 
 
@@ -48,7 +50,7 @@ def ensure_debug_directory(debug_dir=None):
         if 'logger' in globals():
             logger.error(f"Error ensuring debug directory: {e}")
         # Fallback to current directory
-        fallback_dir = os.path.join(os.getcwd(), "debug_clicks")
+        fallback_dir = os.path.join(os.getcwd(), "debug")
         try:
             os.makedirs(fallback_dir, exist_ok=True)
             return fallback_dir
@@ -206,6 +208,27 @@ class DebugLogger:
             LogLevel.WARNING: {"color": "#FF8C00", "prefix": "[WARN]"},
             LogLevel.ERROR: {"color": "#FF0000", "prefix": "[ERROR]"},
         }
+        
+        self._setup_exit_handlers()
+
+    def _setup_exit_handlers(self):
+        atexit.register(self._save_latest_log)
+        
+        def signal_handler(signum, frame):
+            try:
+                self.error(f"Application terminated by signal {signum}")
+                self._save_latest_log()
+            except:
+                pass
+            sys.exit(1)
+        
+        try:
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+            if hasattr(signal, 'SIGBREAK'):
+                signal.signal(signal.SIGBREAK, signal_handler)
+        except:
+            pass
 
     def debug(self, message):
         self._log(LogLevel.DEBUG, message)
@@ -588,6 +611,7 @@ class DebugLogger:
         self.console_text = None
 
     def cleanup(self):
+        self._save_latest_log()
         self._flush_file_buffer()
         self.disable_console_capture() 
         while not self.log_queue.empty():
@@ -595,6 +619,48 @@ class DebugLogger:
                 self.log_queue.get_nowait()
             except queue.Empty:
                 break
+
+    def _save_latest_log(self):
+        try:
+            debug_dir = setup_debug_directory()
+            ensure_debug_directory(debug_dir)
+            latest_log_path = os.path.join(debug_dir, "latest.log")
+            
+            with open(latest_log_path, "w", encoding="utf-8") as f:
+                f.write("Dig Tool Debug Log - Latest Session\n")
+                f.write("=====================================\n")
+                f.write(f"Saved at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("-" * 50 + "\n\n")
+                
+                for entry in self.log_history:
+                    level_info = self.log_levels[entry["level"]]
+                    formatted_line = f"{entry['timestamp']} {level_info['prefix']} {entry['message']}\n"
+                    f.write(formatted_line)
+                
+                if not self.log_queue.empty():
+                    f.write("\n--- Remaining Queue Messages ---\n")
+                    temp_queue = []
+                    while not self.log_queue.empty():
+                        try:
+                            entry = self.log_queue.get_nowait()
+                            temp_queue.append(entry)
+                            level_info = self.log_levels[entry["level"]]
+                            formatted_line = f"{entry['timestamp']} {level_info['prefix']} {entry['message']}\n"
+                            f.write(formatted_line)
+                        except queue.Empty:
+                            break
+                    
+                    for entry in temp_queue:
+                        try:
+                            self.log_queue.put_nowait(entry)
+                        except queue.Full:
+                            break
+            
+        except Exception as e:
+            try:
+                print(f"Error saving latest.log: {e}")
+            except:
+                pass
 
     def _populate_console_with_history_progressive(self):
         if not self.console_text or not self.log_history:

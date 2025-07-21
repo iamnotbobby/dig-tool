@@ -1,5 +1,5 @@
 .idea
-debug_clicks
+debug
 __pycache__
 main.build
 main.dist

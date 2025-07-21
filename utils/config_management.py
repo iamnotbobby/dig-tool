@@ -2,7 +2,7 @@ import os
 import keyboard
 
 def ensure_debug_dir(dig_tool_instance):
-    if get_param(dig_tool_instance, "debug_clicks_enabled") and not os.path.exists(
+    if get_param(dig_tool_instance, "debug_enabled") and not os.path.exists(
         dig_tool_instance.debug_dir
     ):
         os.makedirs(dig_tool_instance.debug_dir)

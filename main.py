@@ -1,6 +1,7 @@
 import warnings
 import os
 import sys
+import traceback
 
 from utils.system_utils import check_dependencies
 
@@ -78,6 +79,25 @@ from core.initialization import (
 )
 
 warnings.filterwarnings("ignore")
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    try:
+        error_msg = f"Uncaught exception: {exc_type.__name__}: {exc_value}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))}")
+        logger._save_latest_log()
+    except:
+        pass
+    
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+
+sys.excepthook = handle_exception
 check_display_scale()
 
 
@@ -294,7 +314,7 @@ class DigTool:
                 "right_shift": False,
             }
 
-            if get_param(self, "debug_clicks_enabled"):
+            if get_param(self, "debug_enabled"):
                 init_click_debug_log(self.debug_log_path)
             if self.click_lock.locked():
                 self.click_lock.release()
@@ -1309,5 +1329,13 @@ class DigTool:
 
 
 if __name__ == "__main__":
-    app = DigTool()
-    app.run()
+    try:
+        app = DigTool()
+        app.run()
+    except Exception as e:
+        try:
+            logger.error(f"Application failed to start: {e}")
+            logger._save_latest_log()
+        except:
+            pass
+        raise

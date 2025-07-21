@@ -1307,7 +1307,7 @@ class MainWindow:
         create_checkbox_param(panes['window'].sub_frame, "Debug Window Always on Top", 'debug_on_top')
         self.dig_tool.param_vars['debug_on_top'].trace_add('write', lambda *args: toggle_debug_on_top(self.dig_tool))
 
-        create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
+        create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_enabled')
         create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
         create_section_button(panes['debug'].sub_frame, "Show Debug Console", lambda: show_debug_console(self.dig_tool))
 
