@@ -1,3 +1,8 @@
+# NOTE: During manual mode, reset these variables at auto-sell start, after auto-sell completion, and auto-sell fail:
+# self.dig_tool.manual_dig_was_engaged = False
+# self.dig_tool.manual_dig_target_disengaged_time = 0
+# Opening inventory can cause false positive line detection, making Dig Tool engage incorrectly. Auto-walk mode doesn't have this issue due to state synchronization.
+
 import time
 import threading
 import autoit
@@ -21,6 +26,8 @@ class AutoSellManager:
         
      
         self.items_sold_total = 0
+        self.engagement_monitoring_thread = None
+        self.stop_engagement_monitoring = False
 
     def is_auto_sell_ready(self):
         if not self.dig_tool.running or not get_param(self.dig_tool, "auto_sell_enabled") or self.is_selling:
@@ -159,6 +166,9 @@ class AutoSellManager:
             logger.info(f"Starting auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling...")
+            
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
 
             time.sleep(0.1)
 
@@ -209,8 +219,20 @@ class AutoSellManager:
                 else:
                     logger.error("Auto-sell failed: AutoIt click error")
                     self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
+                    
+                    try:
+                        autoit.send("g")
+                        logger.info("Closed inventory after failed sell click")
+                    except (OSError, WindowsError, Exception) as e:
+                        logger.warning(f"AutoIt send 'g' failed after click failure, using keyboard fallback: {e}")
+                        self.keyboard_controller.press("g")
+                        self.keyboard_controller.release("g")
+                    time.sleep(0.5)
 
             self.is_selling = False
+            
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
             
             if get_param(self.dig_tool, "auto_walk_enabled"):
                 self._monitor_post_sell_engagement()
@@ -220,6 +242,8 @@ class AutoSellManager:
 
         except Exception as e:
             self.is_selling = False
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
             self._restore_shifts_on_error()
             error_msg = f"Error in auto-sell: {e}"
             logger.error(error_msg)
@@ -238,6 +262,9 @@ class AutoSellManager:
             logger.info(f"Starting UI navigation auto-sell sequence #{self.sell_count + 1}")
             self.is_selling = True
             self.dig_tool.update_status("Auto-selling (UI Navigation)...")
+            
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
 
             time.sleep(0.1)
 
@@ -292,6 +319,9 @@ class AutoSellManager:
 
             self.is_selling = False
             
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
+            
             if get_param(self.dig_tool, "auto_walk_enabled"):
                 self._monitor_post_sell_engagement()
             else:
@@ -300,6 +330,8 @@ class AutoSellManager:
 
         except Exception as e:
             self.is_selling = False
+            self.dig_tool.manual_dig_was_engaged = False
+            self.dig_tool.manual_dig_target_disengaged_time = 0
             self._restore_shifts_on_error()
             error_msg = f"Error in UI navigation auto-sell: {e}"
             logger.error(error_msg)
@@ -307,7 +339,27 @@ class AutoSellManager:
             return False
 
     def _monitor_post_sell_engagement(self):
+        self.stop_engagement_monitoring = True
+        
+        if self.engagement_monitoring_thread and self.engagement_monitoring_thread.is_alive():
+            logger.debug("Stopping previous engagement monitoring thread")
+            self.engagement_monitoring_thread.join(timeout=0.5)
+        
+        self.stop_engagement_monitoring = False
+        
+        self.engagement_monitoring_thread = threading.Thread(
+            target=self._engagement_monitoring_worker, 
+            daemon=True
+        )
+        self.engagement_monitoring_thread.start()
+    
+    def _engagement_monitoring_worker(self):
         try:
+            engagement_enabled = get_param(self.dig_tool, "auto_sell_target_engagement_enabled")
+            if not engagement_enabled:
+                logger.debug("Post-sell engagement monitoring disabled by user setting")
+                return
+                
             target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout") or 5.0
             
             if target_engagement_timeout <= 0:
@@ -321,8 +373,11 @@ class AutoSellManager:
             
             checks_performed = 0
             while time.time() - engagement_start_time < target_engagement_timeout:
-                if not self.dig_tool.running:
-                    logger.info("Post-sell engagement monitoring aborted: tool stopped")
+                if not self.dig_tool.running or self.stop_engagement_monitoring:
+                    if self.stop_engagement_monitoring:
+                        logger.debug("Post-sell engagement monitoring stopped (new auto-sell started)")
+                    else:
+                        logger.info("Post-sell engagement monitoring aborted: tool stopped")
                     return
                     
                 try:
@@ -337,15 +392,17 @@ class AutoSellManager:
                 
                 time.sleep(target_check_interval)
             
-            logger.warning(f"No target engagement detected after {target_engagement_timeout}s, applying fallback")
-            self._apply_auto_sell_fallback()
+            if not self.stop_engagement_monitoring:
+                logger.warning(f"No target engagement detected after {target_engagement_timeout}s, applying fallback")
+                self._apply_auto_sell_fallback()
             
         except Exception as e:
             logger.error(f"Error in post-sell engagement monitoring: {e}")
-            try:
-                self._apply_auto_sell_fallback()
-            except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {fallback_error}")
+            if not self.stop_engagement_monitoring:
+                try:
+                    self._apply_auto_sell_fallback()
+                except Exception as fallback_error:
+                    logger.error(f"Fallback also failed: {fallback_error}")
 
     def _apply_auto_sell_fallback(self):
         try:
