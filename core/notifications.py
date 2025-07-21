@@ -329,8 +329,6 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
             
             if not skip_ocr and dig_tool_instance.money_ocr.initialized and dig_tool_instance.money_ocr.money_area:
                 try:
-                    import time
-                    time.sleep(0.2)
                     logger.info("Reading money value for milestone notification")
                     money_value = dig_tool_instance.money_ocr.read_money_value()
                     if money_value:
@@ -350,7 +348,6 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, user_id, include_
             )
             if success:
                 logger.info(f"Milestone notification sent successfully for {dig_tool_instance.dig_count} digs")
-                # Note: Item counts no longer reset after milestone - only reset when bot stops/starts
             else:
                 logger.error(f"Failed to send milestone notification for {dig_tool_instance.dig_count} digs")
         except Exception as e:
@@ -434,9 +431,7 @@ def _check_item_text(dig_tool_instance, webhook_url, user_id, include_screenshot
     dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
     
     def check_item():
-        try:
-            import time
-            time.sleep(0.2)
+        try:            
             logger.info("Reading item text for notification check")
             item_text = dig_tool_instance.item_ocr.read_item_text()
             

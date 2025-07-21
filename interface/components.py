@@ -940,15 +940,15 @@ class AutoWalkOverlay:
                         x1, y1, x2, y2, fill=color, width=width
                     )
 
-                end_x, end_y = path_points[-1]
+                start_x, start_y = path_points[0]
                 self.path_canvas.create_oval(
-                    end_x - 4,
-                    end_y - 4,
-                    end_x + 4,
-                    end_y + 4,
-                    fill="#ff0000",
+                    start_x - 3,
+                    start_y - 3,
+                    start_x + 3,
+                    start_y + 3,
+                    fill="#00ff00",
                     outline="#ffffff",
-                    width=2,
+                    width=1,
                 )
 
                 if (
@@ -966,26 +966,6 @@ class AutoWalkOverlay:
                         outline="#ffffff",
                         width=2,
                     )
-
-                if len(path_points) >= 2:
-                    prev_x, prev_y = path_points[-2]
-                    arrow_dx = end_x - prev_x
-                    arrow_dy = end_y - prev_y
-                    if arrow_dx != 0 or arrow_dy != 0:
-
-                        length = math.sqrt(arrow_dx * arrow_dx + arrow_dy * arrow_dy)
-                        if length > 0:
-                            arrow_dx = (arrow_dx / length) * 8
-                            arrow_dy = (arrow_dy / length) * 8
-                            self.path_canvas.create_line(
-                                end_x,
-                                end_y,
-                                end_x + arrow_dx,
-                                end_y + arrow_dy,
-                                fill="#ffffff",
-                                width=2,
-                                arrow=tk.LAST,
-                            )
 
         except Exception as e:
             logger.debug(f"Error updating path visualization: {e}")
