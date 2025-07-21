@@ -81,7 +81,7 @@ class ExportOptionsDialog:
         discord_check = ttk.Checkbutton(discord_frame, text="Discord Information", 
                                        variable=self.vars['discord'])
         discord_check.pack(side=tk.LEFT)
-        ttk.Label(discord_frame, text="(Webhook URL, User ID, Money Area)", 
+        ttk.Label(discord_frame, text="(Webhook URL, User ID, Money Area, Item Area)", 
                  font=("Segoe UI", 9), foreground="gray").pack(side=tk.LEFT, padx=(10, 0))
         
       

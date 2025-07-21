@@ -472,6 +472,95 @@ class MainWindow:
             self.dig_tool.root.deiconify()
             self.dig_tool.update_status(f"Error sampling colors: {e}")
 
+    def create_notification_rarities_widget(self, parent):
+        """Create a multi-select widget for notification rarities"""
+        import json
+        
+        available_rarities = ["scarce", "legendary", "mythical", "divine", "prismatic"]
+        
+        rarity_colors = {
+            'scarce': "#BB68F3",
+            'legendary': '#FF8C00',
+            'mythical': '#FF1493',
+            'divine': "#FF0000",
+            'prismatic': "#F34545"
+        }
+        
+        if 'notification_rarities' not in self.dig_tool.param_vars:
+            default_rarities = self.dig_tool.settings_manager.get_default_value('notification_rarities')
+            self.dig_tool.param_vars['notification_rarities'] = tk.StringVar(value=json.dumps(default_rarities))
+            self.dig_tool.last_known_good_params['notification_rarities'] = default_rarities
+
+        main_frame = Frame(parent, bg=parent.cget('bg'))
+        main_frame.pack(fill='x', pady=6, padx=6)
+
+        label = Label(main_frame, text="Notification Rarities:", font=("Segoe UI", 9), 
+                     bg=parent.cget('bg'), fg="#000000", width=25, anchor='w')
+        label.pack(side='left')
+        
+        from interface.components import Tooltip
+        tooltip_text = self.dig_tool.settings_manager.get_description('notification_rarities')
+        Tooltip(label, tooltip_text)
+
+        right_frame = Frame(main_frame, bg=parent.cget('bg'))
+        right_frame.pack(side='right', fill='x', expand=True)
+
+        self.rarities_vars = {}
+        row = 0
+        col = 0
+        max_cols = 2
+        
+        for rarity in available_rarities:
+            var = tk.BooleanVar()
+            color = rarity_colors.get(rarity, "#000000")
+            
+            checkbox = Checkbutton(right_frame, text=rarity.title(), variable=var,
+                                 bg=parent.cget('bg'), fg=color, selectcolor="#ffffff",
+                                 activebackground=parent.cget('bg'), activeforeground=color,
+                                 font=("Segoe UI", 8, "bold"), anchor='w', width=15,
+                                 command=self.update_notification_rarities)
+            checkbox.grid(row=row, column=col, sticky='ew', padx=6, pady=2)
+            self.rarities_vars[rarity] = var
+            
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+
+        right_frame.grid_columnconfigure(0, weight=1)
+        right_frame.grid_columnconfigure(1, weight=1)
+        self.update_rarities_display()
+
+    def update_notification_rarities(self):
+        """Update the notification_rarities parameter when checkboxes change"""
+        import json
+        
+        selected_rarities = []
+        for rarity, var in self.rarities_vars.items():
+            if var.get():
+                selected_rarities.append(rarity)
+        
+        # Update the parameter
+        self.dig_tool.param_vars['notification_rarities'].set(json.dumps(selected_rarities))
+        self.dig_tool.last_known_good_params['notification_rarities'] = selected_rarities
+
+    def update_rarities_display(self):
+        """Update the checkbox states from the current parameter value"""
+        import json
+        
+        try:
+            current_value = self.dig_tool.param_vars['notification_rarities'].get()
+            if current_value:
+                selected_rarities = json.loads(current_value) if isinstance(current_value, str) else current_value
+            else:
+                selected_rarities = self.dig_tool.settings_manager.get_default_value('notification_rarities')
+        except (json.JSONDecodeError, KeyError):
+            selected_rarities = self.dig_tool.settings_manager.get_default_value('notification_rarities')
+        
+        # Update checkbox states
+        for rarity, var in self.rarities_vars.items():
+            var.set(rarity in selected_rarities)
+
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
@@ -1080,6 +1169,16 @@ class MainWindow:
         create_section_button(panes['discord'].sub_frame, "Select Item Area", lambda: select_item_area(self.dig_tool))
         create_section_button(panes['discord'].sub_frame, "Test Item OCR", lambda: test_item_ocr(self.dig_tool))
 
+        # Notification Rarities Multi-Select
+        try:
+            self.create_notification_rarities_widget(panes['discord'].sub_frame)
+        except Exception as e:
+            logger.error(f"Error creating notification rarities widget: {e}")
+            # Create a simple label as fallback
+            fallback_label = Label(panes['discord'].sub_frame, text="Notification Rarities: Using defaults", 
+                                 font=("Segoe UI", 9), bg=panes['discord'].sub_frame.cget('bg'))
+            fallback_label.pack(fill='x', pady=6, padx=6)
+
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
         self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))
         create_checkbox_param(panes['window'].sub_frame, "Preview Window Always on Top", 'preview_on_top')
@@ -1179,6 +1278,13 @@ class MainWindow:
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
         self.update_dependent_widgets_state()
+        
+        # Update notification rarities display if the widget exists
+        try:
+            if hasattr(self, 'update_rarities_display'):
+                self.update_rarities_display()
+        except Exception as e:
+            logger.debug(f"Could not update rarities display: {e}")
 
         from utils.ui_management import update_main_button_text
         update_main_button_text(self.dig_tool)

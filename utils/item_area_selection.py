@@ -63,10 +63,10 @@ def test_item_ocr(dig_tool_instance):
                 if item_text:
                     rarity = dig_tool_instance.item_ocr.extract_rarity(item_text)
                     if rarity:
-                        dig_tool_instance.update_status(f"Item detected: {rarity} - {item_text[:50]}...")
-                        logger.info(f"Test OCR successful - Rarity: {rarity}, Text: {item_text}")
+                        dig_tool_instance.update_status(f"✅ Item detected: {item_text}")
+                        logger.info(f"Test OCR successful - Rarity: {rarity}, Full text: {item_text}")
                     else:
-                        dig_tool_instance.update_status(f"Text detected but no rarity found: {item_text[:50]}...")
+                        dig_tool_instance.update_status(f"Text detected but no rarity found: {item_text[:100]}...")
                         logger.info(f"Test OCR - No rarity found in: {item_text}")
                 else:
                     dig_tool_instance.update_status("No item text detected - check area selection")

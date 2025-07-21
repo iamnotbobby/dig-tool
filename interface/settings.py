@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import subprocess
 import tkinter as tk
 from tkinter import filedialog
 from PIL import Image, ImageTk
@@ -79,7 +81,8 @@ class SettingsManager:
             "use_custom_cursor": False,
             "shovel_equip_mode": "double",
             "include_screenshot_in_discord": False,
-            "enable_item_detection": False
+            "enable_item_detection": False,
+            "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"]
         }
 
         self.param_descriptions = {
@@ -130,6 +133,7 @@ class SettingsManager:
             "money_area": "Selected screen area for money detection in Discord notifications.",
             "item_area": "Selected screen area for item detection in Discord notifications.",
             "enable_item_detection": "Enable automatic detection and notification of rare items during digging.",
+            "notification_rarities": "Select which item rarities will trigger Discord notifications when found.",
             "auto_shovel_enabled": "Automatically re-equip shovel when no activity detected for specified time.",
             "shovel_slot": "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
             "shovel_timeout": "Minutes of inactivity before auto-equipping shovel (based on clicks, digs, and target detection).",
@@ -410,6 +414,26 @@ class SettingsManager:
                 if isinstance(value, str):
                     value = int(value)
                 return value >= 0
+            elif key == "notification_rarities":
+                # Validate notification rarities list (stored as JSON string)
+                if isinstance(value, list):
+                    # Direct list validation
+                    valid_rarities = {"scarce", "legendary", "mythical", "divine", "prismatic"}
+                    return all(rarity.lower() in valid_rarities for rarity in value)
+                elif isinstance(value, str):
+                    # JSON string validation
+                    if not value.strip():
+                        return True  # Empty string is valid (will use default)
+                    try:
+                        import json
+                        parsed_list = json.loads(value)
+                        if not isinstance(parsed_list, list):
+                            return False
+                        valid_rarities = {"scarce", "legendary", "mythical", "divine", "prismatic"}
+                        return all(isinstance(rarity, str) and rarity.lower() in valid_rarities for rarity in parsed_list)
+                    except (json.JSONDecodeError, TypeError):
+                        return False
+                return False
             return True
         except (ValueError, TypeError):
             return False
@@ -481,7 +505,7 @@ class SettingsManager:
                         value = get_param(self.dig_tool, key)
 
                         if (
-                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "include_screenshot_in_discord"]
+                            key in ["user_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord", "notification_rarities"]
                             and export_options
                             and not export_options.get("discord", True)
                         ):
@@ -1019,7 +1043,6 @@ class SettingsManager:
                     except Exception as e:
                         feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
 
-                # Reset money area from MoneyOCR instance
                 if hasattr(self.dig_tool, "money_ocr") and self.dig_tool.money_ocr.money_area:
                     try:
                         old_money_area = str(self.dig_tool.money_ocr.money_area)
@@ -1029,6 +1052,16 @@ class SettingsManager:
                         )
                     except Exception as e:
                         feedback.add_text(f"✗ Money Area: Reset failed - {e}", "error")
+                        
+                if hasattr(self.dig_tool, "item_ocr") and self.dig_tool.item_ocr.item_area:
+                    try:
+                        old_item_area = str(self.dig_tool.item_ocr.item_area)
+                        self.dig_tool.item_ocr.item_area = None
+                        feedback.add_change_entry(
+                            "Item Area", old_item_area, "None", "success"
+                        )
+                    except Exception as e:
+                        feedback.add_text(f"✗ Item Area: Reset failed - {e}", "error")
 
                 feedback.update_progress(90, "Finalizing...")
 
@@ -1300,6 +1333,20 @@ class SettingsManager:
                             logger.info(f"Loaded money area from settings: {money_area}")
                 except Exception as e:
                     logger.warning(f"Failed to load money area from settings: {e}")
+
+            if hasattr(self.dig_tool, "item_ocr") and 'item_area' in self.dig_tool.param_vars:
+                try:
+                    item_area_str = self.dig_tool.param_vars['item_area'].get()
+                    if item_area_str and item_area_str != "None":
+                        import ast
+                        item_area = ast.literal_eval(item_area_str)
+                        if isinstance(item_area, (tuple, list)) and len(item_area) == 4:
+                            self.dig_tool.item_ocr.item_area = tuple(item_area)
+                            if not self.dig_tool.item_ocr.initialized:
+                                self.dig_tool.item_ocr.initialize_ocr()
+                            logger.info(f"Loaded item area from settings: {item_area}")
+                except Exception as e:
+                    logger.warning(f"Failed to load item area from settings: {e}")
 
             logger.info("Parameters applied successfully")
         except Exception as e:
