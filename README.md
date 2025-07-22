@@ -73,6 +73,10 @@ A full technical overview on how Dig Tool works can also be found [here](docs/TE
 
 ## 💭 Footnotes
 
-Contributions are welcome. Part of this project wouldn't have existed without the contributions given. A massive thank you to contributors from me.
+Contributions are welcome. Part of this project wouldn't have existed without the contributions given. A massive thank you to contributors from me!
 
 For issues, questions, or a community you can join the [discord](https://discord.com/invite/mxE7dzXMGf).
+
+## 📄 License
+
+This project is licensed under [MIT License](https://github.com/iamnotbobby/dig-tool/blob/beta/LICENSE).
