@@ -958,13 +958,13 @@ class AutoWalkOverlay:
                     curr_x, curr_y = path_points[highlight_step]
 
                     self.path_canvas.create_oval(
-                        curr_x - 5,
-                        curr_y - 5,
-                        curr_x + 5,
-                        curr_y + 5,
+                        curr_x - 3,
+                        curr_y - 3,
+                        curr_x + 3,
+                        curr_y + 3,
                         fill="#ffff00",
                         outline="#ffffff",
-                        width=2,
+                        width=1,
                     )
 
         except Exception as e:
