@@ -722,9 +722,9 @@ class AutoWalkOverlay:
         if not self.visible or not self.overlay:
             return
         try:
-            dig_count = kwargs.get("dig_count", 0)
+            walkspeed_dig_count = self.parent.automation_manager.get_walkspeed_dig_count()
             initial_items = get_param(self.parent, "initial_item_count") or 0
-            total_items = dig_count + initial_items
+            total_items = walkspeed_dig_count + initial_items
 
             if get_param(self.parent, "dynamic_walkspeed_enabled"):
                 formula_reduction = (
@@ -767,10 +767,10 @@ class AutoWalkOverlay:
 
             auto_sell_enabled = get_param(self.parent, "auto_sell_enabled")
             if auto_sell_enabled:
-                dig_count = kwargs.get("dig_count", 0)
+                raw_dig_count = kwargs.get("dig_count", 0)  # Use raw count for auto-sell timing
                 sell_interval = get_param(self.parent, "sell_every_x_digs")
                 if sell_interval and sell_interval > 0:
-                    current_progress = dig_count % sell_interval
+                    current_progress = raw_dig_count % sell_interval
                     self.autosell_label.config(
                         text=f"AUTO SELL: {current_progress} / {sell_interval}"
                     )
