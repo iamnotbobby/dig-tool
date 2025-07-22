@@ -1187,6 +1187,103 @@ class SettingsManager:
             except Exception as fallback_error:
                 logger.error(f"Fallback directory creation failed: {fallback_error}")
 
+    def _validate_and_cleanup_settings(self):
+        settings_file = os.path.join(self.settings_dir, "settings.json")
+        if not os.path.exists(settings_file):
+            return
+        
+        try:
+            with open(settings_file, "r") as f:
+                settings = json.load(f)
+            
+            settings_modified = False
+            
+            if "params" in settings:
+                original_params = settings["params"].copy()
+                cleaned_params = {}
+                
+                for key, value in original_params.items():
+                    if key in self.default_params:
+                        try:
+                            if self.validate_param_value(key, value):
+                                cleaned_params[key] = value
+                            else:
+                                cleaned_params[key] = self.default_params[key]
+                                logger.warning(f"Invalid parameter {key} reset to default: {self.default_params[key]}")
+                                settings_modified = True
+                        except Exception:
+                            cleaned_params[key] = self.default_params[key]
+                            logger.warning(f"Invalid parameter {key} reset to default: {self.default_params[key]}")
+                            settings_modified = True
+                    else:
+                        logger.warning(f"Unknown parameter {key} removed from settings")
+                        settings_modified = True
+                
+                for key in self.default_params:
+                    if key not in cleaned_params:
+                        cleaned_params[key] = self.default_params[key]
+                        logger.info(f"Missing parameter {key} added with default: {self.default_params[key]}")
+                        settings_modified = True
+                
+                settings["params"] = cleaned_params
+            else:
+                settings["params"] = self.default_params.copy()
+                logger.info("Missing params section added to settings")
+                settings_modified = True
+            
+            if "keybinds" in settings:
+                original_keybinds = settings["keybinds"].copy()
+                cleaned_keybinds = {}
+                
+                for key, value in original_keybinds.items():
+                    if key in self.default_keybinds:
+                        from utils.config_management import validate_keybind
+                        is_valid, _ = validate_keybind(key, value)
+                        if is_valid:
+                            cleaned_keybinds[key] = value
+                        else:
+                            cleaned_keybinds[key] = self.default_keybinds[key]
+                            logger.warning(f"Invalid keybind {key} reset to default: {self.default_keybinds[key]}")
+                            settings_modified = True
+                    else:
+                        logger.warning(f"Unknown keybind {key} removed from settings")
+                        settings_modified = True
+                
+                for key in self.default_keybinds:
+                    if key not in cleaned_keybinds:
+                        cleaned_keybinds[key] = self.default_keybinds[key]
+                        logger.info(f"Missing keybind {key} added with default: {self.default_keybinds[key]}")
+                        settings_modified = True
+                
+                settings["keybinds"] = cleaned_keybinds
+            else:
+                settings["keybinds"] = self.default_keybinds.copy()
+                logger.info("Missing keybinds section added to settings")
+                settings_modified = True
+            
+            if "window_positions" not in settings:
+                settings["window_positions"] = {}
+                settings_modified = True
+            
+            if settings_modified:
+                with open(settings_file, "w") as f:
+                    json.dump(settings, f, indent=2)
+                logger.info("Settings file validated and cleaned up")
+            
+        except Exception as e:
+            logger.error(f"Failed to validate settings: {e}")
+            logger.info("Creating new settings file with defaults")
+            default_settings = {
+                "params": self.default_params.copy(),
+                "keybinds": self.default_keybinds.copy(),
+                "window_positions": {}
+            }
+            try:
+                with open(settings_file, "w") as f:
+                    json.dump(default_settings, f, indent=2)
+            except Exception as write_error:
+                logger.error(f"Failed to create default settings file: {write_error}")
+
     def get_settings_info(self):
         return {
             "settings_directory": self.settings_dir,
@@ -1217,6 +1314,7 @@ class SettingsManager:
 
     def load_all_settings(self):
         self._ensure_settings_directory()
+        self._validate_and_cleanup_settings()
 
         settings_file = os.path.join(self.settings_dir, "settings.json")
         if os.path.exists(settings_file):
