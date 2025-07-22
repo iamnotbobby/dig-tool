@@ -410,9 +410,9 @@ class SettingsManager:
         return key in self.default_keybinds
 
     def refresh_pattern_dropdown(self):
-        if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
-            update_walk_pattern_dropdown(self.dig_tool)
-            self.dig_tool.update_status("Pattern list refreshed!")
+        self.dig_tool.automation_manager.auto_load_patterns()
+        update_walk_pattern_dropdown(self.dig_tool)
+        self.dig_tool.update_status("Pattern list refreshed!")
 
     def open_custom_pattern_manager(self):
         if hasattr(self.dig_tool, "open_custom_pattern_manager"):
@@ -952,8 +952,7 @@ class SettingsManager:
 
                 apply_keybinds(self.dig_tool)
 
-                if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
-                    update_walk_pattern_dropdown(self.dig_tool)
+                update_walk_pattern_dropdown(self.dig_tool)
 
                 total_failed = len(params_failed + keybinds_failed)
                 total_success = params_loaded + keybinds_loaded
@@ -1119,8 +1118,7 @@ class SettingsManager:
 
                 feedback.update_progress(90, "Finalizing...")
 
-                if hasattr(self.dig_tool, "update_walk_pattern_dropdown"):
-                    update_walk_pattern_dropdown(self.dig_tool)
+                update_walk_pattern_dropdown(self.dig_tool)
 
                 apply_keybinds(self.dig_tool)
 

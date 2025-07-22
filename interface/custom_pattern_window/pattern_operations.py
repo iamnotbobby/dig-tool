@@ -53,6 +53,8 @@ class PatternOperations:
             return
             
         try:
+            self.main_window.automation_manager.auto_load_patterns()
+            
             current_selection = None
             selection = self.main_window.pattern_listbox.curselection()
             if selection:
@@ -73,6 +75,9 @@ class PatternOperations:
             if not self.main_window.pattern_listbox.curselection() and self.main_window.pattern_listbox.size() > 0:
                 self.main_window.pattern_listbox.selection_set(0)
                 self._on_pattern_select(None)
+            
+            from utils.pattern_utils import update_walk_pattern_dropdown
+            update_walk_pattern_dropdown(self.main_window.automation_manager.dig_tool)
 
         except tk.TclError:
             return
