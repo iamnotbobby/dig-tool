@@ -30,6 +30,19 @@ A highly configurable automation tool specifically for the ROBLOX game ["Dig"](h
 > [!CAUTION]
 > Only download Dig Tool from the **official** repository and website (https://github.com/iamnotbobby/dig-tool/releases). Never download from untrusted links.
 
+## ⭐ Features
+
+Dig Tool was originally developed with the primary focus of achieving significant accuracy during the minigame. Since then, it has expanded to include several other features, such as:
+
+* In-depth customization panel with detection settings and adjustable accuracy parameters.
+* Full-fledged AFK mode (auto-walk) with a built-in walk pattern recorder, path visualizations, a reverse-engineered mathematical formula to determine the walk speed decrease given in-game after digging X items, and more.
+* A lightweight OCR engine with no performance cost, integrated into Dig Tool to detect various in-game displays.
+* Sleek Discord notification system with _live_ webhook updates.
+* Several toggleable in-game HUD overlays that reflect real-time metrics.
+* Support for external automation of Dig Tool by outputting information about Dig Tool's internal status (e.g., AHK).
+
+and much more!
+
 ## 📦 Installation 
 
 ### Option 1: Quick Start (Recommended)
