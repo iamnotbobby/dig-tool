@@ -971,7 +971,7 @@ class DigTool:
                             else:
                                 walk_duration = get_param(self, "walk_duration")
 
-                            move_completed_time = current_time_ms + walk_duration + 300
+                            move_completed_time = current_time_ms + walk_duration
 
                 elif (
                     auto_walk_state == "click_to_start"
