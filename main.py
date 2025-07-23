@@ -142,6 +142,9 @@ class DigTool:
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         
+        from core.roblox_status import RobloxRejoiner
+        self.roblox_rejoiner = RobloxRejoiner(self)
+        
         from core.ocr import MoneyOCR, ItemOCR
         self.money_ocr = MoneyOCR()
         self.item_ocr = ItemOCR()
@@ -161,6 +164,7 @@ class DigTool:
         self.root.after(500, lambda: perform_initial_latency_measurement(self))
         self.running = False
         self.preview_active = True
+        self.is_auto_rejoining = False
         self.overlay = None
         self.overlay_enabled = False
         self.autowalk_overlay = None
@@ -431,6 +435,12 @@ class DigTool:
 
             if self.running and self.automation_manager.should_re_equip_shovel():
                 self.automation_manager.re_equip_shovel()
+
+            if hasattr(self, 'roblox_rejoiner') and self.roblox_rejoiner.should_rejoin():
+                try:
+                    self.roblox_rejoiner.attempt_rejoin()
+                except Exception as e:
+                    logger.error(f"Error during auto-rejoin: {e}")
 
             frame_skip_counter += 1
             should_process_zones = frame_skip_counter % process_every_nth_frame == 0
