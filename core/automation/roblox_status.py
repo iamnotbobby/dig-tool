@@ -395,6 +395,10 @@ class RobloxRejoiner:
         if get_param(self.dig_tool, "auto_rejoin_enabled"):
             self.status_monitor.start()
 
+    def stop_monitoring(self):
+        if hasattr(self.status_monitor, 'stop'):
+            self.status_monitor.stop()
+
     def check_and_toggle_monitoring(self):
         from utils.config_management import get_param
         auto_rejoin_enabled = get_param(self.dig_tool, "auto_rejoin_enabled")

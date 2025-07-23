@@ -142,7 +142,7 @@ class DigTool:
         self.automation_manager = AutomationManager(self)
         self.discord_notifier = DiscordNotifier()
         
-        from core.roblox_status import RobloxRejoiner
+        from core.automation.roblox_status import RobloxRejoiner
         self.roblox_rejoiner = RobloxRejoiner(self)
         
         from core.ocr import MoneyOCR, ItemOCR
