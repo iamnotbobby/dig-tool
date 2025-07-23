@@ -88,8 +88,7 @@ jobs:
         run: |
           $releaseTag = "${{ github.event.inputs.release_tag }}"
           $version = $releaseTag -replace '^v', '' -replace '[^a-zA-Z0-9.-]', '-'
-          $bootloaderSuffix = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "-custom" } else { "" }
-          $exeName = "DigTool-$version$bootloaderSuffix"
+          $exeName = "DigTool-$version"
           
           echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
           echo "Generated executable name: $exeName"
@@ -99,7 +98,7 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --hidden-import=winrt.windows.foundation --hidden-import=winrt.windows.media.ocr --hidden-import=winrt.windows.graphics.imaging --hidden-import=winrt.windows.storage.streams --distpath=dist --workpath=build --specpath=. --clean main.py
          
-      - name: Get executable info and generate checksums
+      - name: Get executable info and generate verification file
         id: get_exe_info
         run: |
           $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
@@ -111,37 +110,31 @@ jobs:
           
           $bootloaderType = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "Custom" } else { "Standard" }
           
-          $checksumContent = @"
-          # Checksums for $exeName
-          # Built by GitHub Actions on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-          # Workflow: ${{ github.workflow }}
-          # Run ID: ${{ github.run_id }}
-          # Commit: ${{ github.sha }}
-          # Bootloader: $bootloaderType PyInstaller Bootloader
+          $verificationContent = "# DigTool Build Verification`n"
+          $verificationContent += "# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')`n"
+          $verificationContent += "# File: $exeName`n"
+          $verificationContent += "# Size: ${fileSize}MB`n`n"
+          $verificationContent += "## File Integrity (Checksums)`n"
+          $verificationContent += "SHA256: $sha256Hash`n"
+          $verificationContent += "MD5: $md5Hash`n`n"
+          $verificationContent += "### Verification Commands`n"
+          $verificationContent += "Windows: certutil -hashfile $exeName SHA256`n"
+          $verificationContent += "Linux/Mac: sha256sum $exeName`n`n"
+          $verificationContent += "## Build Attestation`n"
+          $verificationContent += "Workflow: ${{ github.workflow }}`n"
+          $verificationContent += "Run ID: ${{ github.run_id }}`n"
+          $verificationContent += "Run Number: ${{ github.run_number }}`n"
+          $verificationContent += "Actor: ${{ github.actor }}`n"
+          $verificationContent += "Repository: ${{ github.repository }}`n"
+          $verificationContent += "Branch/Ref: ${{ github.ref }}`n"
+          $verificationContent += "Commit SHA: ${{ github.sha }}`n"
+          $verificationContent += "Timestamp: $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')`n"
+          $verificationContent += "Bootloader: $bootloaderType PyInstaller Bootloader`n`n"
+          $verificationContent += "## Verification Links`n"
+          $verificationContent += "GitHub Actions Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`n"
+          $verificationContent += "Source Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}`n`n"
+          $verificationContent += "## JSON Attestation`n"
 
-          SHA256: $sha256Hash
-          MD5: $md5Hash
-
-          # Verification Instructions:
-          # Windows: certutil -hashfile $exeName SHA256
-          # Linux/Mac: sha256sum $exeName
-          "@
-          
-          $checksumContent | Out-File -FilePath "dist/CHECKSUMS.txt" -Encoding UTF8
-          
-          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
-          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
-          echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
-          echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
-          echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
-          echo "bootloader_type=$bootloaderType" >> $env:GITHUB_OUTPUT
-          echo "Built executable: $exeName (${fileSize}MB) with $bootloaderType bootloader"
-          echo "SHA256: $sha256Hash"
-        shell: powershell
-        
-      - name: Generate build attestation
-        id: build_attestation
-        run: |
           $attestation = @{
             "build_info" = @{
               "workflow" = "${{ github.workflow }}"
@@ -152,13 +145,13 @@ jobs:
               "ref" = "${{ github.ref }}"
               "sha" = "${{ github.sha }}"
               "timestamp" = "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
-              "bootloader_type" = "${{ steps.get_exe_info.outputs.bootloader_type }}"
+              "bootloader_type" = "$bootloaderType"
             }
             "executable" = @{
-              "name" = "${{ steps.get_exe_info.outputs.exe_name }}"
-              "sha256" = "${{ steps.get_exe_info.outputs.sha256_hash }}"
-              "md5" = "${{ steps.get_exe_info.outputs.md5_hash }}"
-              "size_mb" = "${{ steps.get_exe_info.outputs.file_size }}"
+              "name" = "$exeName"
+              "sha256" = "$sha256Hash"
+              "md5" = "$md5Hash"
+              "size_mb" = "$fileSize"
             }
             "verification" = @{
               "github_actions_url" = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -166,10 +159,19 @@ jobs:
             }
           }
           
-          $attestationJson = $attestation | ConvertTo-Json -Depth 10
-          $attestationJson | Out-File -FilePath "dist/build-attestation.json" -Encoding UTF8
+          $attestationJson = $attestation | ConvertTo-Json -Depth 10 -Compress:$false
+          $verificationContent += $attestationJson
           
-          echo "Generated build attestation"
+          $verificationContent | Out-File -FilePath "dist/VERIFICATION.txt" -Encoding UTF8
+          
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
+          echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
+          echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
+          echo "bootloader_type=$bootloaderType" >> $env:GITHUB_OUTPUT
+          echo "Built executable: $exeName (${fileSize}MB) with $bootloaderType bootloader"
+          echo "SHA256: $sha256Hash"
         shell: powershell
         
       - name: Create and push tag
@@ -182,24 +184,32 @@ jobs:
       - name: Generate automated release notes
         id: generate_notes
         run: |
-          $notes = ""
-         
-          if ("${{ github.event.inputs.is_beta_release }}" -eq "true") {
-            $notes += "**BETA RELEASE** - Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
+          $releaseTag = "${{ github.event.inputs.release_tag }}"
+          $isBeta = "${{ github.event.inputs.is_beta_release }}" -eq "true"
+          $customNotes = "${{ github.event.inputs.custom_notes }}"
+          
+          $notes = "<div align=`"center`">`n`n"
+          
+          if ($isBeta) {
+            $notes += "# **BETA RELEASE ~ $releaseTag**`n"
+          } else {
+            $notes += "# **RELEASE ~ $releaseTag**`n"
+          }
+          
+          $notes += "`n</div>`n`n"
+          
+          if ($isBeta) {
+            $notes += "Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
           } else {
             $notes += "Join our [Discord](https://discord.com/invite/mxE7dzXMGf) for support and updates!`n`n"
           }
-         
-          $customNotes = "${{ github.event.inputs.custom_notes }}"
+          
           if ($customNotes -and $customNotes.Trim() -ne "") {
             $notes += "$customNotes`n`n"
           }
           
-          $notes += "**File Integrity Verification:**`n"
-          $notes += "``````n"
-          $notes += "SHA256: ${{ steps.get_exe_info.outputs.sha256_hash }}`n"
-          $notes += "``````n"
-          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
+          $notes += "> **File Integrity Verification:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
           echo "$notes" >> $env:GITHUB_OUTPUT
@@ -216,8 +226,7 @@ jobs:
           prerelease: ${{ github.event.inputs.is_beta_release }}
           files: |
             ${{ steps.get_exe_info.outputs.exe_path }}
-            dist/CHECKSUMS.txt
-            dist/build-attestation.json
+            dist/VERIFICATION.txt
          
       - name: Output release info
         run: |
