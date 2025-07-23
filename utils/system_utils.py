@@ -231,7 +231,6 @@ def find_window_by_title(title_pattern, exact_match=False):
 
 
 def find_and_focus_roblox_window():
-    """Find and focus the Roblox window."""
     try:
         roblox_patterns = ["Roblox", "roblox"]
         roblox_window = None
@@ -263,7 +262,6 @@ def find_and_focus_roblox_window():
 
 
 def focus_window_no_resize(hwnd):
-    """Focus a window without resizing it."""
     try:
         win32gui.SetForegroundWindow(hwnd)
         return True
@@ -273,7 +271,6 @@ def focus_window_no_resize(hwnd):
 
 
 def focus_roblox_window_legacy():
-    """Legacy method name for compatibility - find and focus Roblox window."""
     try:
         windows = get_window_list()
         roblox_patterns = ["Roblox", "roblox"]
@@ -530,20 +527,6 @@ class PerformanceMonitor:
 
 
 def measure_system_latency(game_area=None, cam=None):
-    """
-    Measures system latency components in a non-intrusive way.
-    
-    This function measures:
-    - Screenshot capture time
-    - Image processing time  
-    - System API call overhead (without actual mouse clicks)
-    - Display refresh latency
-    
-    The measurement is designed to be non-intrusive - it does NOT perform
-    actual mouse clicks that would interfere with the user's experience.
-    Instead, it measures the timing of system API calls that would be
-    involved in clicking operations.
-    """
     try:
         screenshot_measurements = []
         processing_measurements = []
@@ -679,7 +662,6 @@ def measure_system_latency(game_area=None, cam=None):
 
 
 def calculate_window_dimensions():
-    """Calculate appropriate window dimensions based on screen resolution."""
     screen_width, screen_height = get_screen_resolution()
     
     if screen_width <= 1366 and screen_height <= 768:
@@ -713,7 +695,6 @@ def calculate_window_dimensions():
 
 
 def get_cached_system_latency(dig_tool_instance):
-    """Get cached system latency or measure if cache is expired."""
     if hasattr(dig_tool_instance, "_cached_latency") and hasattr(
         dig_tool_instance, "_latency_measurement_time"
     ):
@@ -733,7 +714,6 @@ def get_cached_system_latency(dig_tool_instance):
 
 
 def force_latency_remeasurement(dig_tool_instance):
-    """Force a new latency measurement."""
     if hasattr(dig_tool_instance, "_latency_measurement_time"):
         dig_tool_instance._latency_measurement_time = 0
 
@@ -742,7 +722,6 @@ def force_latency_remeasurement(dig_tool_instance):
     return new_latency
 
 def measure_system_latency_for_instance(dig_tool_instance):
-    """Measure system latency for a DigTool instance with caching."""
     import time
     
     if hasattr(dig_tool_instance, "_measured_latency") and hasattr(
@@ -758,7 +737,6 @@ def measure_system_latency_for_instance(dig_tool_instance):
 
 
 def perform_final_cleanup(dig_tool_instance):
-    """Perform final cleanup before application exit."""
     if dig_tool_instance.overlay:
         dig_tool_instance.overlay.destroy_overlay()
         dig_tool_instance.overlay = None
@@ -797,7 +775,6 @@ def perform_final_cleanup(dig_tool_instance):
 
 
 def force_exit(dig_tool_instance):
-    """Force application exit."""
     try:
         dig_tool_instance.root.destroy()
     except:
@@ -812,7 +789,6 @@ def force_exit(dig_tool_instance):
 
 
 def update_time_cache(dig_tool_instance):
-    """Update the time cache for performance optimization."""
     now = time.time()
     if now - dig_tool_instance._last_time_update > 0.001:
         dig_tool_instance._current_time_cache = now

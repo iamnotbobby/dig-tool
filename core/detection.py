@@ -12,18 +12,6 @@ def detect_by_saturation(hsv, saturation_threshold):
 def detect_by_otsu_with_area_filter(
     hsv, min_area=50, max_area=None, morph_kernel_size=3
 ):
-    """
-    Alternative detection method using Otsu's thresholding with area filtering.
-
-    Args:
-        hsv: HSV image array
-        min_area: Minimum contour area to keep (default: 50)
-        max_area: Maximum contour area to keep (None for no upper limit)
-        morph_kernel_size: Size of morphological operations kernel (default: 3)
-
-    Returns:
-        Binary mask with detected regions
-    """
     # Extract saturation channel
     saturation = hsv[:, :, 1]
 
@@ -67,17 +55,6 @@ def detect_by_otsu_with_area_filter(
 
 
 def detect_by_otsu_adaptive_area(hsv, area_percentile=0.1, morph_kernel_size=3):
-    """
-    Otsu detection with adaptive area filtering based on image size.
-
-    Args:
-        hsv: HSV image array
-        area_percentile: Minimum area as percentage of image size (default: 0.1%)
-        morph_kernel_size: Size of morphological operations kernel
-
-    Returns:
-        Binary mask with detected regions and threshold value
-    """
     height, width = hsv.shape[:2]
     image_area = height * width
     min_area = int(image_area * (area_percentile / 100.0))
@@ -445,20 +422,6 @@ def calculate_velocity_based_sweet_spot_width(
     velocity_multiplier=1.5,
     max_velocity_factor=500.0,
 ):
-    """
-    Calculate dynamic sweet spot width based on velocity.
-    Higher velocity = wider sweet spot for easier targeting.
-
-    Args:
-        base_width_percent: Base sweet spot width percentage
-        velocity: Current line velocity in pixels/second
-        enabled: Whether the feature is enabled
-        velocity_multiplier: How much velocity affects the width (0.0-5.0)
-        max_velocity_factor: Maximum velocity for normalization (default: 500.0)
-
-    Returns:
-        Dynamic sweet spot width percentage
-    """
     if not enabled or velocity_multiplier <= 0:
         return base_width_percent
 
@@ -476,18 +439,6 @@ def calculate_velocity_based_sweet_spot_width(
 
 
 def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_detailed_logging=False):
-    """
-    Detection method using a user-picked color with tolerance.
-
-    Args:
-        hsv: HSV image array
-        target_color_hsv: Target color in HSV format [H, S, V]
-        color_tolerance: Tolerance for color matching (default: 30)
-        enable_detailed_logging: Whether to log detailed debug information (default: False)
-
-    Returns:
-        Binary mask with detected regions matching the target color
-    """
     try:
         from utils.debug_logger import logger
         
