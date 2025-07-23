@@ -188,17 +188,10 @@ jobs:
           $isBeta = "${{ github.event.inputs.is_beta_release }}" -eq "true"
           $customNotes = "${{ github.event.inputs.custom_notes }}"
           
-          $notes = "<div align=`"center`">`n`n"
+          $notes = ""
           
           if ($isBeta) {
-            $notes += "# **BETA RELEASE ~ $releaseTag**`n"
-          } else {
-            $notes += "# **RELEASE ~ $releaseTag**`n"
-          }
-          
-          $notes += "`n</div>`n`n"
-          
-          if ($isBeta) {
+            $notes += "**⚠️ BETA RELEASE ⚠️**`n`n"
             $notes += "Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
           } else {
             $notes += "Join our [Discord](https://discord.com/invite/mxE7dzXMGf) for support and updates!`n`n"
