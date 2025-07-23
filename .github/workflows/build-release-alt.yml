@@ -1,4 +1,4 @@
-name: Build and Release with Custom PyInstaller Bootloader
+name: Build and Release
 on:
   workflow_dispatch:
     inputs:
