@@ -76,6 +76,11 @@ class SettingsManager:
             "auto_shovel_enabled": False,
             "shovel_slot": 1,
             "shovel_timeout": 5,
+            "auto_rejoin_enabled": False,
+            "roblox_server_link": "",
+            "rejoin_check_interval": 30,
+            "auto_rejoin_restart_delay": 60,
+            "auto_rejoin_discord_notifications": True,
             "user_id": "",
             "server_id": "",
             "webhook_url": "",
@@ -150,7 +155,12 @@ class SettingsManager:
             "target_fps": "Your game's FPS for prediction calculations. Higher FPS = more precise predictions. Does not affect screenshot rate.",
             "use_custom_cursor": "Move cursor to set position before clicking when enabled. Cannot be used with Auto-Walk.",
             "shovel_equip_mode": "Whether to press the shovel slot key once ('single') or twice ('double') when re-equipping.",
-            "include_screenshot_in_discord": "When enabled, screenshots of your game will be included in Discord milestone notifications."
+            "include_screenshot_in_discord": "When enabled, screenshots of your game will be included in Discord milestone notifications.",
+            "auto_rejoin_enabled": "Automatically rejoin Roblox servers when disconnected or kicked.",
+            "roblox_server_link": "Roblox server link to rejoin (supports share links and direct game URLs).",
+            "rejoin_check_interval": "How often to check for disconnection and attempt rejoining (minimum 10 seconds).",
+            "auto_rejoin_restart_delay": "Seconds to wait before restarting automation after successful rejoin (minimum 5 seconds).",
+            "auto_rejoin_discord_notifications": "Send Discord notifications for disconnections and rejoin attempts."
         }
 
         self.default_keybinds = {
@@ -309,18 +319,22 @@ class SettingsManager:
                 "money_area": lambda v: self._validate_area_param(v),
                 "item_area": lambda v: self._validate_area_param(v),
                 "initial_walkspeed_decrease": lambda v: 0.0 <= float(v) <= 1.0,
-                "initial_item_count": lambda v: int(v) >= 0
+                "initial_item_count": lambda v: int(v) >= 0,
+                "roblox_server_link": self._validate_roblox_link
             },
             "int_ranges": {
                 ("min_zone_height_percent", "sweet_spot_width_percent"): (0, 100),
                 ("max_zone_width_percent",): (0, 200),
                 ("target_fps",): (1, 1000),
                 ("screenshot_fps",): (30, 500),
-                ("milestone_interval",): (1, None)
+                ("milestone_interval",): (1, None),
+                ("rejoin_check_interval",): (10, None),
+                ("auto_rejoin_restart_delay",): (5, None)
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
-                "sell_delay", "walk_duration", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance"
+                "sell_delay", "walk_duration", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
+                "auto_rejoin_restart_delay"
             ],
             "float_ranges": {
                 ("velocity_width_multiplier",): (0.0, 5.0),
@@ -333,9 +347,9 @@ class SettingsManager:
                 "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_enabled",
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
                 "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "use_color_picker_detection",
-                "enable_money_detection", "enable_item_detection"
+                "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications"
             ],
-            "string_params": ["user_id", "server_id", "webhook_url"]
+            "string_params": ["user_id", "server_id", "webhook_url", "roblox_server_link"]
         }
 
     def _validate_ui_sequence(self, value):
@@ -371,6 +385,19 @@ class SettingsManager:
                 return False
         return (isinstance(value, (list, tuple)) and len(value) == 4 and 
                 all(isinstance(x, (int, float)) and x >= 0 for x in value))
+
+    def _validate_roblox_link(self, value):
+        if not isinstance(value, str) or not value.strip():
+            return True
+        
+        value = value.strip()
+        if value.startswith('roblox://'):
+            return True
+        
+        if ('roblox.com/share?' in value or 'roblox.com/games/' in value):
+            return True
+        
+        return False
 
     def validate_param_value(self, key, value):
         try:

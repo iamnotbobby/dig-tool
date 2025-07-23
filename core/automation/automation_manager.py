@@ -1,6 +1,7 @@
 # TODO: remove unnecessary wrapper functions
 
 import threading
+import time
 import gc
 from pynput.keyboard import Controller as KeyboardController
 from utils.debug_logger import logger
@@ -322,6 +323,52 @@ class AutomationManager:
                 return "AUTO WALKING"
         else:
             return "ACTIVE"
+
+    def restart_automation(self, reason="Manual restart"):
+        logger.info(f"Restarting automation: {reason}")
+        try:
+            if hasattr(self.dig_tool, 'running') and self.dig_tool.running:
+                self.dig_tool.running = False
+                if hasattr(self.dig_tool, 'update_status'):
+                    self.dig_tool.update_status("Restarting...")
+                time.sleep(0.5)
+            
+            self.dig_tool.running = True
+            self.dig_tool.click_count = 0
+            self.dig_tool.dig_count = 0
+            self.walk_pattern_index = 0
+            self.sell_count = 0
+            self.is_walking = False
+            self.is_selling = False
+            
+            if hasattr(self.dig_tool, 'velocity_calculator'):
+                self.dig_tool.velocity_calculator.reset()
+            if hasattr(self.dig_tool, 'item_counts_since_startup'):
+                self.dig_tool.item_counts_since_startup = {'junk': 0, 'common': 0, 'unusual': 0, 'scarce': 0, 'legendary': 0, 'mythical': 0, 'divine': 0, 'prismatic': 0}
+            if hasattr(self.dig_tool, 'manual_dig_target_disengaged_time'):
+                self.dig_tool.manual_dig_target_disengaged_time = 0
+                self.dig_tool.manual_dig_was_engaged = False
+            if hasattr(self.dig_tool, 'startup_time'):
+                self.dig_tool.startup_time = time.time() * 1000
+                self.dig_tool._startup_grace_ended = False
+            if hasattr(self.dig_tool, 'click_lock') and self.dig_tool.click_lock.locked():
+                self.dig_tool.click_lock.release()
+            if hasattr(self.dig_tool, 'target_engaged'):
+                self.dig_tool.target_engaged = False
+            if hasattr(self.dig_tool, 'line_moving_history'):
+                self.dig_tool.line_moving_history = []
+            
+            self.shiftlock_state = {"shift": False, "right_shift": False}
+            
+            if hasattr(self.dig_tool, 'update_status'):
+                self.dig_tool.update_status("Bot Started...")
+            from utils.ui_management import update_main_button_text
+            update_main_button_text(self.dig_tool)
+            logger.info(f"Automation restarted successfully: {reason}")
+        except Exception as e:
+            logger.error(f"Error during automation restart: {e}")
+            if hasattr(self.dig_tool, 'update_status'):
+                self.dig_tool.update_status("Restart failed")
 
     def get_mouse_position(self):
         try:

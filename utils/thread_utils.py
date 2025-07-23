@@ -14,6 +14,9 @@ def start_threads(instance):
             target=instance.run_main_loop, daemon=True
         )
         instance.main_loop_thread.start()
+    
+    if hasattr(instance, 'roblox_rejoiner'):
+        instance.roblox_rejoiner.start_monitoring()
 
 
 def run_hotkey_listener(instance):
