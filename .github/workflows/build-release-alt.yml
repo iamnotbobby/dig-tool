@@ -47,7 +47,7 @@ jobs:
         if: ${{ github.event.inputs.use_custom_bootloader == 'true' }}
         run: |
           choco install visualstudio2022-workload-vctools -y
-
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv
         shell: powershell
 
@@ -231,7 +231,6 @@ jobs:
       - name: Cleanup build artifacts
         if: always()
         run: |
-          # Clean up PyInstaller source to save space
           if (Test-Path "pyinstaller-source") {
             Remove-Item -Recurse -Force "pyinstaller-source"
           }
