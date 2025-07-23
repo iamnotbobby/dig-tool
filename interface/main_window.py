@@ -824,6 +824,8 @@ class MainWindow:
                     disabled_tooltip = DisabledTooltip(entry, "", tooltip_text)
                     disabled_tooltip.widget_type = widget_type
                     self.disabled_tooltips.append(disabled_tooltip)
+                
+                return entry
 
         def create_dual_param_entry(parent, text1, var_key1, text2, var_key2, dependent_list=None, widget_type=None):
             frame = Frame(parent, bg=parent.cget('bg'))
@@ -1260,6 +1262,21 @@ class MainWindow:
                     
         self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
         self.dig_tool.root.after_idle(update_test_button_text)
+
+        # Auto-Rejoin subsection within Auto-Walk pane
+        auto_rejoin_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Auto-Rejoin Settings",
+                                                      "#f0f0f8")
+        rejoin_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Auto-Rejoin", 'auto_rejoin_enabled')
+        Tooltip(rejoin_checkbox, "Automatically rejoin Roblox servers when disconnected or kicked")
+        
+        create_param_entry(auto_rejoin_subsection.content, "Server Link:", 'roblox_server_link')
+        
+        create_param_entry(auto_rejoin_subsection.content, "Check Interval (seconds):", 'rejoin_check_interval')
+        
+        create_param_entry(auto_rejoin_subsection.content, "Restart Delay (seconds):", 'auto_rejoin_restart_delay')
+        
+        discord_notif_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Discord Notifications", 'auto_rejoin_discord_notifications')
+        Tooltip(discord_notif_checkbox, "Send Discord notifications for disconnections and rejoin attempts")
 
         # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
