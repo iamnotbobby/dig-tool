@@ -752,6 +752,11 @@ def perform_final_cleanup(dig_tool_instance):
         del dig_tool_instance.automation_manager
         dig_tool_instance.automation_manager = None
 
+    if hasattr(dig_tool_instance, "roblox_rejoiner") and dig_tool_instance.roblox_rejoiner:
+        dig_tool_instance.roblox_rejoiner.stop_monitoring()
+        del dig_tool_instance.roblox_rejoiner
+        dig_tool_instance.roblox_rejoiner = None
+
     try:
         keyboard.unhook_all()
     except:
