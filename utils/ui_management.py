@@ -382,9 +382,34 @@ def update_gui_from_queue(instance):
         if instance.debug_window and instance.debug_label and debug_mask is not None:
             dw, dh = instance.debug_label.winfo_width(), instance.debug_label.winfo_height()
             if dw > 20 and dh > 20:
-                debug_bgr = cv2.cvtColor(debug_mask, cv2.COLOR_GRAY2BGR)
+                detection_info = overlay_info.get("detection_info", {})
+                method = detection_info.get("method", "Unknown")
+                
+                if len(debug_mask.shape) == 3:
+                    debug_display = debug_mask
+                elif "Otsu" in method or "Color Picker" in method:
+                    preview_thumbnail = overlay_info.get("preview_thumbnail")
+                    if preview_thumbnail is not None:
+                        debug_display = preview_thumbnail.copy()
+                        
+                        if debug_mask.shape[:2] == debug_display.shape[:2]:
+                            overlay = debug_display.copy()
+                            overlay[debug_mask > 0] = [0, 255, 0]
+                            debug_display = cv2.addWeighted(debug_display, 0.7, overlay, 0.3, 0)
+                        elif debug_mask.shape[1] == debug_display.shape[1]:
+                            mask_height = min(debug_mask.shape[0], debug_display.shape[0])
+                            overlay = debug_display.copy()
+                            overlay[:mask_height][debug_mask[:mask_height] > 0] = [0, 255, 0]
+                            debug_display = cv2.addWeighted(debug_display, 0.7, overlay, 0.3, 0)
+                    else:
+                        debug_bgr = cv2.cvtColor(debug_mask, cv2.COLOR_GRAY2BGR)
+                        debug_display = debug_bgr
+                else:
+                    debug_bgr = cv2.cvtColor(debug_mask, cv2.COLOR_GRAY2BGR)
+                    debug_display = debug_bgr
+                
                 debug_img = Image.fromarray(
-                    cv2.cvtColor(debug_bgr, cv2.COLOR_BGR2RGB)
+                    cv2.cvtColor(debug_display, cv2.COLOR_BGR2RGB)
                 )
                 debug_img.thumbnail((dw, dh), Image.Resampling.NEAREST)
                 debug_photo = ImageTk.PhotoImage(image=debug_img)

@@ -1026,6 +1026,8 @@ class MainWindow:
                               validation_callback=self.validate_otsu_toggle)
         create_checkbox_param(otsu_subsection.content, "Adaptive Area Filtering", 'otsu_adaptive_area',
                               self.otsu_dependent_widgets, 'otsu')
+        create_checkbox_param(otsu_subsection.content, "Disable Color Lock", 'otsu_disable_color_lock',
+                              self.otsu_dependent_widgets, 'otsu')
         create_dual_param_entry(otsu_subsection.content, "Min Area (pixels):", 'otsu_min_area',
                                "Max Area (pixels):", 'otsu_max_area',
                                self.otsu_dependent_widgets, 'otsu')

@@ -63,6 +63,7 @@ class SettingsManager:
             "otsu_morph_kernel_size": 3,
             "otsu_adaptive_area": True,
             "otsu_area_percentile": 0.1,
+            "otsu_disable_color_lock": False,
             # Color picker detection parameters
             "use_color_picker_detection": False,
             "picked_color_rgb": "",  # RGB color in hex format (e.g., "#FF0000")
@@ -128,6 +129,7 @@ class SettingsManager:
             "otsu_morph_kernel_size": "Size of morphological operations kernel for noise reduction. 0 to disable, higher values = more smoothing.",
             "otsu_adaptive_area": "Use adaptive area filtering based on image size instead of fixed pixel values.",
             "otsu_area_percentile": "Minimum area as percentage of image size when using adaptive area filtering.",
+            "otsu_disable_color_lock": "Disable color locking for Otsu detection. When enabled, detection runs continuously without locking to specific colors.",
             # Color picker detection help text
             "use_color_picker_detection": "Use a specific color picked from the screen. Click 'Pick Color' to select a target color.",
             "picked_color_rgb": "The RGB color value sampled from a screen area (automatically set when using Sample Area button).",
@@ -330,7 +332,7 @@ class SettingsManager:
             "bool_params": [
                 "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_enabled",
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
-                "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "use_color_picker_detection",
+                "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "use_color_picker_detection",
                 "enable_money_detection", "enable_item_detection"
             ],
             "string_params": ["user_id", "server_id", "webhook_url"]

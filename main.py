@@ -508,11 +508,13 @@ class DigTool:
 
                 saturation_threshold = get_param(self, "saturation_threshold")
 
-                if not self.is_color_locked:
+                use_otsu = get_param(self, "use_otsu_detection")
+                otsu_disable_color_lock = get_param(self, "otsu_disable_color_lock")
+                
+                if not self.is_color_locked or (use_otsu and otsu_disable_color_lock):
                     if final_mask is None or final_mask.shape != (height_80, width):
                         final_mask = np.empty((height_80, width), dtype=np.uint8)
 
-                    use_otsu = get_param(self, "use_otsu_detection")
                     use_color_picker = get_param(self, "use_color_picker_detection")
                     detection_info = {}
 
@@ -694,8 +696,17 @@ class DigTool:
                     
                     if lower_bound is not None and upper_bound is not None:
                         cv2.inRange(hsv, lower_bound, upper_bound, dst=final_mask)
+                        detection_info = {
+                            "method": "Color Lock (HSV Range)",
+                            "threshold": f"HSV: {lower_bound} - {upper_bound}",
+                            "locked_color": self.locked_color_hex if hasattr(self, 'locked_color_hex') else "Unknown",
+                        }
                     else:
                         final_mask.fill(0)
+                        detection_info = {
+                            "method": "Color Lock (No Color)",
+                            "threshold": "N/A",
+                        }
 
                     line_exclusion_radius = get_param(self, "line_exclusion_radius")
                     if line_exclusion_radius > 0 and line_pos != -1:
@@ -737,7 +748,7 @@ class DigTool:
                         and h_temp >= min_zone_height
                     ):
                         raw_zone_x, raw_zone_w = x_temp, w_temp
-                        if not self.is_color_locked:
+                        if not self.is_color_locked and not (use_otsu and otsu_disable_color_lock):
                             mask = np.zeros(hsv.shape[:2], dtype="uint8")
                             cv2.drawContours(mask, [main_contour], -1, (255,), -1)
                             mean_hsv = cv2.mean(hsv, mask=mask)
@@ -1276,6 +1287,26 @@ class DigTool:
                     interpolation=cv2.INTER_NEAREST,
                 )
 
+                debug_visualization = None
+                if final_mask is not None:
+                    if 'detection_info' in locals() and detection_info:
+                        method = detection_info.get("method", "")
+                        if "Otsu" in method or "Color Picker" in method:
+                            if 'zone_detection_area' in locals() and zone_detection_area is not None:
+                                debug_visualization = zone_detection_area.copy()
+                            else:
+                                debug_visualization = screenshot[:height_80, :].copy() if height_80 < screenshot.shape[0] else screenshot.copy()
+                            
+                            if final_mask.shape[:2] == debug_visualization.shape[:2]:
+                                overlay = debug_visualization.copy()
+                                overlay[final_mask > 0] = [0, 255, 0]
+                                debug_visualization = cv2.addWeighted(debug_visualization, 0.7, overlay, 0.3, 0)
+                            elif final_mask.shape[1] == debug_visualization.shape[1]:
+                                mask_height = min(final_mask.shape[0], debug_visualization.shape[0])
+                                overlay = debug_visualization.copy()
+                                overlay[:mask_height][final_mask[:mask_height] > 0] = [0, 255, 0]
+                                debug_visualization = cv2.addWeighted(debug_visualization, 0.7, overlay, 0.3, 0)
+
                 overlay_info = {
                     "sweet_spot_center": sweet_spot_center,
                     "velocity": display_velocity,
@@ -1297,7 +1328,7 @@ class DigTool:
                 }
                 try:
                     self.results_queue.put_nowait(
-                        (preview_img, final_mask, overlay_info)
+                        (preview_img, debug_visualization if debug_visualization is not None else final_mask, overlay_info)
                     )
                 except queue.Full:
                     pass
