@@ -1,4 +1,4 @@
-name: Build and Release with PyInstaller
+name: Build and Release with Custom PyInstaller Bootloader
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +19,12 @@ on:
         description: 'Additional release notes (optional)'
         required: false
         default: ''
+      use_custom_bootloader:
+        description: 'Build with custom bootloader (reduces AV false positives)'
+        required: false
+        default: true
+        type: boolean
+
 jobs:
   build-and-release:
     runs-on: windows-latest
@@ -36,18 +42,54 @@ jobs:
           python-version: '3.x'
           architecture: 'x64'
           cache: 'pip'
-         
+
+      - name: Install system dependencies for bootloader compilation
+        if: ${{ github.event.inputs.use_custom_bootloader == 'true' }}
+        run: |
+          choco install visualstudio2022-workload-vctools -y
+
+          refreshenv
+        shell: powershell
+
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          pip install wheel setuptools
+      
+      - name: Build custom PyInstaller bootloader
+        if: ${{ github.event.inputs.use_custom_bootloader == 'true' }}
+        run: |
+          git clone https://github.com/pyinstaller/pyinstaller.git pyinstaller-source
+          cd pyinstaller-source
+          
+          cd bootloader
+          python waf distclean all
+          
+          cd ..
+          pip install .
+          
+          echo "Custom bootloader built and installed successfully"
+        shell: powershell
+
+      - name: Install standard PyInstaller
+        if: ${{ github.event.inputs.use_custom_bootloader == 'false' }}
+        run: |
           pip install pyinstaller
+        shell: powershell
+
+      - name: Verify PyInstaller installation
+        run: |
+          pyinstaller --version
+          python -c "import PyInstaller; print('PyInstaller location:', PyInstaller.__path__[0])"
+        shell: powershell
       
       - name: Generate executable name with version
         id: exe_name
         run: |
           $releaseTag = "${{ github.event.inputs.release_tag }}"
           $version = $releaseTag -replace '^v', '' -replace '[^a-zA-Z0-9.-]', '-'
-          $exeName = "DigTool-$version"
+          $bootloaderSuffix = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "-custom" } else { "" }
+          $exeName = "DigTool-$version$bootloaderSuffix"
           
           echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
           echo "Generated executable name: $exeName"
@@ -67,19 +109,22 @@ jobs:
           $sha256Hash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
           $md5Hash = (Get-FileHash -Path $exePath -Algorithm MD5).Hash
           
+          $bootloaderType = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "Custom" } else { "Standard" }
+          
           $checksumContent = @"
           # Checksums for $exeName
           # Built by GitHub Actions on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
           # Workflow: ${{ github.workflow }}
           # Run ID: ${{ github.run_id }}
           # Commit: ${{ github.sha }}
+          # Bootloader: $bootloaderType PyInstaller Bootloader
 
           SHA256: $sha256Hash
           MD5: $md5Hash
 
           # Verification Instructions:
           # Windows: certutil -hashfile $exeName SHA256
-          # Linux/Mac: sha25 Get-FileHash -Path $exeName -Algorithm SHA256
+          # Linux/Mac: sha256sum $exeName
           "@
           
           $checksumContent | Out-File -FilePath "dist/CHECKSUMS.txt" -Encoding UTF8
@@ -89,7 +134,8 @@ jobs:
           echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
           echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
           echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
-          echo "Built executable: $exeName (${fileSize}MB)"
+          echo "bootloader_type=$bootloaderType" >> $env:GITHUB_OUTPUT
+          echo "Built executable: $exeName (${fileSize}MB) with $bootloaderType bootloader"
           echo "SHA256: $sha256Hash"
         shell: powershell
         
@@ -106,6 +152,7 @@ jobs:
               "ref" = "${{ github.ref }}"
               "sha" = "${{ github.sha }}"
               "timestamp" = "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
+              "bootloader_type" = "${{ steps.get_exe_info.outputs.bootloader_type }}"
             }
             "executable" = @{
               "name" = "${{ steps.get_exe_info.outputs.exe_name }}"
@@ -148,7 +195,10 @@ jobs:
             $notes += "$customNotes`n`n"
           }
           
-          $notes += "**File Integrity Verification:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "**File Integrity Verification:**`n"
+          $notes += "``````n"
+          $notes += "SHA256: ${{ steps.get_exe_info.outputs.sha256_hash }}`n"
+          $notes += "``````n"
           $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`n"
          
           echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
@@ -175,4 +225,14 @@ jobs:
           echo "Tag: ${{ github.event.inputs.release_tag }}"
           echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
           echo "Full path: ${{ steps.get_exe_info.outputs.exe_path }}"
+          echo "Bootloader: ${{ steps.get_exe_info.outputs.bootloader_type }}"
+        shell: powershell
+
+      - name: Cleanup build artifacts
+        if: always()
+        run: |
+          # Clean up PyInstaller source to save space
+          if (Test-Path "pyinstaller-source") {
+            Remove-Item -Recurse -Force "pyinstaller-source"
+          }
         shell: powershell
