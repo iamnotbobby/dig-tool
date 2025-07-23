@@ -196,6 +196,7 @@ class MainWindow:
         self.engagement_timeout_dependent_widgets = []
         self.money_detection_dependent_widgets = []
         self.item_detection_dependent_widgets = []
+        self.walkspeed_dependent_widgets = []
         self.money_test_button = None
         self.item_test_button = None
         self.disabled_tooltips = []
@@ -595,6 +596,12 @@ class MainWindow:
                 widget.config(state='normal' if item_detection_enabled else 'disabled')
             else:
                 logger.warning(f"Widget in item_detection_dependent_widgets has no config method: {type(widget)}")
+
+        # Walkspeed dependent widgets
+        walkspeed_enabled = self.dig_tool.param_vars.get('dynamic_walkspeed_enabled', tk.BooleanVar()).get()
+        for widget in self.walkspeed_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if walkspeed_enabled else 'disabled')
 
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
@@ -1105,8 +1112,8 @@ class MainWindow:
         
         # Decreased Walkspeed settings
         dynamic_walkspeed_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Decreased Walkspeed", 'dynamic_walkspeed_enabled')
-        create_param_entry(panes['auto_walk'].sub_frame, "Initial Item Count:", 'initial_item_count')
-        create_param_entry(panes['auto_walk'].sub_frame, "Initial Walkspeed Decrease:", 'initial_walkspeed_decrease')
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Item Count:", 'initial_item_count', dependent_list=self.walkspeed_dependent_widgets)
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Walkspeed Decrease:", 'initial_walkspeed_decrease', dependent_list=self.walkspeed_dependent_widgets)
         
         # Auto Walk Overlay button
         overlay_button_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")
@@ -1399,6 +1406,7 @@ class MainWindow:
         self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['velocity_based_width_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['auto_sell_target_engagement_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['dynamic_walkspeed_enabled'].trace_add('write', self.update_dependent_widgets_state)
 
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
