@@ -53,7 +53,7 @@ class AutoShovelManager:
             return False
 
         time_since_last_dig = (
-            current_time - self.last_dig_time if self.last_dig_time else float("inf")
+            current_time - self.last_dig_time if self.last_dig_time else 0
         )
 
         no_recent_pickup = time_since_last_dig > shovel_timeout
@@ -135,7 +135,7 @@ class AutoShovelManager:
         shovel_timeout = get_param(self.dig_tool, "shovel_timeout") * 60
 
         time_since_last_dig = (
-            current_time - self.last_dig_time if self.last_dig_time else float("inf")
+            current_time - self.last_dig_time if self.last_dig_time else 0
         )
 
         if time_since_last_dig >= shovel_timeout:

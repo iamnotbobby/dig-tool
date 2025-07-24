@@ -186,8 +186,7 @@ class DebugLogger:
         self.always_on_top = False
         self.save_to_file = False
         self.redirect_to_console = False
-        self.logging_enabled = False
-        self.startup_timer = None
+        self.logging_enabled = True
         self.log_file = None
         self.log_history = []
         self._last_update_time = 0
@@ -285,38 +284,9 @@ class DebugLogger:
         if self.console_window and self.console_text:
             self.console_window.after_idle(self._update_console)
 
-    def enable_logging_for_startup(self, duration_seconds=30):
-        self.logging_enabled = True
-        if hasattr(self, "startup_timer") and self.startup_timer:
-            try:
-                import threading
-
-                if isinstance(self.startup_timer, threading.Timer):
-                    self.startup_timer.cancel()
-            except:
-                pass
-
-        import threading
-
-        self.startup_timer = threading.Timer(
-            duration_seconds, self._disable_startup_logging
-        )
-        self.startup_timer.start()
-
-        self.info(f"Debug logging enabled for {duration_seconds} seconds")
-
-    def _disable_startup_logging(self):
-        self.logging_enabled = False
-        self.info("Debug logging disabled (startup period ended)")
-
     def set_logging_enabled(self, enabled):
         self.logging_enabled = enabled
         if enabled:
-            if hasattr(self, "startup_timer") and self.startup_timer:
-                try:
-                    self.startup_timer.cancel()
-                except:
-                    pass
             self.info("Debug logging manually enabled")
         else:
             self.info("Debug logging manually disabled")

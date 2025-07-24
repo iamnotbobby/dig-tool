@@ -103,7 +103,6 @@ check_display_scale()
 
 class DigTool:
     def __init__(self):
-        logger.enable_logging_for_startup(30)
         # Comment if in dev
         enable_console_logging() 
         
@@ -394,7 +393,6 @@ class DigTool:
         target_disengaged_time = 0
         pending_auto_sell = False
         walk_thread = None
-        max_wait_time = 5000
         post_dig_delay = 2000
         click_retry_count = 0
         max_click_retries = 2
@@ -970,9 +968,6 @@ class DigTool:
                                         direction
                                     )
 
-                                if success:
-                                    self.automation_manager.advance_walk_pattern()
-
                             walk_thread = threading.Thread(
                                 target=perform_walk_with_callback, daemon=True
                             )
@@ -1019,7 +1014,7 @@ class DigTool:
                         auto_walk_state = "digging"
                         target_disengaged_time = 0
                         click_retry_count = 0
-                    elif current_time_ms - wait_for_target_start > max_wait_time:
+                    elif current_time_ms - wait_for_target_start > get_param(self, "max_wait_time"):
                         if click_retry_count < max_click_retries:
                             click_retry_count += 1
                             logger.debug(
@@ -1217,6 +1212,7 @@ class DigTool:
                     )
 
                 auto_walk_state = "move"
+                self.automation_manager.advance_walk_pattern()
                 check_milestone_notifications(self)
                 
                 if get_param(self, "enable_item_detection"):

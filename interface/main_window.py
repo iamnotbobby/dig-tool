@@ -1111,6 +1111,7 @@ class MainWindow:
         # ===== AUTO-WALK PANE =====
         auto_walk_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled')
         create_param_entry(panes['auto_walk'].sub_frame, "Key Duration (ms):", 'walk_duration')
+        create_param_entry(panes['auto_walk'].sub_frame, "Max Wait Time (ms):", 'max_wait_time')
         
         # Decreased Walkspeed settings
         dynamic_walkspeed_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Decreased Walkspeed", 'dynamic_walkspeed_enabled')

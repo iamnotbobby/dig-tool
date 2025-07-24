@@ -70,6 +70,7 @@ class SettingsManager:
             "color_tolerance": 30,
             "auto_walk_enabled": False,
             "walk_duration": 500,
+            "max_wait_time": 5000,
             "dynamic_walkspeed_enabled": False,
             "initial_item_count": 0,
             "initial_walkspeed_decrease": 0.0,
@@ -125,6 +126,7 @@ class SettingsManager:
             "auto_sell_target_engagement_timeout": "Time to wait for target engagement after auto-sell completion (seconds). If no engagement detected, applies auto-sell fallback to re-close inventory.",
             "auto_walk_enabled": "Automatically move around while digging.",
             "walk_duration": "Default duration to hold down key presses (milliseconds). Used as base duration unless custom durations are set for individual keys.",
+            "max_wait_time": "Maximum time to wait for target engagement after clicking (milliseconds). If target isn't engaged within this time, the pattern advances to the next step.",
             "dynamic_walkspeed_enabled": "Apply a mathematical formula to determine the decreased walkspeed after X items.",
             "initial_item_count": "Starting item count for walkspeed calculation. Useful if you already have items collected.",
             # Otsu detection help text
@@ -329,12 +331,14 @@ class SettingsManager:
                 ("screenshot_fps",): (30, 500),
                 ("milestone_interval",): (1, None),
                 ("rejoin_check_interval",): (10, None),
-                ("auto_rejoin_restart_delay",): (5, None)
+                ("auto_rejoin_restart_delay",): (5, None),
+                ("shovel_slot",): (0, 9),
+                ("shovel_timeout",): (1, None)
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
-                "sell_delay", "walk_duration", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
-                "auto_rejoin_restart_delay"
+                "sell_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
+                "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout"
             ],
             "float_ranges": {
                 ("velocity_width_multiplier",): (0.0, 5.0),
