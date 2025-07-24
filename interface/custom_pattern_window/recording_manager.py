@@ -243,14 +243,15 @@ class RecordingManager:
     def _show_add_manual_key_dialog(self, pattern_name):
         dialog = tk.Toplevel(self.main_window.window)
         dialog.title("Add Manual Key")
-        dialog.geometry("400x300")
-        dialog.resizable(False, False)
+        dialog.geometry("500x400")
+        dialog.resizable(True, True)
+        dialog.minsize(450, 550)
         dialog.transient(self.main_window.window)
         dialog.grab_set()
 
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (300 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (400 // 2)
         dialog.geometry(f"+{x}+{y}")
 
         main_frame = ttk.Frame(dialog, padding="20")
