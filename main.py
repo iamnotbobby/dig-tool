@@ -756,7 +756,7 @@ class DigTool:
                         and h_temp >= min_zone_height
                     ):
                         raw_zone_x, raw_zone_w = x_temp, w_temp
-                        if not self.is_color_locked and not (use_otsu and otsu_disable_color_lock):
+                        if not self.is_color_locked and not (use_otsu and otsu_disable_color_lock) and not use_color_picker:
                             mask = np.zeros(hsv.shape[:2], dtype="uint8")
                             cv2.drawContours(mask, [main_contour], -1, (255,), -1)
                             mean_hsv = cv2.mean(hsv, mask=mask)

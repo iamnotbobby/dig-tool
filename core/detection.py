@@ -455,20 +455,35 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
         if enable_detailed_logging:
             logger.debug(f"Color picker detection: Target HSV={target_color_hsv}, Tolerance={color_tolerance}")
         
+        target_value = target_color_hsv[2]
+        target_saturation = target_color_hsv[1]
+        
+        is_very_dark = target_value < 30
+        is_low_saturation = target_saturation < 40
+        
+        if is_very_dark or is_low_saturation:
+            h_tolerance = min(color_tolerance * 3, 179)
+            s_tolerance = min(color_tolerance * 4, 255)
+            v_tolerance = min(color_tolerance * 2, 255)
+        else:
+            h_tolerance = color_tolerance
+            s_tolerance = color_tolerance
+            v_tolerance = color_tolerance
+        
         lower_bound = np.array(
             [
-                max(0, target_color_hsv[0] - color_tolerance),
-                max(0, target_color_hsv[1] - color_tolerance),
-                max(0, target_color_hsv[2] - color_tolerance),
+                max(0, target_color_hsv[0] - h_tolerance),
+                max(0, target_color_hsv[1] - s_tolerance),
+                max(0, target_color_hsv[2] - v_tolerance),
             ],
             dtype=np.uint8,
         )
 
         upper_bound = np.array(
             [
-                min(179, target_color_hsv[0] + color_tolerance),
-                min(255, target_color_hsv[1] + color_tolerance),
-                min(255, target_color_hsv[2] + color_tolerance),
+                min(179, target_color_hsv[0] + h_tolerance),
+                min(255, target_color_hsv[1] + s_tolerance),
+                min(255, target_color_hsv[2] + v_tolerance),
             ],
             dtype=np.uint8,
         )
@@ -476,12 +491,12 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
         if enable_detailed_logging:
             logger.debug(f"HSV bounds: Lower={lower_bound}, Upper={upper_bound}")
 
-        if target_color_hsv[0] - color_tolerance < 0:
+        if target_color_hsv[0] - h_tolerance < 0:
             mask1 = cv2.inRange(
                 hsv,
                 np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
                 np.array(
-                    [target_color_hsv[0] + color_tolerance, upper_bound[1], upper_bound[2]],
+                    [target_color_hsv[0] + h_tolerance, upper_bound[1], upper_bound[2]],
                     dtype=np.uint8,
                 ),
             )
@@ -489,7 +504,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
                 hsv,
                 np.array(
                     [
-                        180 + target_color_hsv[0] - color_tolerance,
+                        180 + target_color_hsv[0] - h_tolerance,
                         lower_bound[1],
                         lower_bound[2],
                     ],
@@ -500,7 +515,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
             mask = cv2.bitwise_or(mask1, mask2)
             if enable_detailed_logging:
                 logger.debug("Applied hue wraparound (low)")
-        elif target_color_hsv[0] + color_tolerance > 179:
+        elif target_color_hsv[0] + h_tolerance > 179:
             mask1 = cv2.inRange(
                 hsv,
                 np.array([lower_bound[0], lower_bound[1], lower_bound[2]], dtype=np.uint8),
@@ -511,7 +526,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
                 np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
                 np.array(
                     [
-                        target_color_hsv[0] + color_tolerance - 180,
+                        target_color_hsv[0] + h_tolerance - 180,
                         upper_bound[1],
                         upper_bound[2],
                     ],
