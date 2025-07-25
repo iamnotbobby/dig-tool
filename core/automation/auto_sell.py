@@ -191,11 +191,8 @@ class AutoSellManager:
                     logger.info(f"Disabled shift keys for auto-sell: {disabled_shifts}")
                     time.sleep(0.2)
 
-                try:
-                    autoit.send("g")
-                except (OSError, WindowsError, Exception) as e:
-                    logger.warning(f"AutoIt send 'g' failed, using keyboard fallback: {e}")
-                    self.keyboard_controller.press_and_release("g")
+                self.keyboard_controller.press("g")
+                self.keyboard_controller.release("g")
 
                 time.sleep(0.5)
                 
@@ -217,12 +214,8 @@ class AutoSellManager:
                 if success:
                     logger.info("Sell click successful")
                     time.sleep(2.5)
-                    try:
-                        autoit.send("g")
-                    except (OSError, WindowsError, Exception) as e:
-                        logger.warning(f"AutoIt send 'g' failed, using keyboard fallback: {e}")
-                        self.keyboard_controller.press("g")
-                        self.keyboard_controller.release("g")
+                    self.keyboard_controller.press("g")
+                    self.keyboard_controller.release("g")
                     time.sleep(1.0)
 
                     self._process_sell_completion()
@@ -230,13 +223,8 @@ class AutoSellManager:
                     logger.error("Auto-sell failed: AutoIt click error")
                     self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
                     
-                    try:
-                        autoit.send("g")
-                        logger.info("Closed inventory after failed sell click")
-                    except (OSError, WindowsError, Exception) as e:
-                        logger.warning(f"AutoIt send 'g' failed after click failure, using keyboard fallback: {e}")
-                        self.keyboard_controller.press("g")
-                        self.keyboard_controller.release("g")
+                    self.keyboard_controller.press("g")
+                    self.keyboard_controller.release("g")
                     time.sleep(0.5)
 
             self.is_selling = False
@@ -443,30 +431,21 @@ class AutoSellManager:
         
         try:
             if key_name in special_keys:
-                autoit_cmd, key_obj = special_keys[key_name]
-                autoit.send(autoit_cmd)
-                logger.debug(f"Sent special key via AutoIt: {key_name}")
+                _, key_obj = special_keys[key_name]
+                self.keyboard_controller.press(key_obj)
+                self.keyboard_controller.release(key_obj)
+                logger.debug(f"Sent special key: {key_name}")
             else:
-                autoit.send(key)
-                logger.debug(f"Sent key via AutoIt: {key}")
-        except (OSError, WindowsError, Exception) as e:
-            logger.warning(f"AutoIt send failed for key '{key}', using keyboard fallback: {e}")
-            try:
-                if key_name in special_keys:
-                    _, key_obj = special_keys[key_name]
+                if hasattr(Key, key_name):
+                    key_obj = getattr(Key, key_name)
                     self.keyboard_controller.press(key_obj)
                     self.keyboard_controller.release(key_obj)
                 else:
-                    if hasattr(Key, key_name):
-                        key_obj = getattr(Key, key_name)
-                        self.keyboard_controller.press(key_obj)
-                        self.keyboard_controller.release(key_obj)
-                    else:
-                        self.keyboard_controller.press(key)
-                        self.keyboard_controller.release(key)
-                logger.debug(f"Sent key via keyboard fallback: {key}")
-            except Exception as fallback_error:
-                logger.error(f"Both AutoIt and keyboard fallback failed for key '{key}': {fallback_error}")
+                    self.keyboard_controller.press(key)
+                    self.keyboard_controller.release(key)
+                logger.debug(f"Sent key: {key}")
+        except Exception as e:
+            logger.error(f"Keyboard controller failed for key '{key}': {e}")
 
     def _countdown_with_status(self, message_format, seconds=5):
         for i in range(seconds, 0, -1):
