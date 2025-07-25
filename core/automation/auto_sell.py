@@ -57,23 +57,33 @@ class AutoSellManager:
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
             logger.error(f"Invalid click coordinates: x={x}, y={y}")
             return False
-            
+        
+        import math
+        max_speed = 2
+        
         for attempt in range(retries):
             try:
-                autoit.mouse_move(x, y, speed=2)
-                time.sleep(0.1)
+                current_pos_before = autoit.mouse_get_pos()
+                distance = math.sqrt((current_pos_before[0] - x)**2 + (current_pos_before[1] - y)**2)
+                
+                speed = max(1, min(max_speed, 3 - (attempt * 0.5)))
+                autoit.mouse_move(x, y, speed=int(speed))
+                
+                wait_time = min(0.05 + (distance * 0.0005), 0.3)
+                time.sleep(wait_time)
 
                 current_pos = autoit.mouse_get_pos()
-                tolerance = 5
-
-                if (abs(current_pos[0] - x) <= tolerance and abs(current_pos[1] - y) <= tolerance):
-                    autoit.mouse_click("left", int(x), int(y), speed=2)
+                base_tolerance = 5
+                adaptive_tolerance = max(base_tolerance, min(int(distance * 0.03), 15))
+                
+                if (abs(current_pos[0] - x) <= adaptive_tolerance and abs(current_pos[1] - y) <= adaptive_tolerance):
+                    autoit.mouse_click("left", int(x), int(y), speed=1)
                     time.sleep(0.1)
                     return True
                 else:
-                    logger.warning(f"Mouse position mismatch: expected ({x}, {y}), got {current_pos}")
+                    logger.warning(f"Mouse position mismatch: expected ({x}, {y}), got {current_pos}, tolerance: {adaptive_tolerance}")
                     if attempt < retries - 1:
-                        time.sleep(0.2)
+                        time.sleep(0.2 + (attempt * 0.1))
                         continue
 
             except (OSError, WindowsError, Exception) as com_error:
@@ -85,7 +95,7 @@ class AutoSellManager:
                 except Exception as fallback_error:
                     logger.warning(f"Fallback click also failed: {fallback_error}")
                     if attempt < retries - 1:
-                        time.sleep(0.2)
+                        time.sleep(0.2 + (attempt * 0.1))
                         continue
 
         logger.error("All AutoIt click attempts failed")

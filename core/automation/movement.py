@@ -97,17 +97,6 @@ class MovementManager:
 
     def execute_movement_with_duration(self, direction, duration):
         try:
-            common_movement_keys = [
-                "w", "a", "s", "d", "up", "down", "left", "right",
-                "shift", "ctrl", "alt", "space",
-            ]
-            for key in common_movement_keys:
-                try:
-                    converted_key = self.convert_key_name(key)
-                    self.keyboard_controller.release(converted_key)
-                except:
-                    pass
-            time.sleep(0.05)
 
             if "+" in direction:
                 keys_to_press = direction.lower().split("+")
@@ -166,7 +155,6 @@ class MovementManager:
                         logger.error(f"Failed to execute movement '{direction}': {e}")
                         return False
 
-            time.sleep(0.05)
             return True
 
         except Exception as e:
@@ -291,8 +279,6 @@ class MovementManager:
                                     logger.warning(
                                         f"Failed to release legacy key '{key}': {e}"
                                     )
-
-                time.sleep(0.05)
 
             self.is_walking = False
             return True

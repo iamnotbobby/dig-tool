@@ -453,51 +453,52 @@ class GameOverlay:
         try:
             automation_status = kwargs.get("automation_status", "STOPPED")
             if automation_status == "AUTO SELLING":
-                self.status_label.config(text="STATUS: AUTO SELLING", fg="#ffa726")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: AUTO SELLING", fg="#ffa726"))
             elif automation_status == "WALKING":
-                self.status_label.config(text="STATUS: WALKING", fg="#ffeb3b")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: WALKING", fg="#ffeb3b"))
             elif automation_status.startswith("AUTO WALKING"):
-                self.status_label.config(text="STATUS: AUTO WALKING", fg="#00ff88")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: AUTO WALKING", fg="#00ff88"))
             elif automation_status == "ACTIVE":
-                self.status_label.config(text="STATUS: ACTIVE", fg="#00ff88")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: ACTIVE", fg="#00ff88"))
             elif automation_status.startswith("RECORDING"):
-                self.status_label.config(text="STATUS: ACTIVE", fg="#00ff88")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: ACTIVE", fg="#00ff88"))
             else:
-                self.status_label.config(text="STATUS: STOPPED", fg="#ff4757")
+                self.overlay.after_idle(lambda: self.status_label.config(text="STATUS: STOPPED", fg="#ff4757"))
 
             target_engaged = kwargs.get("target_engaged", False)
-            self.target_label.config(
+            self.overlay.after_idle(lambda: self.target_label.config(
                 text=f"TARGET: {'LOCKED' if target_engaged else '---'}",
                 fg="#00ff88" if target_engaged else "#ff4757",
-            )
+            ))
 
             locked_color = kwargs.get("locked_color_hex")
             if locked_color:
-                self.color_swatch_overlay_label.config(bg=locked_color)
+                self.overlay.after_idle(lambda: self.color_swatch_overlay_label.config(bg=locked_color))
                 
             dig_count = kwargs.get("dig_count", 0)
             click_count = kwargs.get("click_count", 0)
             # self.benchmark_label.config(text=f"BENCH: {benchmark_fps:<5} FPS")
 
-            self.dig_label.config(text=f"DIGS: {dig_count}")
-            self.clicks_label.config(text=f"CLICKS: {click_count}")
+            self.overlay.after_idle(lambda: self.dig_label.config(text=f"DIGS: {dig_count}"))
+            self.overlay.after_idle(lambda: self.clicks_label.config(text=f"CLICKS: {click_count}"))
 
             is_pred = get_param(self.parent, "prediction_enabled")
-            self.pred_label.config(
+            self.overlay.after_idle(lambda: self.pred_label.config(
                 text=f"PRED: {'ON' if is_pred else 'OFF'}",
                 fg="#4ecdc4" if is_pred else "#ff4757",
-            )
-            self.latency_label.config(
-                text=f"LAT: {get_cached_system_latency(self.parent)}ms"
-            )
+            ))
+            latency = get_cached_system_latency(self.parent)
+            self.overlay.after_idle(lambda: self.latency_label.config(
+                text=f"LAT: {latency}ms"
+            ))
 
             bot_key = self.parent.keybind_vars["toggle_bot"].get().upper()
             gui_key = self.parent.keybind_vars["toggle_gui"].get().upper()
             ovl_key = self.parent.keybind_vars["toggle_overlay"].get().upper()
 
-            self.toggle_bot_label.config(text=f"Bot: {bot_key}")
-            self.toggle_gui_label.config(text=f"GUI: {gui_key}")
-            self.toggle_overlay_label.config(text=f"Ovl: {ovl_key}")
+            self.overlay.after_idle(lambda: self.toggle_bot_label.config(text=f"Bot: {bot_key}"))
+            self.overlay.after_idle(lambda: self.toggle_gui_label.config(text=f"GUI: {gui_key}"))
+            self.overlay.after_idle(lambda: self.toggle_overlay_label.config(text=f"Ovl: {ovl_key}"))
 
             preview_thumbnail = kwargs.get("preview_thumbnail")
             if preview_thumbnail is not None and self.preview_label_overlay:
@@ -506,12 +507,19 @@ class GameOverlay:
                         cv2.cvtColor(preview_thumbnail, cv2.COLOR_BGR2RGB)
                     )
                     photo = ImageTk.PhotoImage(image=img)
-                    self.preview_label_overlay.config(image=photo)  # type: ignore
-                    setattr(self.preview_label_overlay, '_image_ref', photo)
+                    self.overlay.after_idle(lambda p=photo: self._update_preview_image(p))
                 except Exception as e:
                     logger.debug(f"Error updating preview thumbnail: {e}")
         except Exception as e:
             logger.error(f"Error updating game overlay: {e}")
+    
+    def _update_preview_image(self, photo):
+        if self.preview_label_overlay and self.visible and self.overlay:
+            try:
+                self.preview_label_overlay.config(image=photo)
+                setattr(self.preview_label_overlay, '_image_ref', photo)
+            except Exception as e:
+                logger.debug(f"Error in _update_preview_image: {e}")
 
     def destroy_overlay(self):
         self.visible = False
@@ -738,46 +746,46 @@ class AutoWalkOverlay:
                 total_reduction = min(formula_reduction + initial_decrease, 0.99)
 
                 decrease_percentage = total_reduction * 100
-                self.walkspeed_decrease_label.config(
+                self.overlay.after_idle(lambda: self.walkspeed_decrease_label.config(
                     text=f"SLOWDOWN: {decrease_percentage:.1f}%"
-                )
+                ))
 
                 duration_multiplier = 1.0 + total_reduction
                 base_duration = get_param(self.parent, "walk_duration") / 1000.0
                 actual_duration = base_duration * duration_multiplier
-                self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s")
+                self.overlay.after_idle(lambda: self.duration_label.config(text=f"DURATION: {actual_duration:.3f}s"))
             else:
-                self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%")
+                self.overlay.after_idle(lambda: self.walkspeed_decrease_label.config(text="SLOWDOWN: 0.0%"))
                 base_duration = get_param(self.parent, "walk_duration") / 1000.0
-                self.duration_label.config(text=f"DURATION: {base_duration:.3f}s")
+                self.overlay.after_idle(lambda: self.duration_label.config(text=f"DURATION: {base_duration:.3f}s"))
 
-            self.update_pattern_name()
-
-            self.update_path_visualization()
-
+            self.overlay.after_idle(self.update_pattern_name)
+            
             automation_status = kwargs.get("automation_status", "STOPPED")
             is_walking = automation_status in [
                 "WALKING"
             ] or automation_status.startswith("AUTO WALKING")
             if is_walking and not getattr(self, "_animation_running", False):
                 self._animation_running = True
-                self.animate_path_step()
-            elif not is_walking:
+                self.overlay.after_idle(self.animate_path_step)
+            elif not is_walking and getattr(self, "_animation_running", False):
                 self._animation_running = False
+            elif not is_walking:
+                self.overlay.after_idle(lambda: self.update_path_visualization())
 
             auto_sell_enabled = get_param(self.parent, "auto_sell_enabled")
             if auto_sell_enabled:
-                raw_dig_count = kwargs.get("dig_count", 0)  # Use raw count for auto-sell timing
+                raw_dig_count = kwargs.get("dig_count", 0)
                 sell_interval = get_param(self.parent, "sell_every_x_digs")
                 if sell_interval and sell_interval > 0:
                     current_progress = raw_dig_count % sell_interval
-                    self.autosell_label.config(
+                    self.overlay.after_idle(lambda: self.autosell_label.config(
                         text=f"AUTO SELL: {current_progress} / {sell_interval}"
-                    )
+                    ))
                 else:
-                    self.autosell_label.config(text="AUTO SELL: 0 / 0")
+                    self.overlay.after_idle(lambda: self.autosell_label.config(text="AUTO SELL: 0 / 0"))
             else:
-                self.autosell_label.config(text="AUTO SELL: OFF")
+                self.overlay.after_idle(lambda: self.autosell_label.config(text="AUTO SELL: OFF"))
 
         except Exception as e:
             logger.debug(f"Error updating auto walk overlay: {e}")
@@ -810,11 +818,14 @@ class AutoWalkOverlay:
 
         if current_pattern and len(current_pattern) > 0:
             if hasattr(self.parent, "automation_manager"):
-                self.current_step_index = getattr(
+                new_step_index = getattr(
                     self.parent.automation_manager, "walk_pattern_index", 0
                 )
-
-            self.update_path_visualization(highlight_step=self.current_step_index)
+                
+                if not hasattr(self, "last_drawn_step") or self.last_drawn_step != new_step_index:
+                    self.current_step_index = new_step_index
+                    self.last_drawn_step = new_step_index
+                    self.overlay.after_idle(lambda idx=new_step_index: self.update_path_visualization(highlight_step=idx))
 
             automation_status = getattr(
                 self.parent.automation_manager, "current_status", "STOPPED"
@@ -828,7 +839,7 @@ class AutoWalkOverlay:
                 and getattr(self, "_animation_running", False)
                 and self.overlay
             ):
-                self.overlay.after(200, self.animate_path_step)
+                self.overlay.after(150, self.animate_path_step)
             else:
                 self._animation_running = False
         else:
@@ -847,17 +858,26 @@ class AutoWalkOverlay:
             if current_pattern:
                 pattern_name = current_pattern.get()
                 if pattern_name:
-                    self.pattern_name_label.config(text=f"PATTERN: {pattern_name}")
+                    self.overlay.after_idle(lambda: self.pattern_name_label.config(text=f"PATTERN: {pattern_name}"))
                 else:
-                    self.pattern_name_label.config(text="PATTERN: None")
+                    self.overlay.after_idle(lambda: self.pattern_name_label.config(text="PATTERN: None"))
             else:
-                self.pattern_name_label.config(text="PATTERN: None")
+                self.overlay.after_idle(lambda: self.pattern_name_label.config(text="PATTERN: None"))
         except Exception:
             pass
 
     def update_path_visualization(self, highlight_step=None):
         if not hasattr(self, "path_canvas") or not self.path_canvas:
             return
+            
+        current_pattern_var = getattr(self.parent, "walk_pattern_var", None)
+        current_pattern_name = current_pattern_var.get() if current_pattern_var else None
+        
+        if (hasattr(self, "_last_visualization_state") and 
+            self._last_visualization_state == (highlight_step, current_pattern_name)):
+            return
+            
+        self._last_visualization_state = (highlight_step, current_pattern_name)
 
         try:
             self.path_canvas.delete("all")
@@ -869,9 +889,8 @@ class AutoWalkOverlay:
                 hasattr(self.parent, "automation_manager")
                 and self.parent.automation_manager
             ):
-                current_pattern_name = getattr(self.parent, "walk_pattern_var", None)
-                if current_pattern_name:
-                    pattern_name = current_pattern_name.get()
+                if current_pattern_var:
+                    pattern_name = current_pattern_name
                     pattern_info = self.parent.automation_manager.get_pattern_list()
                     if pattern_name in pattern_info:
                         current_pattern = pattern_info[pattern_name]["pattern"]
@@ -882,41 +901,49 @@ class AutoWalkOverlay:
                 )
                 return
 
-            canvas_width = 180
-            canvas_height = 140
-            center_x = canvas_width // 2
-            center_y = canvas_height // 2
+            if (not hasattr(self, "_cached_path_points") or 
+                not hasattr(self, "_cached_pattern_name") or 
+                self._cached_pattern_name != pattern_name):
+                
+                canvas_width = 180
+                canvas_height = 140
+                center_x = canvas_width // 2
+                center_y = canvas_height // 2
+                scale = 12.0
 
-            scale = 12.0
+                raw_points: list[tuple[float, float]] = [(0.0, 0.0)]
+                x, y = 0.0, 0.0
 
-            raw_points: list[tuple[float, float]] = [(0.0, 0.0)]
-            x, y = 0.0, 0.0
+                for step in current_pattern:
+                    dx, dy = self.get_direction_vector(step)
+                    x += dx * scale
+                    y += dy * scale
+                    raw_points.append((x, y))
 
-            for step in current_pattern:
-                dx, dy = self.get_direction_vector(step)
-                x += dx * scale
-                y += dy * scale
-                raw_points.append((x, y))
+                if len(raw_points) > 1:
+                    all_x = [point[0] for point in raw_points]
+                    all_y = [point[1] for point in raw_points]
+                    min_x, max_x = min(all_x), max(all_x)
+                    min_y, max_y = min(all_y), max(all_y)
 
-            if len(raw_points) > 1:
-                all_x = [point[0] for point in raw_points]
-                all_y = [point[1] for point in raw_points]
-                min_x, max_x = min(all_x), max(all_x)
-                min_y, max_y = min(all_y), max(all_y)
+                    pattern_center_x = (min_x + max_x) / 2
+                    pattern_center_y = (min_y + max_y) / 2
 
-                pattern_center_x = (min_x + max_x) / 2
-                pattern_center_y = (min_y + max_y) / 2
+                    offset_x = center_x - pattern_center_x
+                    offset_y = center_y - pattern_center_y
+                else:
+                    offset_x = offset_y = 0
 
-                offset_x = center_x - pattern_center_x
-                offset_y = center_y - pattern_center_y
+                path_points = []
+                for raw_x, raw_y in raw_points:
+                    final_x = raw_x + offset_x
+                    final_y = raw_y + offset_y
+                    path_points.append((final_x, final_y))
+                
+                self._cached_path_points = path_points
+                self._cached_pattern_name = pattern_name
             else:
-                offset_x = offset_y = 0
-
-            path_points = []
-            for raw_x, raw_y in raw_points:
-                final_x = raw_x + offset_x
-                final_y = raw_y + offset_y
-                path_points.append((final_x, final_y))
+                path_points = self._cached_path_points
 
             if len(path_points) > 1:
                 for i in range(len(path_points) - 1):
@@ -925,10 +952,10 @@ class AutoWalkOverlay:
 
                     if highlight_step is not None and i == highlight_step:
                         color = "#ffff00"
-                        width = 4
+                        width = 3
                     elif highlight_step is not None and i < highlight_step:
                         color = "#00aa00"
-                        width = 3
+                        width = 2
                     else:
                         progress = i / (len(path_points) - 1)
                         red_component = int(progress * 180 + 75)
@@ -1165,8 +1192,8 @@ class ColorModulesOverlay:
         )
         self.preview_btn.pack(side="right")
         self.preview_btn.bind("<Button-1>", self.on_preview_click)
-        self.preview_btn.bind("<Enter>", lambda e: self.preview_btn.config(fg="#ffffff" if not self.preview_mode else "#8B4BAE"))
-        self.preview_btn.bind("<Leave>", lambda e: self.preview_btn.config(fg="#666666" if not self.preview_mode else "#8B4BAE"))
+        self.preview_btn.bind("<Enter>", lambda e: self.overlay.after_idle(lambda: self.preview_btn.config(fg="#ffffff" if not self.preview_mode else "#8B4BAE")))
+        self.preview_btn.bind("<Leave>", lambda e: self.overlay.after_idle(lambda: self.preview_btn.config(fg="#666666" if not self.preview_mode else "#8B4BAE")))
 
         self.auto_sell_indicator = Label(
             auto_sell_section,
@@ -1210,8 +1237,8 @@ class ColorModulesOverlay:
         )
         self.target_preview_btn.pack(side="right")
         self.target_preview_btn.bind("<Button-1>", self.on_target_preview_click)
-        self.target_preview_btn.bind("<Enter>", lambda e: self.target_preview_btn.config(fg="#ffffff" if not self.target_preview_mode else "#00FF00"))
-        self.target_preview_btn.bind("<Leave>", lambda e: self.target_preview_btn.config(fg="#666666" if not self.target_preview_mode else "#00FF00"))
+        self.target_preview_btn.bind("<Enter>", lambda e: self.overlay.after_idle(lambda: self.target_preview_btn.config(fg="#ffffff" if not self.target_preview_mode else "#00FF00")))
+        self.target_preview_btn.bind("<Leave>", lambda e: self.overlay.after_idle(lambda: self.target_preview_btn.config(fg="#666666" if not self.target_preview_mode else "#00FF00")))
 
         self.target_indicator = Label(
             target_section,
@@ -1271,25 +1298,25 @@ class ColorModulesOverlay:
             return
         try:
             if self.preview_mode:
-                self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+                self.overlay.after_idle(lambda: self.auto_sell_indicator.config(bg="#8B4BAE", fg="white"))
             else:
                 automation_status = kwargs.get("automation_status", "STOPPED")
                 is_selling = automation_status in ["SELLING"] or "SELL" in automation_status.upper()
                 
                 if is_selling:
-                    self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+                    self.overlay.after_idle(lambda: self.auto_sell_indicator.config(bg="#8B4BAE", fg="white"))
                 else:
-                    self.auto_sell_indicator.config(bg="black", fg="white")
+                    self.overlay.after_idle(lambda: self.auto_sell_indicator.config(bg="black", fg="white"))
 
             if self.target_preview_mode:
-                self.target_indicator.config(bg="#00FF00", fg="white")
+                self.overlay.after_idle(lambda: self.target_indicator.config(bg="#00FF00", fg="white"))
             else:
                 target_engaged = kwargs.get("target_engaged", False)
                 
                 if target_engaged:
-                    self.target_indicator.config(bg="#00FF00", fg="white")
+                    self.overlay.after_idle(lambda: self.target_indicator.config(bg="#00FF00", fg="white"))
                 else:
-                    self.target_indicator.config(bg="black", fg="white")
+                    self.overlay.after_idle(lambda: self.target_indicator.config(bg="black", fg="white"))
 
         except Exception as e:
             logger.debug(f"Error updating color modules overlay: {e}")
@@ -1304,21 +1331,21 @@ class ColorModulesOverlay:
         self.preview_mode = not self.preview_mode
         
         if self.preview_mode:
-            self.preview_btn.config(fg="#8B4BAE", text="●")
-            self.auto_sell_indicator.config(bg="#8B4BAE", fg="white")
+            self.overlay.after_idle(lambda: self.preview_btn.config(fg="#8B4BAE", text="●"))
+            self.overlay.after_idle(lambda: self.auto_sell_indicator.config(bg="#8B4BAE", fg="white"))
         else:
-            self.preview_btn.config(fg="#666666", text="●")
-            self.auto_sell_indicator.config(bg="black", fg="white")
+            self.overlay.after_idle(lambda: self.preview_btn.config(fg="#666666", text="●"))
+            self.overlay.after_idle(lambda: self.auto_sell_indicator.config(bg="black", fg="white"))
 
     def toggle_target_preview_mode(self):
         self.target_preview_mode = not self.target_preview_mode
         
         if self.target_preview_mode:
-            self.target_preview_btn.config(fg="#00FF00", text="●")
-            self.target_indicator.config(bg="#00FF00", fg="white")
+            self.overlay.after_idle(lambda: self.target_preview_btn.config(fg="#00FF00", text="●"))
+            self.overlay.after_idle(lambda: self.target_indicator.config(bg="#00FF00", fg="white"))
         else:
-            self.target_preview_btn.config(fg="#666666", text="●")
-            self.target_indicator.config(bg="black", fg="white")
+            self.overlay.after_idle(lambda: self.target_preview_btn.config(fg="#666666", text="●"))
+            self.overlay.after_idle(lambda: self.target_indicator.config(bg="black", fg="white"))
 
     def preview_overlay(self):
         if not self.overlay:

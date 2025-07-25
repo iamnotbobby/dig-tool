@@ -1004,9 +1004,10 @@ class DigTool:
                             wait_for_target_start = current_time_ms
                     else:
                         logger.debug("Skipping click for this step (click disabled)")
-                        self.automation_manager.advance_walk_pattern()
                         auto_walk_state = "move"
-                        move_completed_time = current_time_ms + 100 # Hardcoded delay as a safety buffer between steps
+                        self.automation_manager.advance_walk_pattern()
+                        logger.debug(f"Advanced to pattern index: {self.automation_manager.walk_pattern_index}")
+                        move_completed_time = 0 
 
                 elif (
                     auto_walk_state == "wait_for_target"
