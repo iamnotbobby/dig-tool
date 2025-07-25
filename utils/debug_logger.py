@@ -320,13 +320,21 @@ class DebugLogger:
             
             self.info("Console output capture disabled - restored original streams")
 
-    def show_console(self):
+    def show_console(self, dig_tool_instance=None):
         if self.console_window and self.console_window.winfo_exists():
             self.console_window.lift()
             return
         self.console_window = tk.Toplevel()
         self.console_window.title("Debug Console")
-        self.console_window.geometry("800x600")
+        
+        if dig_tool_instance and hasattr(dig_tool_instance, 'width') and hasattr(dig_tool_instance, 'base_height'):
+            console_width = int(dig_tool_instance.width * 1.6)
+            console_height = int(dig_tool_instance.base_height * 1.09)
+        else:
+            console_width = 800
+            console_height = 600
+            
+        self.console_window.geometry(f"{console_width}x{console_height}")
         self.console_window.attributes("-topmost", self.always_on_top)
 
         try:

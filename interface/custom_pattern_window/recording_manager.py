@@ -243,15 +243,27 @@ class RecordingManager:
     def _show_add_manual_key_dialog(self, pattern_name):
         dialog = tk.Toplevel(self.main_window.window)
         dialog.title("Add Manual Key")
-        dialog.geometry("500x400")
+        
+        if hasattr(self.main_window, 'dig_tool') and hasattr(self.main_window.dig_tool, 'width') and hasattr(self.main_window.dig_tool, 'base_height'):
+            dialog_width = int(self.main_window.dig_tool.width)
+            dialog_height = int(self.main_window.dig_tool.base_height * 0.73)
+            min_width = int(self.main_window.dig_tool.width * 0.9)
+            min_height = int(self.main_window.dig_tool.base_height)
+        else:
+            dialog_width = 500
+            dialog_height = 400
+            min_width = 450
+            min_height = 550
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.resizable(True, True)
-        dialog.minsize(450, 550)
+        dialog.minsize(min_width, min_height)
         dialog.transient(self.main_window.window)
         dialog.grab_set()
 
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (400 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (dialog_width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog_height // 2)
         dialog.geometry(f"+{x}+{y}")
 
         main_frame = ttk.Frame(dialog, padding="20")

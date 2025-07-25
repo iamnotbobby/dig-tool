@@ -10,8 +10,17 @@ class WindowManagement:
     def _create_window(self):
         self.main_window.window = tk.Toplevel(self.main_window.parent)
         self.main_window.window.title(self.main_window.title)
-        self.main_window.window.geometry("550x500")
+        
+        if hasattr(self.main_window, 'dig_tool') and hasattr(self.main_window.dig_tool, 'width') and hasattr(self.main_window.dig_tool, 'base_height'):
+            initial_width = int(self.main_window.dig_tool.width * 1.22)
+            initial_height = int(self.main_window.dig_tool.base_height * 0.95)
+        else:
+            initial_width = 550
+            initial_height = 500
+            
+        self.main_window.window.geometry(f"{initial_width}x{initial_height}")
         self.main_window.window.resizable(True, True)
+        self.main_window.window.minsize(480, 400)
         self.main_window.window.transient(self.main_window.parent)
         self.main_window.window.grab_set()
         self.main_window.window.protocol("WM_DELETE_WINDOW", self.main_window.close_window)
@@ -28,7 +37,7 @@ class WindowManagement:
         
         if hasattr(self.main_window, 'dig_tool'):
             width = int(self.main_window.dig_tool.width * 1.22)
-            height = int(self.main_window.dig_tool.base_height * 0.88)
+            height = int(self.main_window.dig_tool.base_height * 0.95)
         else:
             width = 550
             height = 500

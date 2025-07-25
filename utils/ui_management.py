@@ -57,7 +57,7 @@ def show_settings_info(dig_tool_instance):
 
 def show_debug_console(dig_tool_instance):
     from utils.debug_logger import logger
-    logger.show_console()
+    logger.show_console(dig_tool_instance)
 
 
 def create_preview_window(dig_tool_instance):

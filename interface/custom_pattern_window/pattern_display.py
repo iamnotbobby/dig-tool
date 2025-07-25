@@ -337,13 +337,21 @@ class PatternDisplay:
         
         dialog = tk.Toplevel(self.main_window.window)
         dialog.title(f"Edit Step #{index+1}")
-        dialog.geometry("450x600")
+        
+        if hasattr(self.main_window, 'dig_tool') and hasattr(self.main_window.dig_tool, 'width') and hasattr(self.main_window.dig_tool, 'base_height'):
+            dialog_width = int(self.main_window.dig_tool.width * 0.9)
+            dialog_height = int(self.main_window.dig_tool.base_height * 1.09)
+        else:
+            dialog_width = 450
+            dialog_height = 600
+            
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.resizable(False, False)
         dialog.transient(self.main_window.window)
         
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (600 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (dialog_width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog_height // 2)
         dialog.geometry(f"+{x}+{y}")
         
         def restore_display():
@@ -558,7 +566,15 @@ class PatternDisplay:
         
         dialog = tk.Toplevel(self.main_window.window)
         dialog.title("Step Information")
-        dialog.geometry("300x200")
+        
+        if hasattr(self.main_window, 'dig_tool') and hasattr(self.main_window.dig_tool, 'width') and hasattr(self.main_window.dig_tool, 'base_height'):
+            dialog_width = int(self.main_window.dig_tool.width * 0.6)
+            dialog_height = int(self.main_window.dig_tool.base_height * 0.36)
+        else:
+            dialog_width = 300
+            dialog_height = 200
+            
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.transient(self.main_window.window)
         dialog.grab_set()
          

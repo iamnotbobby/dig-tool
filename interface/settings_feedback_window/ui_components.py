@@ -27,8 +27,14 @@ class UIComponents:
         text_frame.pack(fill="both", expand=True, pady=(0, 15))
         text_container = ttk.Frame(text_frame)
         text_container.pack(fill="both", expand=True)
+        
+        if hasattr(self.main_window, 'dig_tool') and hasattr(self.main_window.dig_tool, 'base_height'):
+            text_height = max(12, min(25, int(self.main_window.dig_tool.base_height * 0.025)))
+        else:
+            text_height = 15
+            
         self.main_window.text_area = scrolledtext.ScrolledText(
-            text_container, wrap=tk.WORD, font=("Consolas", 9), height=20
+            text_container, wrap=tk.WORD, font=("Consolas", 9), height=text_height
         )
         self.main_window.text_area.pack(fill="both", expand=True)
 

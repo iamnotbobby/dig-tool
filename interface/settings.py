@@ -452,7 +452,7 @@ class SettingsManager:
             open_custom_pattern_manager(self.dig_tool)
 
     def export_settings(self):
-        options_dialog = ExportOptionsDialog(self.dig_tool.root)
+        options_dialog = ExportOptionsDialog(self.dig_tool.root, self.dig_tool)
         export_options = options_dialog.show_dialog()
 
         if export_options is None:
@@ -612,28 +612,6 @@ class SettingsManager:
                         feedback.add_text(f"✓ Walk Pattern: {pattern}", "success")
                     else:
                         feedback.add_text("✗ Walk Pattern: Not set", "warning")
-
-                    if (
-                        hasattr(self.dig_tool, "money_ocr")
-                        and self.dig_tool.money_ocr.money_area
-                    ):
-                        feedback.add_text(
-                            f"✓ Money Area: {self.dig_tool.money_ocr.money_area}",
-                            "success",
-                        )
-                    else:
-                        feedback.add_text("✗ Money Area: Not set", "warning")
-
-                    if (
-                        hasattr(self.dig_tool, "item_ocr")
-                        and self.dig_tool.item_ocr.item_area
-                    ):
-                        feedback.add_text(
-                            f"✓ Item Area: {self.dig_tool.item_ocr.item_area}",
-                            "success",
-                        )
-                    else:
-                        feedback.add_text("✗ Item Area: Not set", "warning")
                 else:
                     feedback.add_section("CONFIGURATION")
                     feedback.add_text("✗ Configuration: excluded", "warning")
@@ -789,6 +767,30 @@ class SettingsManager:
                     feedback.update_progress(progress)
                     time.sleep(0.02)
 
+                if 'money_area' in self.dig_tool.param_vars:
+                    try:
+                        money_area_str = self.dig_tool.param_vars['money_area'].get()
+                        if money_area_str and money_area_str != "None" and hasattr(self.dig_tool, "money_ocr"):
+                            money_area = ast.literal_eval(money_area_str)
+                            if isinstance(money_area, (tuple, list)) and len(money_area) == 4:
+                                self.dig_tool.money_ocr.money_area = tuple(money_area)
+                                if not self.dig_tool.money_ocr.initialized:
+                                    self.dig_tool.money_ocr.initialize_ocr()
+                    except Exception as e:
+                        logger.warning(f"Failed to apply money area to OCR: {e}")
+
+                if 'item_area' in self.dig_tool.param_vars:
+                    try:
+                        item_area_str = self.dig_tool.param_vars['item_area'].get()
+                        if item_area_str and item_area_str != "None" and hasattr(self.dig_tool, "item_ocr"):
+                            item_area = ast.literal_eval(item_area_str)
+                            if isinstance(item_area, (tuple, list)) and len(item_area) == 4:
+                                self.dig_tool.item_ocr.item_area = tuple(item_area)
+                                if not self.dig_tool.item_ocr.initialized:
+                                    self.dig_tool.item_ocr.initialize_ocr()
+                    except Exception as e:
+                        logger.warning(f"Failed to apply item area to OCR: {e}")
+
                 self.update_setting_states()
 
                 feedback.add_section("KEYBINDS")
@@ -937,50 +939,6 @@ class SettingsManager:
                 else:
                     feedback.add_text("✗ Walk Pattern: Not found", "warning")
 
-                money_area_loaded = False
-                if "money_area" in settings and self.validate_position(settings["money_area"]):
-                    try:
-                        pos = settings["money_area"]
-                        old_pos = getattr(self.dig_tool.money_ocr, "money_area", None) if hasattr(self.dig_tool, "money_ocr") else None
-                        if hasattr(self.dig_tool, "money_ocr"):
-                            self.dig_tool.money_ocr.money_area = tuple(pos)
-                            if 'money_area' not in self.dig_tool.param_vars:
-                                self.dig_tool.param_vars['money_area'] = self.get_param_type('money_area')()
-                            self.dig_tool.param_vars['money_area'].set(str(tuple(pos)))
-                            feedback.add_change_entry(
-                                "Money Area",
-                                str(old_pos) if old_pos else "None",
-                                str(tuple(pos)),
-                                "success",
-                            )
-                            money_area_loaded = True
-                    except Exception:
-                        feedback.add_text("✗ Money Area: Invalid position data", "warning")
-                else:
-                    feedback.add_text("✗ Money Area: Not found", "warning")
-
-                item_area_loaded = False
-                if "item_area" in settings and self.validate_position(settings["item_area"]):
-                    try:
-                        pos = settings["item_area"]
-                        old_pos = getattr(self.dig_tool.item_ocr, "item_area", None) if hasattr(self.dig_tool, "item_ocr") else None
-                        if hasattr(self.dig_tool, "item_ocr"):
-                            self.dig_tool.item_ocr.item_area = tuple(pos)
-                            if 'item_area' not in self.dig_tool.param_vars:
-                                self.dig_tool.param_vars['item_area'] = self.get_param_type('item_area')()
-                            self.dig_tool.param_vars['item_area'].set(str(tuple(pos)))
-                            feedback.add_change_entry(
-                                "Item Area",
-                                str(old_pos) if old_pos else "None",
-                                str(tuple(pos)),
-                                "success",
-                            )
-                            item_area_loaded = True
-                    except Exception:
-                        feedback.add_text("✗ Item Area: Invalid position data", "warning")
-                else:
-                    feedback.add_text("✗ Item Area: Not found", "warning")
-
                 feedback.update_progress(90, "Finalizing...")
 
                 apply_keybinds(self.dig_tool)
@@ -992,7 +950,7 @@ class SettingsManager:
                 
                 config_loaded = sum([
                     area_loaded, sell_button_loaded, cursor_loaded, 
-                    pattern_loaded, money_area_loaded, item_area_loaded
+                    pattern_loaded
                 ])
                 total_success += config_loaded
                 
@@ -1128,26 +1086,6 @@ class SettingsManager:
                         update_cursor_info(self.dig_tool)
                     except Exception as e:
                         feedback.add_text(f"✗ Cursor Position: Reset failed - {e}", "error")
-
-                if hasattr(self.dig_tool, "money_ocr") and self.dig_tool.money_ocr.money_area:
-                    try:
-                        old_money_area = str(self.dig_tool.money_ocr.money_area)
-                        self.dig_tool.money_ocr.money_area = None
-                        feedback.add_change_entry(
-                            "Money Area", old_money_area, "None", "success"
-                        )
-                    except Exception as e:
-                        feedback.add_text(f"✗ Money Area: Reset failed - {e}", "error")
-                        
-                if hasattr(self.dig_tool, "item_ocr") and self.dig_tool.item_ocr.item_area:
-                    try:
-                        old_item_area = str(self.dig_tool.item_ocr.item_area)
-                        self.dig_tool.item_ocr.item_area = None
-                        feedback.add_change_entry(
-                            "Item Area", old_item_area, "None", "success"
-                        )
-                    except Exception as e:
-                        feedback.add_text(f"✗ Item Area: Reset failed - {e}", "error")
 
                 feedback.update_progress(90, "Finalizing...")
 
