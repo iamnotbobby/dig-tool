@@ -327,8 +327,6 @@ class SettingsManager:
             "int_ranges": {
                 ("min_zone_height_percent", "sweet_spot_width_percent"): (0, 100),
                 ("max_zone_width_percent",): (0, 200),
-                ("target_fps",): (1, 1000),
-                ("screenshot_fps",): (30, 500),
                 ("milestone_interval",): (1, None),
                 ("rejoin_check_interval",): (10, None),
                 ("auto_rejoin_restart_delay",): (5, None),
@@ -338,7 +336,7 @@ class SettingsManager:
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
                 "sell_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
-                "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout"
+                "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps"
             ],
             "float_ranges": {
                 ("velocity_width_multiplier",): (0.0, 5.0),

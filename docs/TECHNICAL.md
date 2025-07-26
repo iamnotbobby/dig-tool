@@ -8,27 +8,27 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Overview](#overview)
-- [Detection Settings](#detection-settings)
+- [Detection](#detection)
   - [Line Detection](#line-detection)
   - [Zone Detection](#zone-detection)
   - [Movement Detection](#movement-detection)
   - [Advanced Detection](#advanced-detection)
-- [Behavior Settings](#behavior-settings)
+- [Behavior](#behavior)
   - [Prediction](#prediction)
   - [Input & Timing](#input--timing)
+  - [Custom Cursor](#custom-cursor)
+- [Auto-Walk](#auto-walk)
+  - [Auto-Walk Settings](#auto-walk-settings)
   - [Auto-Sell](#auto-sell)
-  - [Auto-Walk](#auto-walk)
   - [Auto-Shovel](#auto-shovel)
-- [Discord Settings](#discord-settings)
+- [Discord](#discord)
   - [General Notifications](#general-notifications)
   - [Money Detection](#money-detection)
   - [Item Detection](#item-detection)
-- [Performance Settings](#performance-settings)
-  - [System & Performance](#system--performance)
-  - [Debug & Overlay](#debug--overlay)
-- [Input Controls](#input-controls)
-  - [Hotkeys](#hotkeys)
-  - [Custom Cursor](#custom-cursor)
+- [Window](#window)
+  - [Window Controls](#window-controls)
+- [Debug](#debug)
+  - [Debug & Performance](#debug--performance)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -43,412 +43,285 @@ This guide explains every setting and option available in the Dig Tool. Each set
 
 ---
 
-## Detection Settings
+## Detection
 
 These settings control how the tool finds and tracks the sweet spot in the digging mini-game.
 
 ### Line Detection
 
-**Line Sensitivity**
-- **What it does**: Controls how sharp the contrast must be to detect the moving line
-- **Higher values**: Less sensitive to weak edges (more selective)
-- **Lower values**: More sensitive to faint lines (may detect false positives)
-- **Typical range**: 50-150
-- **When to adjust**: If the tool isn't detecting the line consistently, try lowering this value
+**Line Sensitivity (1-1000)**  
+Controls how sharp the contrast must be to detect the moving line. Higher values are less sensitive to weak edges (more selective), while lower values are more sensitive to faint lines (may detect false positives). It is HIGHLY recommended to leave this at default (100) unless you know what you're doing.
 
-**Line Detection Offset**
-- **What it does**: Moves the detected line position left or right by a specific number of pixels
-- **Positive values**: Shifts the line detection to the right
-- **Negative values**: Shifts the line detection to the left
-- **Decimals allowed**: You can use precise values like 2.5 or -1.2
-- **When to adjust**: If clicks seem slightly off-target, fine-tune this value
+**Line Detection Offset (-∞ to +∞)**  
+Moves the detected line position left or right by a specific number of pixels. Positive values shift right, negative values shift left. It is recommended to adjust until it's in the middle of the line.
 
-**Line Exclusion Radius**
-- **What it does**: Creates a circular "dead zone" around the detected line where target zones are ignored
-- **Purpose**: Prevents the moving line from interfering with zone detection
-- **Typical range**: 5-20 pixels
-- **When to adjust**: If the tool gets confused when the line passes through valid zones
+In the example below, you can see the red line in the middle (to see this, open "Show Preview" panel).
+
+![Line Detection Offset Example](/assets/docs/technical/line_detection_offset_example.png)
+
+**Line Exclusion Radius (0-∞)**  
+Creates a circular "dead zone" around the detected line where target zones are ignored. This prevents the moving line from interfering with zone detection. Adjust if the tool gets confused when the line passes through valid zones (basically, the target moves with the line). 
 
 ### Zone Detection
 
-**Zone Min Width**
-- **What it does**: Sets the minimum pixel width for a valid target zone
-- **Purpose**: Filters out tiny zones that aren't worth clicking
-- **Typical range**: 50-200 pixels
-- **When to adjust**: If the tool clicks on very small, insignificant zones
+**Zone Min Width (0-∞)**  
+Sets the minimum **PIXEL** width for a valid target zone to filter out unrelated objects that might appear during the minigame.
 
-**Max Zone Width Percent**
-- **What it does**: Sets the maximum width of a target zone as a percentage of the capture area
-- **Range**: 0-200% (values above 100% allow detecting zones wider than the capture area)
-- **Purpose**: Prevents detection of massive zones that might be background elements
-- **When to adjust**: If the tool incorrectly selects very large areas
+**Max Zone Width Percent (0-200)**  
+Sets the maximum width of a target zone as a **PERCENTAGE** of the capture area (0-200%, values above 100% allow detecting zones wider than the capture area).
 
-**Min Zone Height Percent**
-- **What it does**: Requires target zones to span at least this percentage of the capture height
-- **Range**: 0-100%
-- **Purpose**: Ensures zones are tall enough to be valid dig spots
-- **When to adjust**: If the tool selects thin horizontal lines that aren't dig zones
+**Min Zone Height Percent (0-100)**  
+Requires target zones to span at least this **PERCENTAGE** of the capture height (0-100%) to ensure zones are tall enough to be valid dig spots. It is HIGHLY recommended to leave this at default (100%) unless you know what you're doing.
 
-**Sweet Spot Width Percent**
-- **What it does**: Controls the width of the clickable area in the center of detected zones
-- **Range**: 5-50%
-- **Smaller values**: More precise clicking required
-- **Larger values**: More forgiving, but less accurate
-- **When to adjust**: If you're missing hits frequently, try increasing this value
+**Target Width Percent (0-100)**  
+Smaller values requires more precise clicking, however, in some cases it may be too strict. Larger values are more forgiving but may be less accurate. In most cases, it is recommended to increase this until it's more consistent rather than vice versa.
+
+In the example below, you can see the target width percent setting visualized as the yellow box that appears in the preview window.
+
+![Target Width Percent Example](/assets/docs/technical/target_width_percent_example.png)
 
 ### Movement Detection
 
-**Saturation Threshold**
-- **What it does**: Controls how colorful a pixel must be to be part of the initial zone search
-- **Range**: 0.0-1.0 (higher = more colorful required)
-- **Purpose**: Helps filter out dull background elements
-- **When to adjust**: If the tool detects too much background or misses colorful dig zones
+**Saturation Threshold (0.0-1.0)**  
+Controls how colorful a pixel must be to be part of the initial zone search (0.0-1.0, higher = more colorful required). This helps filter out dull background elements. Adjust if the tool detects unrelated elements to the minigame.
 
-**Zone Smoothing Factor**
-- **What it does**: Controls how much the target zone movement is smoothed over time
-- **Range**: 0.0-2.0
-- **1.0**: No smoothing (zone jumps immediately)
-- **Lower values**: More smoothing (zone moves more gradually)
-- **Higher values**: Less smoothing (zone follows detection more directly)
-- **When to adjust**: If zone tracking is too jittery or too slow to respond
+In the "Show Debug" panel, you can visualize if Dig Tool can see the minigame bar correctly (the white bar overlayed ontop of a black background).
 
-**Velocity Based Width Enabled**
-- **What it does**: Automatically adjusts sweet spot width based on how fast the line is moving
-- **When enabled**: Faster line movement = wider sweet spot for easier targeting
-- **Purpose**: Makes it easier to hit fast-moving targets
-- **When to use**: Enable if you have trouble hitting targets when the line moves quickly
+![Saturation Threshold Example](/assets/docs/technical/saturation_threshold_example.png)
 
-**Velocity Width Multiplier**
-- **What it does**: Controls how much line speed affects sweet spot width
-- **Range**: 0.5-5.0
-- **Higher values**: More dramatic width changes based on speed
-- **Lower values**: More subtle width adjustments
-- **Only works**: When "Velocity Based Width Enabled" is on
+> [!IMPORTANT]
+> Saturation Threshold is a detection method and CANNOT be used with other detection methods (e.g., Otsu and Color Picker)!
 
-**Velocity Max Factor**
-- **What it does**: Sets the maximum velocity for normalization (pixels per second)
-- **Purpose**: Velocities above this value are treated as maximum speed
-- **Typical range**: 1000-5000 px/s
-- **When to adjust**: If velocity-based width isn't working correctly
+**Zone Smoothing Factor (0.0-2.0)**  
+Controls how much the target zone movement is smoothed over time. 1.0 = no smoothing (zone jumps immediately), lower values = more smoothing (zone moves gradually), higher values = less smoothing. It is HIGHLY recommended to leave this at default (1) unless you know what you're doing.
+
+**Velocity Based Width**  
+Automatically adjusts target width percent based on how fast the line is moving. When enabled, faster line movement creates a wider target width percent for easier targeting. Enable if you have trouble hitting targets when the line moves quickly.
+
+The data that is fed into Velocity Based Width can be found in the "Show Debug" panel.
+
+![Velocity Based Width Info](/assets/docs/technical/velocity_based_width_info.png)
+
+**Velocity Width Multiplier (0.0-5.0)**  
+Controls how much line speed affects target width percent. Higher values create more dramatic width changes based on speed, lower values create more subtle adjustments. 
+
+**Velocity Max Factor (0-∞)**  
+Sets the maximum velocity for normalization (pixels per second). Velocities above this value are treated as maximum speed. 
 
 ### Advanced Detection
 
-**Use Otsu Detection**
-- **What it does**: Uses automatic threshold calculation instead of manual saturation settings
-- **Benefits**: Can be more adaptive to different lighting conditions
-- **Cannot be used with**: Color Picker Detection (they conflict)
-- **When to use**: If manual saturation threshold isn't working well
+**Use Otsu Detection**  
+Uses automatic threshold calculation instead of manual saturation settings. Can be more adaptive to different lighting conditions but cannot be used with Color Picker Detection or Saturation Threshold. Use if saturation threshold isn't working well.
 
-**Otsu Min Area**
-- **What it does**: Minimum area (in pixels) for detected regions when using Otsu
-- **Purpose**: Filters out tiny regions that aren't valid zones
-- **Only works**: When "Use Otsu Detection" is enabled
+**Otsu Min Area (0-∞)**  
+Minimum area (in pixels) for detected regions when using Otsu detection. This filters out tiny regions that aren't valid zones.
 
-**Otsu Max Area**
-- **What it does**: Maximum area (in pixels) for detected regions when using Otsu
-- **Purpose**: Prevents detection of huge areas that aren't dig zones
-- **Leave empty**: For no upper limit
-- **Only works**: When "Use Otsu Detection" is enabled
+**Otsu Max Area (0-∞)**  
+Maximum area (in pixels) for detected regions when using Otsu detection. This prevents detection of huge areas that aren't dig zones. Leave empty for no upper limit. 
 
-**Use Color Picker Detection**
-- **What it does**: Uses a specific color you pick to detect target zones
-- **How to use**: Enable this, then click "Pick Color from Screen" to select your target color
-- **Benefits**: Very precise when you know the exact color you want to detect
-- **Cannot be used with**: Otsu Detection (they conflict)
+**Use Color Picker Detection**  
+Uses a specific color you pick to detect target zones. Enable this, then click "Pick Color from Screen" to select your target color. Very precise when you know the exact color you want to detect, but cannot be used with Otsu Detection or Saturation Threshold. Will also not work in situations where environments may change (e.g., grass turns snowy).
 
-**Color Tolerance**
-- **What it does**: How close colors need to be to your picked color to be detected
-- **Range**: 1-90
-- **Higher values**: More lenient color matching
-- **Lower values**: More precise color matching
-- **Only works**: When "Use Color Picker Detection" is enabled
+**Color Tolerance (1-90)**  
+How close colors need to be to your picked color to be detected. Higher values allow more lenient color matching, lower values require more precise matching. 
 
 ---
 
-## Behavior Settings
+## Behavior
 
 These settings control how the tool behaves during operation.
 
 ### Prediction
 
-**Prediction Enabled**
-- **What it does**: Predicts where the line will be and clicks earlier to compensate for delays
-- **Benefits**: Can improve accuracy on fast systems
-- **Drawbacks**: May cause issues if prediction is wrong
-- **When to disable**: If you're getting inconsistent hits or weird behavior
+**Prediction**  
+Predicts where the line will be and clicks earlier to compensate for delays. Can improve accuracy on fast systems but may cause issues if prediction is wrong. Disable if you're getting inconsistent hits or weird behavior.
 
-**Prediction Confidence Threshold**
-- **What it does**: How confident the prediction must be before it's used
-- **Range**: 0.0-1.0
-- **Higher values**: More conservative prediction (only predicts when very sure)
-- **Lower values**: More aggressive prediction (predicts more often)
-- **Only works**: When "Prediction Enabled" is on
+**Prediction Confidence Threshold (0.0-1.0)**  
+How confident the prediction must be before it's used. Higher values are more conservative (only predicts when very sure), lower values are more aggressive (predicts more often).
+
+**Target FPS (Game FPS) (1-∞)**  
+Sets the target frame rate of the game for prediction calculations. This helps the prediction algorithm understand the timing of game updates. Higher FPS games allow for more precise prediction timing. Set this to match your actual in-game frame rate for best prediction accuracy.
+
+You can view your in-game FPS by pressing ``Shift+F5`` in-game. It is recommended you try and average it out and go a bit lower rather than higher.
+
+![Game FPS Example](/assets/docs/technical/game_fps_example.png)
 
 ### Input & Timing
 
-**Post Click Blindness**
-- **What it does**: How long to wait after clicking before scanning for new targets
-- **Purpose**: Prevents multiple rapid clicks on the same spot
-- **Range**: 10-500 milliseconds
-- **Higher values**: Slower clicking but more stable
-- **Lower values**: Faster clicking but may double-click
+**Post Click Blindness (0-∞)**  
+How long to wait after clicking before scanning for new targets. This prevents multiple rapid clicks on the same spot. Higher values mean slower clicking but more stability, lower values mean faster clicking but may cause double-clicks. Ironically, Dig Tool is very fast and that's why multiple clicks can occur.
 
-**System Latency**
-- **What it does**: Compensates for delays between detection and clicking
-- **"Auto" setting**: Automatically calculates based on your system
-- **Manual values**: You can set a specific delay in milliseconds
-- **When to adjust**: If clicks seem to lag behind the detection
+### Custom Cursor
 
-### Auto-Sell
+**Use Custom Cursor**  
+Uses a custom cursor position instead of auto-detection. Cannot be used with Auto-Walk. For setups where you want to click a specific spot manually. Must set cursor position first.
 
-**Auto Sell Enabled**
-- **What it does**: Automatically sells items after a certain number of digs
-- **Requirements**: Must set up sell button position or use UI navigation
-- **Benefits**: Keeps inventory from getting full
-
-**Sell Every X Digs**
-- **What it does**: Number of successful digs before auto-selling
-- **Typical range**: 5-50 digs
-- **Lower values**: Sell more frequently
-- **Higher values**: Sell less frequently
-
-**Sell Delay**
-- **What it does**: Wait time in milliseconds before clicking the sell button
-- **Purpose**: Gives the inventory time to open fully
-- **Typical range**: 500-2000 milliseconds
-- **Increase if**: The sell button isn't clicked properly
-
-**Auto Sell Method**
-- **"Button Click"**: Clicks on a specific position you set (requires "Set Sell Button")
-- **"UI Navigation"**: Uses keyboard shortcuts to navigate the interface
-- **Button Click**: More reliable but requires setup
-- **UI Navigation**: No position setup needed but may be less reliable
-
-**Auto Sell UI Sequence**
-- **What it does**: Keyboard sequence for UI navigation auto-sell
-- **Format**: Comma-separated keys like "down,up,enter"
-- **Available keys**: down, up, left, right, enter
-- **Only used**: When Auto Sell Method is "UI Navigation"
-
-**Auto Sell Target Engagement**
-- **What it does**: Waits for target re-engagement after auto-sell completion
-- **Purpose**: Ensures the tool properly returns to digging after selling
-- **Disable if**: Your inventory stays open after selling
-
-**Auto Sell Target Engagement Timeout**
-- **What it does**: How long to wait for target engagement after selling
-- **Range**: 5-300 seconds
-- **Purpose**: If no engagement detected, applies fallback actions
-- **Only works**: When "Auto Sell Target Engagement" is enabled
-
-### Auto-Walk
-
-**Auto Walk Enabled**
-- **What it does**: Automatically moves your character around while digging
-- **Cannot be used with**: Custom Cursor (they conflict)
-- **Benefits**: Covers more ground automatically
-- **Patterns**: Choose from built-in patterns or create custom ones
-
-**Walk Duration**
-- **What it does**: How long to hold down movement keys (in milliseconds)
-- **Typical range**: 100-1000 milliseconds
-- **Higher values**: Longer movement steps
-- **Lower values**: Shorter, more precise movements
-
-**Max Wait Time**
-- **What it does**: Maximum time to wait for target engagement after moving
-- **Purpose**: If no target found, advances to next movement step
-- **Range**: 1000-10000 milliseconds
-
-**Dynamic Walkspeed Enabled**
-- **What it does**: Slows down movement as you collect more items
-- **Purpose**: Simulates realistic fatigue effects
-- **Formula**: Uses mathematical calculation based on item count
-
-**Initial Item Count**
-- **What it does**: Starting item count for walkspeed calculation
-- **Purpose**: Useful if you already have items when starting the tool
-- **Only works**: When "Dynamic Walkspeed Enabled" is on
-
-### Auto-Shovel
-
-**Auto Shovel Enabled**
-- **What it does**: Automatically re-equips your shovel when it breaks or gets unequipped
-- **Benefits**: Reduces manual intervention
-- **Requirements**: Must set the correct shovel slot number
-
-**Shovel Slot**
-- **What it does**: Which inventory slot your shovel is in
-- **Range**: 0-9 (0 = slot 1, 1 = slot 2, etc.)
-- **Important**: Must match your actual shovel location
-
-**Shovel Timeout**
-- **What it does**: How long to wait before re-equipping after no dig activity
-- **Range**: 1-60 seconds
-- **Purpose**: Prevents constantly re-equipping during normal pauses
-
-**Shovel Equip Mode**
-- **"Single"**: Presses the shovel key once
-- **"Double"**: Presses the shovel key twice quickly
-- **Double mode**: Usually more reliable for re-equipping
+**Cursor Position Setup**  
+Click "Set Cursor Position" button to record a specific screen position for custom cursor mode. Use if you want consistent clicking at one exact spot.
 
 ---
 
-## Discord Settings
+## Auto-Walk
+
+These settings control the automation features that work together to automate digging activities.
+
+### Auto-Walk Settings
+
+**Auto Walk Enabled**  
+Automatically moves your character around while digging. Cannot be used with Custom Cursor. Covers more ground automatically using built-in patterns or custom ones you create.
+
+**Walk Duration (0-∞)**  
+How long to hold down movement keys in milliseconds. Higher values create longer movement steps, lower values create shorter, more precise movements.
+
+**Max Wait Time (0-∞)**  
+Maximum time to wait for target engagement after moving. If no target found, advances to next movement step.
+
+**Dynamic Walkspeed**  
+Increases walk duration based on how much items you collect to simulate the walkspeed decrease in-game. Uses a mathematical equation to calculate this.
+
+The auto-walk overlay will also update accordingly.
+
+![Dynamic Walkspeed Example](/assets/docs/technical/dynamic_walkspeed_example.png)
+
+**Initial Item Count (0-∞)**  
+Starting item count for walkspeed calculation. Useful if you already have items when starting the tool. This is factored in with the mathematical equation.
+
+**Initial Walkspeed Decrease (0.0-1.0)**
+Starting walkspeed decrease that must be expressed as a decimal rather than a percentage (19% -> 0.1). This is factored in with the mathematical equation.
+
+### Auto-Sell
+
+**Auto Sell**  
+Automatically sells items after a certain number of digs. Must set up sell button position or use UI navigation. Keeps inventory from reaching the in-game item limit and potential auto-walk overlap.
+
+**Sell Every X Digs (1-∞)**  
+Number of digs before auto-selling.
+
+**Sell Delay (0-∞)**  
+Wait time in milliseconds before clicking the sell button. This gives the inventory time to open fully. 
+
+**Auto Sell Method**  
+Choose between "Button Click" (clicks on a specific position you set, requires "Set Sell Button") or "UI Navigation" (uses ROBLOX's UI navigation to navigate the in-game UIs). UI navigation is often more reliable and is recommended.
+
+The default UI navigation sequence is not for everyone because of UI updates or ROBLOX being bipolar. You will need to change the sequence on your own if this is the case.
+
+**Auto Sell UI Sequence**  
+Keyboard sequence for UI navigation auto-sell. Format as comma-separated keys like "down,up,enter". Available keys: down, up, left, right, enter. Only used when Auto Sell Method is "UI Navigation". Enter should be your last step and this is when it will press the sell button.
+
+**Auto Sell Target Engagement**  
+Waits for target re-engagement after auto-sell completion to ensure the tool properly returns to digging after selling. This will press the ``g`` key once to close the inventory in the circumstances that the inventory may still open after auto-sell. Typically, there are no issues related to having this enabled and there may be an underlying issue.
+
+**Auto Sell Target Engagement Timeout (0-∞)**  
+How long to wait for target engagement after selling. If no engagement detected, applies the fallback (as mentioned above).
+
+### Auto-Shovel
+
+**Auto Shovel Enabled**  
+Automatically re-equips your shovel when it breaks or gets unequipped. This was added to fix a game bug where your shovel is out but you can't move or dig.
+
+**Shovel Slot (0-9)**  
+Which inventory slot your shovel is in (0-9, where 0 = slot 1, 1 = slot 2, etc.). Must match your actual shovel location.
+
+**Shovel Timeout (1-∞)**  
+How long to wait before re-equipping after no dig activity.
+
+**Shovel Equip Mode**  
+Choose "Single" (presses the shovel key once) or "Double" (presses the shovel key twice quickly). Double mode is usually more reliable as it's the most intended.
+
+---
+
+## Discord
 
 These settings control Discord notifications for milestones and rare items.
 
 ### General Notifications
 
-**Webhook URL**
-- **What it does**: Discord webhook URL for sending notifications
-- **Required**: For any Discord notifications to work
-- **How to get**: Create a webhook in your Discord server settings
+**Webhook URL**  
+Discord webhook URL for sending notifications. Required for any Discord notifications to work. C
 
-**Server ID**
-- **What it does**: Your Discord server's ID number
-- **Purpose**: Used for mention formatting in notifications
-- **Optional**: Notifications work without this but mentions won't
+**Server ID**  
+Your Discord server's ID number. Optional - notifications work without this but it won't provide a message link to return back to live stats.
 
-**User ID**
-- **What it does**: Your Discord user ID for mentions
-- **Purpose**: Tool can mention you in notifications
-- **Optional**: Leave blank if you don't want mentions
+**User ID**  
+Your Discord user ID for mentions. Optional - leave blank if you don't want mentions.
 
-**Milestone Interval**
-- **What it does**: How often to send dig count milestone notifications
-- **Example**: Set to 100 to get notified every 100 digs
-- **Set to 0**: Disables milestone notifications
+**Milestone Interval (1-∞)**  
+How often to send dig count milestone notifications. Set to 100 to get notified every 100 digs, or set to 0 to disable milestone notifications.
 
-**Include Screenshot in Discord**
-- **What it does**: Attaches screenshots to Discord notifications
-- **Benefits**: Shows what was happening when notification was sent
-- **Drawbacks**: Makes notifications larger and slower to send
+**Include Screenshot in Discord**  
+Attaches screenshots to Discord notifications. Shows what was happening when notification was sent.
 
 ### Money Detection
 
-**Enable Money Detection**
-- **What it does**: Detects and tracks your in-game money amount
-- **Requirements**: Must set up money area first
-- **Purpose**: Includes money information in Discord notifications
+**Money Detection**  
+Detects and tracks your in-game money amount. Must set up money area first. Includes money information in Discord notifications.
 
-**Money Area Setup**
-- **How to set**: Click "Select Money Area" button
-- **What to select**: The area of your screen showing your money amount
-- **Tips**: Select just the number, not labels or decorations
+**Money Area Setup**  
+Click "Select Money Area" button to set this up. Select the area of your screen showing your money amount. 
 
-**Test Money OCR**
-- **What it does**: Tests if money detection is working properly
-- **When to use**: After setting up money area to verify it works
-- **Shows**: The detected money value or error message
+Ensure when you're selecting that you're selecting a rectangle of the area where your money is. There must be enough space when it may extend (for example, $100,000 to $1,000,000).
+
+![Money Area Setup Example](/assets/docs/technical/set_money_area_example.png)
+
+**Test Money OCR**  
+Tests if money detection is working properly. Use after setting up money area to verify it works. Shows the detected money value or error message.
+
+This will show the detected money value in the status box within the main window.
+
+![Test Money OCR Example](/assets/docs/technical/test_money_ocr_example.png)
 
 ### Item Detection
 
-**Enable Item Detection**
-- **What it does**: Detects rare items and sends Discord notifications
-- **Requirements**: Must set up item area first
-- **Benefits**: Get notified immediately when you find rare items
+**Item Detection**  
+Detects rare items and sends Discord notifications. Must set up item area first. Get notified immediately when you find rare items.
 
-**Item Area Setup**
-- **How to set**: Click "Select Item Area" button
-- **What to select**: The area showing item information when you dig
-- **Tips**: Select the area where rarity and item names appear
+**Item Area Setup**  
+Click "Select Item Area" button to set this up. Select the area showing item information when you dig - the area where rarity and item names appear.
 
-**Notification Rarities**
-- **What it does**: Choose which item rarities trigger notifications
-- **Options**: Scarce, Legendary, Mythical, Divine, Prismatic
-- **Default**: All rare types are enabled
-- **Customize**: Uncheck rarities you don't want notifications for
+Ensure when you're selecting that you're selecting a wide rectangle of where item names pop up. Make sure there's enough space for bigger text pop ups like legendaries or divines.
 
-**Test Item OCR**
-- **What it does**: Tests if item detection is working properly
-- **When to use**: After setting up item area to verify it works
-- **Shows**: The detected item rarity and text or error message
+![Item Detection Example](/assets/docs/technical/item_detection_example.png)
+
+**Notification Rarities**  
+Choose which item rarities trigger notifications: Scarce, Legendary, Mythical, Divine, Prismatic. All rare types are enabled by default. Uncheck rarities you don't want notifications for.
+
+**Test Item OCR**  
+Tests if item detection is working properly. Use after setting up item area to verify it works. Shows the detected item rarity and text or error message.
+
+Similar to testing money OCR, it will also show the item rarity in the status box within te main window.
+
+![test Item OCR](/assets/docs/technical/test_item_ocr_example.png)
 
 ---
 
-## Performance Settings
+## Window
+
+These settings control window behavior and positioning.
+
+### Window Controls
+
+**Main Window On Top**  
+Keeps the main tool window above all other windows. Provides easy access to controls but may cover other applications.
+
+**Preview Window On Top**  
+Keeps the preview window above all other windows. Always see what the tool is detecting. Enable if you want constant visual feedback.
+
+**Debug Window On Top**  
+Keeps the debug console above all other windows. Monitor debug messages without switching windows. Enable when actively debugging issues.
+
+---
+
+## Debug
 
 These settings affect how the tool performs and uses system resources.
 
-### System & Performance
+### Debug & Performance
 
-**Target FPS**
-- **What it does**: How many screenshots per second the tool takes
-- **Range**: 30-500 FPS
-- **Higher values**: Lower latency but more CPU usage
-- **Lower values**: Less CPU usage but higher latency
-- **Recommended**: 120-240 FPS for best balance
+**Screenshot FPS (1-∞)**  
+Frame rate for screenshot capture. This is limited by your monitor's refresh rate and may significantly affect how Dig Tool operates during the minigame.
 
-**Screenshot FPS**
-- **What it does**: Frame rate for screenshot capture specifically
-- **Range**: 30-500 FPS
-- **Purpose**: Can be different from target FPS for optimization
-- **When to adjust**: If you need different capture vs processing rates
-
-### Debug & Overlay
-
-**Debug Enabled**
-- **What it does**: Saves screenshots and debug information for every click
-- **Purpose**: Helps troubleshoot detection issues
-- **Warning**: Uses lots of disk space over time
-- **When to enable**: Only when investigating problems
-
-**Main Window On Top**
-- **What it does**: Keeps the main tool window above all other windows
-- **Benefits**: Easy access to controls
-- **Drawbacks**: May cover other applications
-
-**Preview Window On Top**
-- **What it does**: Keeps the preview window above all other windows
-- **Purpose**: Always see what the tool is detecting
-- **When to enable**: If you want constant visual feedback
-
-**Debug Window On Top**
-- **What it does**: Keeps the debug console above all other windows
-- **Purpose**: Monitor debug messages without switching windows
-- **When to enable**: When actively debugging issues
-
----
-
-## Input Controls
-
-These settings control how you interact with the tool and game.
-
-### Hotkeys
-
-**Start/Stop Macro** (Default: F1)
-- **What it does**: Toggles the main automation on and off
-- **Important**: Primary control for the tool
-- **Can customize**: Change to any key you prefer
-
-**Show/Hide Main GUI** (Default: F2)
-- **What it does**: Shows or hides the main tool window
-- **Benefits**: Reduces screen clutter while keeping tool running
-- **Quick access**: Easy to bring back when needed
-
-**Show/Hide Overlay** (Default: F3)
-- **What it does**: Shows or hides the detection overlay
-- **Purpose**: See real-time detection without the full preview window
-- **Visual feedback**: Shows what zones are being detected
-
-**Toggle Auto-Walk Overlay** (Default: F4)
-- **What it does**: Shows or hides the auto-walk pattern overlay
-- **Purpose**: See the current walking pattern and progress
-- **Only visible**: When auto-walk is enabled
-
-### Custom Cursor
-
-**Use Custom Cursor**
-- **What it does**: Uses a custom cursor position instead of auto-detection
-- **Cannot be used with**: Auto-Walk (they conflict)
-- **Purpose**: For setups where you want to click a specific spot manually
-- **Setup required**: Must set cursor position first
-
-**Cursor Position Setup**
-- **How to set**: Click "Set Cursor Position" button
-- **What it does**: Records a specific screen position for custom cursor mode
-- **When to use**: If you want consistent clicking at one exact spot
+**Save Debug Screenshots**  
+Saves screenshots and debug information for every click. Helps troubleshoot some issues. Only enable when investigating problems.
 
 ---
 
@@ -457,6 +330,3 @@ These settings control how you interact with the tool and game.
 
 > [!TIP]
 > Start with default settings and adjust gradually. Most users only need to modify a few settings to get optimal performance for their setup.
-
-> [!WARNING]
-> Some settings like Debug Mode can use significant system resources. Only enable resource-intensive options when necessary.
