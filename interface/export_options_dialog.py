@@ -2,8 +2,9 @@ import tkinter as tk
 from tkinter import ttk
 
 class ExportOptionsDialog:
-    def __init__(self, parent):
+    def __init__(self, parent, dig_tool=None):
         self.parent = parent
+        self.dig_tool = dig_tool
         self.result = None
         self.dialog = None
         
@@ -17,13 +18,21 @@ class ExportOptionsDialog:
     def show_dialog(self):
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("Export Options")
-        self.dialog.geometry("450x280")
+        
+        if self.dig_tool and hasattr(self.dig_tool, 'width') and hasattr(self.dig_tool, 'base_height'):
+            dialog_width = int(self.dig_tool.width * 0.90)
+            dialog_height = int(self.dig_tool.base_height * 0.51)
+        else:
+            dialog_width = 450
+            dialog_height = 280
+            
+        self.dialog.geometry(f"{dialog_width}x{dialog_height}")
         self.dialog.resizable(False, False)
         
         try:
             import sys
             import os
-            self.dialog.wm_iconbitmap(os.path.join(sys._MEIPASS, "assets/icon.ico") if hasattr(sys, '_MEIPASS') else "assets/icon.ico")
+            self.dialog.wm_iconbitmap(os.path.join(getattr(sys, '_MEIPASS', '.'), "assets/icon.ico") if hasattr(sys, '_MEIPASS') else "assets/icon.ico")
         except:
             pass  
         
@@ -81,7 +90,7 @@ class ExportOptionsDialog:
         discord_check = ttk.Checkbutton(discord_frame, text="Discord Information", 
                                        variable=self.vars['discord'])
         discord_check.pack(side=tk.LEFT)
-        ttk.Label(discord_frame, text="(Webhook URL, User ID)", 
+        ttk.Label(discord_frame, text="(Webhook URL, User ID, Money Area, Item Area)", 
                  font=("Segoe UI", 9), foreground="gray").pack(side=tk.LEFT, padx=(10, 0))
         
       
