@@ -97,6 +97,28 @@ class MovementManager:
 
     def execute_movement_with_duration(self, direction, duration):
         try:
+            base_duration = duration
+            
+            if get_param(self.dig_tool, "dynamic_walkspeed_enabled"):
+                items_collected = self.dig_tool.automation_manager.get_walkspeed_dig_count()
+                initial_item_count = (
+                    get_param(self.dig_tool, "initial_item_count") or 0
+                )
+                total_items = items_collected + initial_item_count
+
+                formula_reduction = self.calculate_walkspeed_multiplier(total_items)
+
+                initial_decrease = (
+                    get_param(self.dig_tool, "initial_walkspeed_decrease") or 0.0
+                )
+                initial_decrease = max(0.0, min(1.0, initial_decrease))
+
+                total_reduction = min(formula_reduction + initial_decrease, 0.99)
+                duration_multiplier = 1.0 + total_reduction
+                duration = base_duration * duration_multiplier
+
+                if total_items > 35 or initial_decrease > 0:
+                    logger.debug(f"Dynamic walkspeed applied: {duration_multiplier:.2f}x duration")
 
             if "+" in direction:
                 keys_to_press = direction.lower().split("+")
@@ -193,15 +215,7 @@ class MovementManager:
                     walk_duration = base_duration * duration_multiplier
 
                     if total_items > 35 or initial_decrease > 0:
-                        logger.debug(
-                            f"Dynamic walkspeed: total_items={total_items} "
-                            f"(collected={items_collected}+initial={initial_item_count}), "
-                            f"formula_reduction={formula_reduction:.3f}, "
-                            f"initial_decrease={initial_decrease:.3f}, "
-                            f"total_reduction={total_reduction:.3f}, "
-                            f"multiplier={duration_multiplier:.2f}x, "
-                            f"duration={walk_duration:.3f}s"
-                        )
+                        logger.debug(f"Dynamic walkspeed applied: {duration_multiplier:.2f}x duration")
 
                 if "+" in direction:
                     keys_to_press = direction.lower().split("+")
@@ -356,6 +370,29 @@ class MovementManager:
         try:
             with self.walking_lock:
                 self.is_walking = True
+                
+                base_duration = duration
+                
+                if get_param(self.dig_tool, "dynamic_walkspeed_enabled"):
+                    items_collected = self.dig_tool.automation_manager.get_walkspeed_dig_count()
+                    initial_item_count = (
+                        get_param(self.dig_tool, "initial_item_count") or 0
+                    )
+                    total_items = items_collected + initial_item_count
+
+                    formula_reduction = self.calculate_walkspeed_multiplier(total_items)
+
+                    initial_decrease = (
+                        get_param(self.dig_tool, "initial_walkspeed_decrease") or 0.0
+                    )
+                    initial_decrease = max(0.0, min(1.0, initial_decrease))
+
+                    total_reduction = min(formula_reduction + initial_decrease, 0.99)
+                    duration_multiplier = 1.0 + total_reduction
+                    duration = base_duration * duration_multiplier
+
+                    if total_items > 35 or initial_decrease > 0:
+                        logger.debug(f"Dynamic walkspeed applied: {duration_multiplier:.2f}x duration")
                 
                 if isinstance(direction, str):
                     if direction.lower() in self.key_mapping:

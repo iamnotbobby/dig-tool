@@ -1,11 +1,6 @@
-# 🔧 Dig Tool — Technical Options Guide
+# 🔧 Dig Tool — Settings Options Guide
 
 ## Table of Contents
-
-<!-- Run with: npx doctoc --maxlevel 3 docs/TECHNICAL.md -->
-
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Overview](#overview)
 - [Detection](#detection)
@@ -29,8 +24,6 @@
   - [Window Controls](#window-controls)
 - [Debug](#debug)
   - [Debug & Performance](#debug--performance)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ---
 
@@ -57,7 +50,7 @@ Moves the detected line position left or right by a specific number of pixels. P
 
 In the example below, you can see the red line in the middle (to see this, open "Show Preview" panel).
 
-![Line Detection Offset Example](/assets/docs/technical/line_detection_offset_example.png)
+![Line Detection Offset Example](/assets/docs/settings/line_detection_offset_example.png)
 
 **Line Exclusion Radius (0-∞)**  
 Creates a circular "dead zone" around the detected line where target zones are ignored. This prevents the moving line from interfering with zone detection. Adjust if the tool gets confused when the line passes through valid zones (basically, the target moves with the line). 
@@ -78,7 +71,7 @@ Smaller values requires more precise clicking, however, in some cases it may be 
 
 In the example below, you can see the target width percent setting visualized as the yellow box that appears in the preview window.
 
-![Target Width Percent Example](/assets/docs/technical/target_width_percent_example.png)
+![Target Width Percent Example](/assets/docs/settings/target_width_percent_example.png)
 
 ### Movement Detection
 
@@ -87,7 +80,7 @@ Controls how colorful a pixel must be to be part of the initial zone search (0.0
 
 In the "Show Debug" panel, you can visualize if Dig Tool can see the minigame bar correctly (the white bar overlayed ontop of a black background).
 
-![Saturation Threshold Example](/assets/docs/technical/saturation_threshold_example.png)
+![Saturation Threshold Example](/assets/docs/settings/saturation_threshold_example.png)
 
 > [!IMPORTANT]
 > Saturation Threshold is a detection method and CANNOT be used with other detection methods (e.g., Otsu and Color Picker)!
@@ -100,7 +93,7 @@ Automatically adjusts target width percent based on how fast the line is moving.
 
 The data that is fed into Velocity Based Width can be found in the "Show Debug" panel.
 
-![Velocity Based Width Info](/assets/docs/technical/velocity_based_width_info.png)
+![Velocity Based Width Info](/assets/docs/settings/velocity_based_width_info.png)
 
 **Velocity Width Multiplier (0.0-5.0)**  
 Controls how much line speed affects target width percent. Higher values create more dramatic width changes based on speed, lower values create more subtle adjustments. 
@@ -144,7 +137,7 @@ Sets the target frame rate of the game for prediction calculations. This helps t
 
 You can view your in-game FPS by pressing ``Shift+F5`` in-game. It is recommended you try and average it out and go a bit lower rather than higher.
 
-![Game FPS Example](/assets/docs/technical/game_fps_example.png)
+![Game FPS Example](/assets/docs/settings/game_fps_example.png)
 
 ### Input & Timing
 
@@ -181,7 +174,7 @@ Increases walk duration based on how much items you collect to simulate the walk
 
 The auto-walk overlay will also update accordingly.
 
-![Dynamic Walkspeed Example](/assets/docs/technical/dynamic_walkspeed_example.png)
+![Dynamic Walkspeed Example](/assets/docs/settings/dynamic_walkspeed_example.png)
 
 **Initial Item Count (0-∞)**  
 Starting item count for walkspeed calculation. Useful if you already have items when starting the tool. This is factored in with the mathematical equation.
@@ -261,14 +254,14 @@ Click "Select Money Area" button to set this up. Select the area of your screen 
 
 Ensure when you're selecting that you're selecting a rectangle of the area where your money is. There must be enough space when it may extend (for example, $100,000 to $1,000,000).
 
-![Money Area Setup Example](/assets/docs/technical/set_money_area_example.png)
+![Money Area Setup Example](/assets/docs/settings/set_money_area_example.png)
 
 **Test Money OCR**  
 Tests if money detection is working properly. Use after setting up money area to verify it works. Shows the detected money value or error message.
 
 This will show the detected money value in the status box within the main window.
 
-![Test Money OCR Example](/assets/docs/technical/test_money_ocr_example.png)
+![Test Money OCR Example](/assets/docs/settings/test_money_ocr_example.png)
 
 ### Item Detection
 
@@ -280,7 +273,7 @@ Click "Select Item Area" button to set this up. Select the area showing item inf
 
 Ensure when you're selecting that you're selecting a wide rectangle of where item names pop up. Make sure there's enough space for bigger text pop ups like legendaries or divines.
 
-![Item Detection Example](/assets/docs/technical/item_detection_example.png)
+![Item Detection Example](/assets/docs/settings/item_detection_example.png)
 
 **Notification Rarities**  
 Choose which item rarities trigger notifications: Scarce, Legendary, Mythical, Divine, Prismatic. All rare types are enabled by default. Uncheck rarities you don't want notifications for.
@@ -290,7 +283,7 @@ Tests if item detection is working properly. Use after setting up item area to v
 
 Similar to testing money OCR, it will also show the item rarity in the status box within te main window.
 
-![test Item OCR](/assets/docs/technical/test_item_ocr_example.png)
+![test Item OCR](/assets/docs/settings/test_item_ocr_example.png)
 
 ---
 
