@@ -4,6 +4,7 @@
 
 - [Architecture Overview](#architecture-overview)
 - [Core Technologies](#core-technologies)
+- [Project Structure](#project-structure)
 - [Detection System](#detection-system)
   - [Line Detection](#line-detection)
   - [Zone Detection](#zone-detection)
@@ -64,6 +65,98 @@ Dig Tool is built on a modular Python architecture using computer vision librari
 
 **Development & Deployment:**
 - **PyInstaller** (`PyInstaller`) - Application packaging and executable creation
+
+---
+
+## Project Structure
+
+### Root Files
+
+**`main.py`** - Application entry point and main controller. Initializes the GUI, coordinates all system components, manages global state, and handles the primary event loop for detection and automation.
+
+**`compile.py`** - Build script for creating standalone executables. Uses PyInstaller to package the application with all dependencies into a single executable file for distribution.
+
+### Core System (`core/`)
+
+**`detection.py`** - Computer vision algorithms for target identification. Contains line detection, zone detection, color analysis, and target tracking functions using OpenCV.
+
+**`initialization.py`** - Application startup procedures. Handles system compatibility checks, initial configuration loading, and core component initialization.
+
+**`notifications.py`** - Discord webhook integration system. Manages real-time status updates, error reporting, and activity notifications to Discord channels.
+
+**`ocr.py`** - Optical Character Recognition engine. Handles money detection and item identification.
+
+#### Automation Subsystem (`core/automation/`)
+
+**`automation_manager.py`** - Central automation coordinator. Manages all automation subsystems, state synchronization, and cross-module communication.
+
+**`auto_sell.py`** - Automated selling functionality. Handles inventory management, selling sequences, and interaction with in-game market interfaces.
+
+**`auto_shovel.py`** - Shovel re-equipment automation. Monitors tool status and automatically re-equips shovels when needed.
+
+**`movement.py`** - Player movement control system (aka auto-walk). Executes movement patterns, handles directional input, and manages walking automation with velocity calculations.
+
+**`pattern_manager.py`** - Custom walk pattern system. Records, stores, and replays user-defined movement patterns with timing accuracy and coordinate scaling.
+
+**`roblox_status.py`** - Game state monitoring. Tracks Roblox window status, connection state, and game session continuity.
+
+**`shift_manager.py`** - Shift key management. Handles shift state tracking and shift key automation during movement patterns.
+
+### User Interface (`interface/`)
+
+**`main_window.py`** - Primary application window and GUI controller. Contains the main interface layout, control panels, and user interaction handlers.
+
+**`components.py`** - Reusable UI components library. Provides custom widgets, tooltips, collapsible panels, and specialized interface elements.
+
+**`settings.py`** - Settings management interface. Handles configuration panels, parameter validation, and settings persistence across application sessions.
+
+**`export_options_dialog.py`** - Configuration export/import interface. Provides dialogs for sharing settings, patterns, and configurations between users.
+
+#### Custom Pattern Window (`interface/custom_pattern_window/`)
+
+**`main_window.py`** - Pattern creation and management interface. Primary window for recording, editing, and managing walk patterns.
+
+**`pattern_display.py`** - Visual pattern representation. Renders pattern previews, path visualizations, and movement trajectory displays.
+
+**`pattern_operations.py`** - Pattern manipulation tools. Handles pattern editing, coordinate transformation, and pattern optimization functions.
+
+**`preview_manager.py`** - Real-time pattern preview system. Provides live preview of patterns during recording and playback.
+
+**`recording_manager.py`** - Pattern recording controller. Captures user movement, timing data, and input sequences for pattern creation.
+
+**`ui_components.py`** - Pattern-specific interface elements. Custom widgets and controls designed specifically for pattern management.
+
+#### Debug Logger Window (`interface/debug_logger_window/`)
+
+**`main_window.py`** - Debug console interface. Provides real-time log viewing, error tracking, and system diagnostics display.
+
+**`search_operations.py`** - Log search and filtering functionality. Enables searching through debug logs with filters and search criteria.
+
+**`ui_components.py`** - Debug interface components. Specialized widgets for log display, filtering controls, and diagnostic information.
+
+#### Settings Feedback Window (`interface/settings_feedback_window/`)
+
+**`main_window.py`** - Settings testing and validation interface. Provides tools for testing configuration changes and validating settings.
+
+**`progress_operations.py`** - Settings application progress tracking. Manages progress indicators during settings updates and system configuration changes.
+
+### Utility Systems (`utils/`)
+
+**`config_management.py`** - Configuration persistence and retrieval. Handles settings storage, parameter validation, and configuration file management.
+
+**`debug_logger.py`** - Logging and debugging system. Provides structured logging, error tracking, and diagnostic information collection.
+
+**`input_management.py`** - Input handling and hotkey system. Manages keyboard shortcuts, mouse input capture, and input event processing.
+
+**`pattern_utils.py`** - Pattern processing utilities. Helper functions for pattern manipulation, coordinate calculations, and pattern file operations.
+
+**`screen_capture.py`** - Screen capture and image processing. Handles screen capture operations, image format conversion, and capture region management.
+
+**`system_utils.py`** - System integration and compatibility. Provides system-specific functions, compatibility checks, and OS integration features.
+
+**`thread_utils.py`** - Threading and concurrency management. Thread-safe utilities, synchronization primitives, and background task coordination.
+
+**`ui_management.py`** - Interface state management. Handles UI updates, window positioning, and interface synchronization across modules.
 
 ---
 
