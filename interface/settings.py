@@ -1129,16 +1129,16 @@ class SettingsManager:
 
     def _setup_settings_directory(self):
         try:
-            for env_var in ["LOCALAPPDATA", "APPDATA"]:
-                appdata_dir = os.environ.get(env_var)
-                if appdata_dir and os.path.exists(appdata_dir):
-                    self.settings_dir = os.path.join(appdata_dir, "DigTool")
-                    return
-
+            appdata_dir = os.environ.get("LOCALAPPDATA")
+            if appdata_dir and os.path.exists(appdata_dir):
+                self.settings_dir = os.path.join(appdata_dir, "DigTool")
+                return
+            appdata_dir = os.environ.get("APPDATA")
+            if appdata_dir and os.path.exists(appdata_dir):
+                self.settings_dir = os.path.join(appdata_dir, "DigTool")
+                return
             self.settings_dir = os.path.join(os.getcwd(), "settings")
-            logger.warning("Using current directory for settings storage as fallback")
-        except Exception as e:
-            logger.error(f"Error setting up settings directory: {e}")
+        except Exception:
             self.settings_dir = os.path.join(os.getcwd(), "settings")
 
     def _ensure_settings_directory(self):
