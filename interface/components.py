@@ -540,6 +540,10 @@ class AutoWalkOverlay:
         self.drag_start_x = 0
         self.drag_start_y = 0
         self.is_dragging = False
+        
+        self._last_pattern_index = None
+        self._last_pattern_name = None
+        self._animation_running = False
 
     def create_overlay(self):
         if self.overlay:
@@ -683,9 +687,7 @@ class AutoWalkOverlay:
         )
         self.autosell_label.pack(expand=True)
 
-        self.current_step_index = 0
         self.update_path_visualization()
-
         self.position_overlay()
 
     def start_drag(self, event):
@@ -761,17 +763,19 @@ class AutoWalkOverlay:
 
             self.overlay.after_idle(self.update_pattern_name)
             
-            automation_status = kwargs.get("automation_status", "STOPPED")
-            is_walking = automation_status in [
-                "WALKING"
-            ] or automation_status.startswith("AUTO WALKING")
-            if is_walking and not getattr(self, "_animation_running", False):
+            automation_status = self.parent.automation_manager.get_current_status()
+            is_auto_walking = automation_status and automation_status.startswith("AUTO WALKING")
+            
+            current_walk_index = getattr(self.parent.automation_manager, "walk_pattern_index", 0)
+            
+            if is_auto_walking and not getattr(self, "_animation_running", False):
                 self._animation_running = True
+                self.overlay.after_idle(lambda: self.update_path_visualization(highlight_step=current_walk_index))
                 self.overlay.after_idle(self.animate_path_step)
-            elif not is_walking and getattr(self, "_animation_running", False):
-                self._animation_running = False
-            elif not is_walking:
-                self.overlay.after_idle(lambda: self.update_path_visualization())
+            elif not is_auto_walking:
+                if getattr(self, "_animation_running", False):
+                    self._animation_running = False
+                self.overlay.after_idle(lambda: self.update_path_visualization(highlight_step=current_walk_index))
 
             auto_sell_enabled = get_param(self.parent, "auto_sell_enabled")
             if auto_sell_enabled:
@@ -804,44 +808,36 @@ class AutoWalkOverlay:
         if not hasattr(self, "path_canvas") or not self.path_canvas or not self.visible:
             return
 
-        current_pattern = None
-        if (
-            hasattr(self.parent, "automation_manager")
-            and self.parent.automation_manager
-        ):
-            current_pattern_name = getattr(self.parent, "walk_pattern_var", None)
-            if current_pattern_name:
-                pattern_name = current_pattern_name.get()
-                pattern_info = self.parent.automation_manager.get_pattern_list()
-                if pattern_name in pattern_info:
-                    current_pattern = pattern_info[pattern_name]["pattern"]
+        if not (hasattr(self.parent, "automation_manager") and self.parent.automation_manager):
+            return
 
-        if current_pattern and len(current_pattern) > 0:
-            if hasattr(self.parent, "automation_manager"):
-                new_step_index = getattr(
-                    self.parent.automation_manager, "walk_pattern_index", 0
-                )
-                
-                if not hasattr(self, "last_drawn_step") or self.last_drawn_step != new_step_index:
-                    self.current_step_index = new_step_index
-                    self.last_drawn_step = new_step_index
-                    self.overlay.after_idle(lambda idx=new_step_index: self.update_path_visualization(highlight_step=idx))
+        current_pattern_name = getattr(self.parent, "walk_pattern_var", None)
+        if not current_pattern_name:
+            return
 
-            automation_status = getattr(
-                self.parent.automation_manager, "current_status", "STOPPED"
-            )
-            is_walking = automation_status in [
-                "WALKING"
-            ] or automation_status.startswith("AUTO WALKING")
-            if (
-                is_walking
-                and self.visible
-                and getattr(self, "_animation_running", False)
-                and self.overlay
-            ):
-                self.overlay.after(150, self.animate_path_step)
-            else:
-                self._animation_running = False
+        pattern_name = current_pattern_name.get()
+        pattern_info = self.parent.automation_manager.get_pattern_list()
+        if pattern_name not in pattern_info:
+            return
+
+        current_pattern = pattern_info[pattern_name]["pattern"]
+        if not current_pattern or len(current_pattern) == 0:
+            self._animation_running = False
+            return
+
+        current_walk_index = getattr(self.parent.automation_manager, "walk_pattern_index", 0)
+        current_walk_index = max(0, min(current_walk_index, len(current_pattern) - 1))
+
+        if (self._last_pattern_index != current_walk_index or self._last_pattern_name != pattern_name):
+            self._last_pattern_index = current_walk_index
+            self._last_pattern_name = pattern_name
+            self.update_path_visualization(highlight_step=current_walk_index)
+
+        automation_status = self.parent.automation_manager.get_current_status()
+        is_auto_walking = automation_status and automation_status.startswith("AUTO WALKING")
+
+        if (is_auto_walking and self.visible and getattr(self, "_animation_running", False) and self.overlay):
+            self.overlay.after(100, self.animate_path_step)
         else:
             self._animation_running = False
 
@@ -878,128 +874,117 @@ class AutoWalkOverlay:
             return
             
         self._last_visualization_state = (highlight_step, current_pattern_name)
+        self.path_canvas.delete("all")
+
+        if not (hasattr(self.parent, "automation_manager") and self.parent.automation_manager):
+            self._show_no_pattern()
+            return
+
+        if not current_pattern_var:
+            self._show_no_pattern()
+            return
+
+        pattern_info = self.parent.automation_manager.get_pattern_list()
+        if current_pattern_name not in pattern_info:
+            self._show_no_pattern()
+            return
+
+        current_pattern = pattern_info[current_pattern_name]["pattern"]
+        if not current_pattern:
+            self._show_no_pattern()
+            return
 
         try:
-            self.path_canvas.delete("all")
-
-            current_pattern = None
-            pattern_name = "unknown"
-
-            if (
-                hasattr(self.parent, "automation_manager")
-                and self.parent.automation_manager
-            ):
-                if current_pattern_var:
-                    pattern_name = current_pattern_name
-                    pattern_info = self.parent.automation_manager.get_pattern_list()
-                    if pattern_name in pattern_info:
-                        current_pattern = pattern_info[pattern_name]["pattern"]
-
-            if not current_pattern:
-                self.path_canvas.create_text(
-                    90, 70, text="NO PATTERN", fill="#666666", font=("Consolas", 10)
-                )
-                return
-
-            if (not hasattr(self, "_cached_path_points") or 
-                not hasattr(self, "_cached_pattern_name") or 
-                self._cached_pattern_name != pattern_name):
-                
-                canvas_width = 180
-                canvas_height = 140
-                center_x = canvas_width // 2
-                center_y = canvas_height // 2
-                scale = 12.0
-
-                raw_points: list[tuple[float, float]] = [(0.0, 0.0)]
-                x, y = 0.0, 0.0
-
-                for step in current_pattern:
-                    dx, dy = self.get_direction_vector(step)
-                    x += dx * scale
-                    y += dy * scale
-                    raw_points.append((x, y))
-
-                if len(raw_points) > 1:
-                    all_x = [point[0] for point in raw_points]
-                    all_y = [point[1] for point in raw_points]
-                    min_x, max_x = min(all_x), max(all_x)
-                    min_y, max_y = min(all_y), max(all_y)
-
-                    pattern_center_x = (min_x + max_x) / 2
-                    pattern_center_y = (min_y + max_y) / 2
-
-                    offset_x = center_x - pattern_center_x
-                    offset_y = center_y - pattern_center_y
-                else:
-                    offset_x = offset_y = 0
-
-                path_points = []
-                for raw_x, raw_y in raw_points:
-                    final_x = raw_x + offset_x
-                    final_y = raw_y + offset_y
-                    path_points.append((final_x, final_y))
-                
-                self._cached_path_points = path_points
-                self._cached_pattern_name = pattern_name
-            else:
-                path_points = self._cached_path_points
-
-            if len(path_points) > 1:
-                for i in range(len(path_points) - 1):
-                    x1, y1 = path_points[i]
-                    x2, y2 = path_points[i + 1]
-
-                    if highlight_step is not None and i == highlight_step:
-                        color = "#ffff00"
-                        width = 3
-                    elif highlight_step is not None and i < highlight_step:
-                        color = "#00aa00"
-                        width = 2
-                    else:
-                        progress = i / (len(path_points) - 1)
-                        red_component = int(progress * 180 + 75)
-                        green_component = int((1 - progress) * 180 + 75)
-                        color = f"#{red_component:02x}{green_component:02x}00"
-                        width = 2
-
-                    self.path_canvas.create_line(
-                        x1, y1, x2, y2, fill=color, width=width
-                    )
-
-                start_x, start_y = path_points[0]
-                self.path_canvas.create_oval(
-                    start_x - 3,
-                    start_y - 3,
-                    start_x + 3,
-                    start_y + 3,
-                    fill="#00ff00",
-                    outline="#ffffff",
-                    width=1,
-                )
-
-                if (
-                    highlight_step is not None
-                    and 0 <= highlight_step < len(path_points) - 1
-                ):
-                    curr_x, curr_y = path_points[highlight_step]
-
-                    self.path_canvas.create_oval(
-                        curr_x - 3,
-                        curr_y - 3,
-                        curr_x + 3,
-                        curr_y + 3,
-                        fill="#ffff00",
-                        outline="#ffffff",
-                        width=1,
-                    )
-
+            path_points = self._get_cached_path_points(current_pattern_name, current_pattern)
+            self._draw_path(path_points, highlight_step)
         except Exception as e:
             logger.debug(f"Error updating path visualization: {e}")
+            self._show_error()
 
-            self.path_canvas.delete("all")
-            self.path_canvas.create_text(
-                90, 70, text="RENDER ERROR", fill="#ff4444", font=("Consolas", 10)
+    def _show_no_pattern(self):
+        self.path_canvas.create_text(90, 70, text="NO PATTERN", fill="#666666", font=("Consolas", 10))
+
+    def _show_error(self):
+        self.path_canvas.create_text(90, 70, text="RENDER ERROR", fill="#ff4444", font=("Consolas", 10))
+
+    def _get_cached_path_points(self, pattern_name, current_pattern):
+        if (hasattr(self, "_cached_path_points") and 
+            hasattr(self, "_cached_pattern_name") and 
+            self._cached_pattern_name == pattern_name):
+            return self._cached_path_points
+
+        canvas_width, canvas_height = 180, 140
+        center_x, center_y = canvas_width // 2, canvas_height // 2
+        scale = 12.0
+
+        raw_points = [(0.0, 0.0)]
+        x, y = 0.0, 0.0
+
+        for step in current_pattern:
+            dx, dy = self.get_direction_vector(step)
+            x += dx * scale
+            y += dy * scale
+            raw_points.append((x, y))
+
+        if len(raw_points) > 1:
+            all_x = [point[0] for point in raw_points]
+            all_y = [point[1] for point in raw_points]
+            min_x, max_x = min(all_x), max(all_x)
+            min_y, max_y = min(all_y), max(all_y)
+
+            pattern_center_x = (min_x + max_x) / 2
+            pattern_center_y = (min_y + max_y) / 2
+            offset_x = center_x - pattern_center_x
+            offset_y = center_y - pattern_center_y
+        else:
+            offset_x = offset_y = 0
+
+        path_points = [(raw_x + offset_x, raw_y + offset_y) for raw_x, raw_y in raw_points]
+        
+        self._cached_path_points = path_points
+        self._cached_pattern_name = pattern_name
+        return path_points
+
+    def _draw_path(self, path_points, highlight_step):
+        if len(path_points) <= 1:
+            return
+
+        max_step = len(path_points) - 2
+        if highlight_step is not None:
+            highlight_step = max(0, min(highlight_step, max_step))
+
+        for i in range(len(path_points) - 1):
+            x1, y1 = path_points[i]
+            x2, y2 = path_points[i + 1]
+
+            if highlight_step is not None and i < highlight_step:
+                color = "#00aa00"
+                width = 2
+            else:
+                progress = i / (len(path_points) - 1)
+                red_component = int(progress * 180 + 75)
+                green_component = int((1 - progress) * 180 + 75)
+                color = f"#{red_component:02x}{green_component:02x}00"
+                width = 2
+
+            self.path_canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
+
+        if highlight_step is not None and 0 <= highlight_step < len(path_points) - 1:
+            x1, y1 = path_points[highlight_step]
+            x2, y2 = path_points[highlight_step + 1]
+            self.path_canvas.create_line(x1, y1, x2, y2, fill="#ffff00", width=3)
+
+        start_x, start_y = path_points[0]
+        self.path_canvas.create_oval(
+            start_x - 3, start_y - 3, start_x + 3, start_y + 3,
+            fill="#00ff00", outline="#ffffff", width=1
+        )
+
+        if highlight_step is not None and 0 <= highlight_step < len(path_points) - 1:
+            curr_x, curr_y = path_points[highlight_step + 1]
+            self.path_canvas.create_oval(
+                curr_x - 3, curr_y - 3, curr_x + 3, curr_y + 3,
+                fill="#ffff00", outline="#ffffff", width=1
             )
 
     def get_direction_vector(self, key):

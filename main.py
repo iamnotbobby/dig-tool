@@ -281,6 +281,11 @@ class DigTool:
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
         self.update_status("Shutting down...")
         
+        try:
+            self.automation_manager.cleanup()
+        except Exception as e:
+            logger.error(f"Error during automation cleanup: {e}")
+        
         logger.cleanup()
         
         self.root.after(100, lambda: check_shutdown(self))
@@ -300,11 +305,15 @@ class DigTool:
 
             self.running = True
             self.update_status("Bot Started...")
-            self.click_count = 0
-            self.dig_count = 0
-            self.velocity_calculator.reset()
-            self.automation_manager.walk_pattern_index = 0
+            
+            self.reset_detection_state()
+            
             self.automation_manager.sell_count = 0
+            self.automation_manager.shiftlock_state = {
+                "shift": False,
+                "right_shift": False,
+            }
+            self.automation_manager.movement_manager.is_walking = False
             
             self.item_counts_since_startup = {
                 'junk': 0,
@@ -316,30 +325,22 @@ class DigTool:
                 'divine': 0,
                 'prismatic': 0
             }
-            
-            self.manual_dig_target_disengaged_time = 0
-            self.manual_dig_was_engaged = False
-            
-            self.startup_time = time.time() * 1000 
-            self._startup_grace_ended = False
-
-            self.automation_manager.shiftlock_state = {
-                "shift": False,
-                "right_shift": False,
-            }
 
             if get_param(self, "debug_enabled"):
                 init_click_debug_log(self.debug_log_path)
             if self.click_lock.locked():
                 self.click_lock.release()
 
-            self.target_engaged = False
-            self.line_moving_history = []
-
             send_startup_notification(self)
 
         else:
             self.running = False
+            
+            if self.automation_manager.is_recording:
+                self.automation_manager.stop_recording_pattern()
+            
+            self.automation_manager.is_selling = False
+            self.automation_manager.movement_manager.is_walking = False
 
             self.update_status("Stopped")
 
@@ -372,6 +373,62 @@ class DigTool:
     def _update_time_cache(self):
         update_time_cache(self)
 
+    def reset_detection_state(self):
+        reset_values = {
+            # Visual detection state
+            'blind_until': 0,
+            'smoothed_zone_x': None,
+            'smoothed_zone_w': None,
+            'is_color_locked': False,
+            'locked_color_hsv': None,
+            'locked_color_hex': None,
+            'is_low_sat_lock': False,
+            'frames_since_last_zone_detection': 0,
+            
+            # Target engagement state
+            'target_engaged': False,
+            'line_moving_history': [],
+            'manual_dig_target_disengaged_time': 0,
+            'manual_dig_was_engaged': False,
+            
+            # Autowalk state machine
+            'auto_walk_state': "move",
+            'move_completed_time': 0,
+            'wait_for_target_start': 0,
+            'target_disengaged_time': 0,
+            'click_retry_count': 0,
+            
+            # Cache variables
+            '_hsv_lower_bound_cache': None,
+            '_hsv_upper_bound_cache': None,
+            '_last_hsv_color': None,
+            '_last_is_low_sat': None,
+            
+            # Timing caches
+            '_current_time_cache': 0,
+            '_current_time_ms_cache': 0,
+            '_last_time_update': 0,
+            
+            # Counters
+            'click_count': 0,
+            'dig_count': 0,
+        }
+        
+        for attr_name, reset_value in reset_values.items():
+            setattr(self, attr_name, reset_value)
+        
+        if hasattr(self, '_line_detection_stats'):
+            del self._line_detection_stats
+
+        if hasattr(self, 'automation_manager'):
+            old_index = self.automation_manager.walk_pattern_index
+            self.automation_manager.walk_pattern_index = 0
+            logger.debug(f"Reset walk pattern index from {old_index} to 0")
+        
+        self.startup_time = time.time() * 1000
+        self._startup_grace_ended = False
+        self.velocity_calculator.reset()
+
     def reset_item_counts_for_startup(self):
         self.item_counts_since_startup = {
             'junk': 0,
@@ -396,18 +453,24 @@ class DigTool:
         screenshot_delay = 1.0 / screenshot_fps
         final_mask = None
 
-        auto_walk_state = "move"
-        move_completed_time = 0
-        wait_for_target_start = 0
+        if not hasattr(self, 'auto_walk_state'):
+            self.auto_walk_state = "move"
+        if not hasattr(self, 'move_completed_time'):
+            self.move_completed_time = 0
+        if not hasattr(self, 'wait_for_target_start'):
+            self.wait_for_target_start = 0
+        if not hasattr(self, 'target_disengaged_time'):
+            self.target_disengaged_time = 0
+        if not hasattr(self, 'click_retry_count'):
+            self.click_retry_count = 0
+
         current_step_click_enabled = True
         dig_completed_time = 0
-        target_disengaged_time = 0
         pending_auto_sell = False
         walk_thread = None
         post_dig_delay = 2000
-        click_retry_count = 0
         max_click_retries = 2
-
+        
         cached_height_80 = None
         cached_zone_y2 = None
         cached_line_area = None
@@ -919,8 +982,8 @@ class DigTool:
                         )
                     
                     logger.info("Auto-sell completed, returning to movement")
-                    auto_walk_state = "move"
-                    move_completed_time = current_time_ms + 500 
+                    self.auto_walk_state = "move"
+                    self.move_completed_time = current_time_ms + 500 
                 else:
                     logger.warning(
                         "Auto-sell skipped: not ready (sell button, running state, or already selling)"
@@ -933,11 +996,11 @@ class DigTool:
                 and get_param(self, "auto_walk_enabled")
                 and not self.automation_manager.is_selling
             ):
-                if auto_walk_state == "move":
+                if self.auto_walk_state == "move":
                     if (
                         not self.automation_manager.is_selling and 
                         not pending_auto_sell and
-                        current_time_ms >= move_completed_time
+                        current_time_ms >= self.move_completed_time
                     ):
                         if walk_thread is None or not walk_thread.is_alive():
                             direction = (
@@ -965,7 +1028,7 @@ class DigTool:
                                     key = direction.get("key", "")
                                     custom_duration = direction.get("duration", None)
                                     if custom_duration is not None:
-                                        success = self.automation_manager._execute_movement_with_duration(
+                                        success = self.automation_manager.movement_manager.execute_movement_with_duration(
                                             key, custom_duration / 1000.0
                                         )
                                     else:
@@ -984,7 +1047,7 @@ class DigTool:
                             )
                             walk_thread.start()
 
-                            auto_walk_state = "click_to_start"
+                            self.auto_walk_state = "click_to_start"
 
                             if (
                                 isinstance(direction, dict)
@@ -998,12 +1061,13 @@ class DigTool:
                             else:
                                 walk_duration = get_param(self, "walk_duration")
 
-                            move_completed_time = current_time_ms + walk_duration
+                            self.move_completed_time = current_time_ms + walk_duration
 
                 elif (
-                    auto_walk_state == "click_to_start"
-                    and current_time_ms >= move_completed_time
+                    self.auto_walk_state == "click_to_start"
+                    and current_time_ms >= self.move_completed_time
                     and not self.automation_manager.is_selling
+                    and self.running
                 ):
                     if current_step_click_enabled:
                         if not self.click_lock.locked():
@@ -1011,28 +1075,29 @@ class DigTool:
                             threading.Thread(
                                 target=perform_click, args=(self, click_delay,)
                             ).start()
-                            auto_walk_state = "wait_for_target"
-                            wait_for_target_start = current_time_ms
+                            self.auto_walk_state = "wait_for_target"
+                            self.wait_for_target_start = current_time_ms
                     else:
                         logger.debug("Skipping click for this step (click disabled)")
-                        auto_walk_state = "move"
+                        self.auto_walk_state = "move"
                         self.automation_manager.advance_walk_pattern()
                         logger.debug(f"Advanced to pattern index: {self.automation_manager.walk_pattern_index}")
-                        move_completed_time = 0 
+                        self.move_completed_time = 0 
 
                 elif (
-                    auto_walk_state == "wait_for_target"
+                    self.auto_walk_state == "wait_for_target"
                     and not self.automation_manager.is_selling
+                    and self.running
                 ):
                     if self.target_engaged:
-                        auto_walk_state = "digging"
-                        target_disengaged_time = 0
-                        click_retry_count = 0
-                    elif current_time_ms - wait_for_target_start > get_param(self, "max_wait_time"):
-                        if click_retry_count < max_click_retries:
-                            click_retry_count += 1
+                        self.auto_walk_state = "digging"
+                        self.target_disengaged_time = 0
+                        self.click_retry_count = 0
+                    elif current_time_ms - self.wait_for_target_start > get_param(self, "max_wait_time"):
+                        if self.click_retry_count < max_click_retries:
+                            self.click_retry_count += 1
                             logger.debug(
-                                f"Target engagement timeout - retry {click_retry_count}/{max_click_retries}"
+                                f"Target engagement timeout - retry {self.click_retry_count}/{max_click_retries}"
                             )
 
                             if not self.click_lock.locked():
@@ -1040,26 +1105,26 @@ class DigTool:
                                 threading.Thread(
                                     target=perform_click, args=(self, 0,)
                                 ).start()
-                                wait_for_target_start = current_time_ms
+                                self.wait_for_target_start = current_time_ms
                         else:
                             logger.warning(
                                 f"Target engagement failed after {max_click_retries} retries - advancing pattern"
                             )
                             self.automation_manager.advance_walk_pattern()
-                            click_retry_count = 0
-                            auto_walk_state = "move"
+                            self.click_retry_count = 0
+                            self.auto_walk_state = "move"
 
-                elif auto_walk_state == "digging":
+                elif self.auto_walk_state == "digging" and self.running:
                     if not self.target_engaged:
-                        if target_disengaged_time == 0:
-                            target_disengaged_time = current_time_ms
+                        if self.target_disengaged_time == 0:
+                            self.target_disengaged_time = current_time_ms
                     else:
-                        target_disengaged_time = 0
+                        self.target_disengaged_time = 0
 
             should_allow_clicking = True
             if get_param(self, "auto_walk_enabled"):
                 should_allow_clicking = (
-                    auto_walk_state == "digging"
+                    self.auto_walk_state == "digging"
                     and not self.automation_manager.is_selling
                     and self.target_engaged
                 )
@@ -1195,9 +1260,9 @@ class DigTool:
 
             if (
                 get_param(self, "auto_walk_enabled")
-                and auto_walk_state == "digging"
-                and target_disengaged_time > 0
-                and current_time_ms - target_disengaged_time > 1500
+                and self.auto_walk_state == "digging"
+                and self.target_disengaged_time > 0
+                and current_time_ms - self.target_disengaged_time > 1500
                 and not self.automation_manager.is_selling
             ):
                 self.dig_count += 1
@@ -1225,7 +1290,7 @@ class DigTool:
                         f"Auto-sell triggered! Will sell after {post_dig_delay}ms delay"
                     )
 
-                auto_walk_state = "move"
+                self.auto_walk_state = "move"
                 self.automation_manager.advance_walk_pattern()
                 check_milestone_notifications(self)
                 

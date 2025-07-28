@@ -73,7 +73,7 @@ class PatternManager:
                 {"key": "w", "duration": None, "click": True},
             ],
             "Brick_Pattern": [
-                {"key": "a+shift", "duration": None, "click": True},
+                {"key": "shift+a", "duration": None, "click": True},
                 {"key": "a", "duration": None, "click": True},
                 {"key": "a", "duration": None, "click": True},
                 {"key": "a", "duration": None, "click": True},
@@ -318,7 +318,7 @@ class PatternManager:
                 if "key" in step:
                     processed_pattern.append(
                         {
-                            "key": step["key"].upper().strip(),
+                            "key": step["key"].strip(),
                             "duration": step.get("duration", None),
                             "click": step.get("click", True),
                         }
@@ -327,7 +327,7 @@ class PatternManager:
                     return False, "Invalid pattern format: missing 'key' field"
             elif isinstance(step, str):
                 processed_pattern.append(
-                    {"key": step.upper().strip(), "duration": None, "click": True}
+                    {"key": step.strip(), "duration": None, "click": True}
                 )
             else:
                 return False, "Invalid pattern format"
