@@ -265,7 +265,7 @@ Color locking prevents detection drift by establishing consistent target identif
 The screen capture system operates on a high-performance pipeline designed for real-time processing:
 
 **1. Capture Region Definition**  
-Users define rectangular regions through an interactive selection tool. The region coordinates are stored relative to the selected monitor and persist across application sessions. Smaller regions improve performance by reducing processing overhead.
+Users define rectangular regions through a selection tool.
 
 **2. Real-Time Frame Acquisition**  
 The MSS library captures frames at user-defined intervals. Each frame is immediately converted to a NumPy array format compatible with OpenCV operations.
