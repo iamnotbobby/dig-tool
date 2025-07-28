@@ -3,11 +3,15 @@ on:
   workflow_dispatch:
     inputs:
       override_version:
-        description: 'Override version (leave empty to auto-detect from main.py)'
+        description: 'Override version (leave empty to auto-detect)'
         required: false
         default: ''
       override_beta:
-        description: 'Override beta version (leave empty to auto-detect from main.py)'
+        description: 'Override beta version (leave empty to auto-detect)'
+        required: false
+        default: ''
+      override_release_name:
+        description: 'Override release name (leave empty to auto-generate)'
         required: false
         default: ''
       custom_notes:
@@ -88,13 +92,22 @@ jobs:
           if ($betaVersion) {
             $fullVersion = "$version-beta.$betaVersion"
             $releaseTag = "v$fullVersion"
-            $releaseName = "Beta Release v$fullVersion"
+            $autoReleaseName = "Beta Release v$fullVersion"
             $isBeta = "true"
           } else {
             $fullVersion = $version
             $releaseTag = "v$fullVersion"
-            $releaseName = "Release v$fullVersion"
+            $autoReleaseName = "Release v$fullVersion"
             $isBeta = "false"
+          }
+          
+          $overrideReleaseName = "${{ github.event.inputs.override_release_name }}"
+          if ($overrideReleaseName -and $overrideReleaseName.Trim() -ne "") {
+            $releaseName = $overrideReleaseName.Trim()
+            echo "Using override release name: $releaseName"
+          } else {
+            $releaseName = $autoReleaseName
+            echo "Using auto-generated release name: $releaseName"
           }
           
           echo "version=$version" >> $env:GITHUB_OUTPUT
