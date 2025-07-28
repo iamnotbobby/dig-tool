@@ -3,13 +3,13 @@ import asyncio
 import time
 from PIL import Image, ImageEnhance
 import io
-import pyautogui
 import numpy as np
 from winrt.windows.media.ocr import OcrEngine
 from winrt.windows.graphics.imaging import BitmapDecoder
 from winrt.windows.storage.streams import InMemoryRandomAccessStream, DataWriter
 
 from utils.debug_logger import logger
+from utils.screen_capture import ScreenCapture
 
 
 class BaseOCR:
@@ -149,6 +149,7 @@ class MoneyOCR(BaseOCR):
     def __init__(self):
         super().__init__()
         self.money_area = None
+        self.screen_capture = ScreenCapture()
         
     def select_money_area(self):
         try:
@@ -164,7 +165,12 @@ class MoneyOCR(BaseOCR):
             return None
         
         x, y, width, height = self.money_area
-        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        bbox = (x, y, x + width, y + height)
+        bgr_array = self.screen_capture.capture(bbox, region_key="money")
+        if bgr_array is not None:
+            screenshot = Image.fromarray(bgr_array[:, :, ::-1])
+        else:
+            return None
         return self._process_money_ocr(screenshot, max_retries, retry_delay)
     
     def read_money_from_screenshot(self, full_screenshot, max_retries=3, retry_delay=0.5):
@@ -180,7 +186,12 @@ class MoneyOCR(BaseOCR):
             return None
         
         x, y, width, height = self.money_area
-        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        bbox = (x, y, x + width, y + height)
+        bgr_array = self.screen_capture.capture(bbox, region_key="money_test")
+        if bgr_array is not None:
+            screenshot = Image.fromarray(bgr_array[:, :, ::-1])
+        else:
+            return None
         return self._process_money_ocr(screenshot, 1, 0)
     
     def _process_money_ocr(self, screenshot, max_retries, retry_delay):
@@ -379,6 +390,7 @@ class ItemOCR(BaseOCR):
     def __init__(self):
         super().__init__()
         self.item_area = None
+        self.screen_capture = ScreenCapture()
         
     def select_item_area(self):
         try:
@@ -397,7 +409,12 @@ class ItemOCR(BaseOCR):
             return None
         
         x, y, width, height = self.item_area
-        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        bbox = (x, y, x + width, y + height)
+        bgr_array = self.screen_capture.capture(bbox, region_key="item")
+        if bgr_array is not None:
+            screenshot = Image.fromarray(bgr_array[:, :, ::-1])
+        else:
+            return None
         return self._process_item_ocr(screenshot, max_retries, retry_delay)
     
     def test_item_ocr(self):
@@ -406,7 +423,12 @@ class ItemOCR(BaseOCR):
             return None
         
         x, y, width, height = self.item_area
-        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        bbox = (x, y, x + width, y + height)
+        bgr_array = self.screen_capture.capture(bbox, region_key="item_test")
+        if bgr_array is not None:
+            screenshot = Image.fromarray(bgr_array[:, :, ::-1])
+        else:
+            return None
         result = self._process_item_ocr(screenshot, 1, 0)
         
         if result:

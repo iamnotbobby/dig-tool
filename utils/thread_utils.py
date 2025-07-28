@@ -50,6 +50,10 @@ def check_shutdown(instance):
         perform_final_cleanup(instance)
 
 
+def run_in_background(target, *args):
+    threading.Thread(target=target, args=args, daemon=True).start()
+
+
 def create_daemon_thread(target, args=None, name=None):
     thread = threading.Thread(
         target=target,

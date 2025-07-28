@@ -3,9 +3,11 @@ import time
 import io
 import json
 import threading
-from PIL import ImageGrab
+import tkinter as tk
 from utils.debug_logger import logger
 from utils.config_management import get_param
+from utils.thread_utils import run_in_background
+from utils.screen_capture import ScreenCapture
 
 
 class DiscordNotifier:
@@ -14,6 +16,10 @@ class DiscordNotifier:
         self.stats_message_id = None
         self.guild_id = None
         self.channel_id = None
+        self.last_screenshot_time = 0
+        self.live_stats_thread = None
+        self.live_stats_running = False
+        self.screen_capture = ScreenCapture()
         self.previous_stats = {
             'digs': 0,
             'clicks': 0,
@@ -37,23 +43,16 @@ class DiscordNotifier:
         if not self.guild_id:
             logger.warning("Server ID not set - message links disabled. Set Discord Server ID in settings to enable message links.")
             return None
-            
-        if self.guild_id and self.channel_id and self.stats_message_id:
-            return f"https://discord.com/channels/{self.guild_id}/{self.channel_id}/{self.stats_message_id}"
-        else:
-            return None
+        return f"https://discord.com/channels/{self.guild_id}/{self.channel_id}/{self.stats_message_id}" if self.guild_id and self.channel_id and self.stats_message_id else None
 
     def _capture_screenshot(self, screenshot_area=None):
         try:
             if screenshot_area:
                 x, y, width, height = screenshot_area
-                screenshot = ImageGrab.grab(bbox=(x, y, x + width, y + height))
+                bbox = (x, y, x + width, y + height)
+                return self.screen_capture.capture_for_discord(bbox)
             else:
-                screenshot = ImageGrab.grab()
-            buffer = io.BytesIO()
-            screenshot.save(buffer, format='PNG')
-            buffer.seek(0)
-            return buffer
+                return self.screen_capture.capture_for_discord()
         except Exception as e:
             logger.error(f"Error capturing screenshot: {e}")
             return None
@@ -63,17 +62,15 @@ class DiscordNotifier:
             logger.warning("Discord webhook URL not set!")
             return False
 
-        buffer = None
-        if include_screenshot:
-            buffer = self._capture_screenshot(screenshot_area)
-            if not buffer:
-                include_screenshot = False
+        buffer = self._capture_screenshot(screenshot_area) if include_screenshot else None
+        if include_screenshot and not buffer:
+            include_screenshot = False
 
         try:
             if include_screenshot and buffer:
                 files = {
                     "payload_json": (None, json.dumps(payload), "application/json"),
-                    "file": ("screenshot.png", buffer, "image/png")
+                    "file": ("screenshot.webp", buffer, "image/webp")
                 }
                 response = requests.post(str(self.webhook_url), files=files, timeout=10)
             else:
@@ -96,77 +93,82 @@ class DiscordNotifier:
                     pass
 
     def send_notification(self, message, user_id=None, color=0x00ff00, include_screenshot=False, screenshot_area=None):
-        content = f"<@{user_id}>" if user_id else ""
-        embed = {
-            "title": "Dig Tool Notification",
-            "description": message,
-            "color": color,
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
-            "image": {"url": "attachment://screenshot.png"} if include_screenshot else None
+        payload = {
+            "content": f"<@{user_id}>" if user_id else "",
+            "embeds": [{
+                "title": "Dig Tool Notification",
+                "description": message,
+                "color": color,
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
+                "image": {"url": "attachment://screenshot.webp"} if include_screenshot else None
+            }]
         }
-        payload = {"content": content, "embeds": [embed]}
-        result = self._send_webhook_request(payload, include_screenshot, screenshot_area)
-        return bool(result)
+        return bool(self._send_webhook_request(payload, include_screenshot, screenshot_area))
 
     def send_initial_stats_message(self, user_id=None):
-        embed = {
-            "title": "📊 Dig Tool Status",
-            "color": 0x5865F2,
-            "fields": [
-                {"name": "⛏️ Digs", "value": "0", "inline": True},
-                {"name": "🖱️ Clicks", "value": "0", "inline": True},
-                {"name": "💰 Current Money", "value": "Not detected", "inline": True},
-                {"name": "📦 Items Found", "value": "No items found yet", "inline": False}
-            ],
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
-            "footer": {"text": "Live Stats"}
+        payload = {
+            "content": f"<@{user_id}>" if user_id else "",
+            "embeds": [{
+                "title": "📊 Dig Tool Status",
+                "color": 0x5865F2,
+                "fields": [
+                    {"name": "⛏️ Digs", "value": "0", "inline": True},
+                    {"name": "🖱️ Clicks", "value": "0", "inline": True},
+                    {"name": "💰 Current Money", "value": "Not detected", "inline": True},
+                    {"name": "📦 Items Found", "value": "No items found yet", "inline": False}
+                ],
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
+                "footer": {"text": "Live Stats"}
+            }]
         }
 
-        content = f"<@{user_id}>" if user_id else ""
-        payload = {"content": content, "embeds": [embed]}
-
         try:
-            webhook_url_with_wait = f"{str(self.webhook_url)}?wait=true"
-            response = requests.post(webhook_url_with_wait, json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
-
+            response = requests.post(f"{str(self.webhook_url)}?wait=true", json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
             if response.status_code in [200, 204]:
                 if response.text and response.text.strip():
                     try:
                         response_data = response.json()
                         self.stats_message_id = response_data.get('id')
                         self._extract_channel_id_from_response(response_data)
-                        
                         logger.info(f"Initial stats message sent, ID: {self.stats_message_id}")
                         
                         stats_link = self._get_stats_message_link()
                         if stats_link:
                             logger.info(f"Stats message link ready: {stats_link}")
+                        elif not self.guild_id:
+                            logger.info("Set Discord Server ID in settings to enable message links")
                         else:
-                            if not self.guild_id:
-                                logger.info("Set Discord Server ID in settings to enable message links")
-                            else:
-                                logger.warning("Could not generate stats message link")
-                        
-                        return True
+                            logger.warning("Could not generate stats message link")
                     except Exception as e:
                         logger.warning(f"Could not parse response JSON: {e}")
                         logger.info("Initial stats message sent successfully (no message ID)")
-                        return True
                 else:
                     logger.info("Initial stats message sent successfully (no message ID)")
-                    return True
+                return True
             else:
                 logger.error(f"Failed to send initial stats message: {response.status_code} - {response.text}")
                 return False
-                
         except Exception as e:
             logger.error(f"Error sending initial stats message: {e}")
             return False
 
-    def update_stats_message(self, digs, clicks=0, money_value=None, item_counts=None, dig_tool_instance=None):
+    def update_stats_message(self, digs, clicks=0, money_value=None, item_counts=None, dig_tool_instance=None, include_screenshot=None):
         if not self.webhook_url or not self.stats_message_id:
             logger.error(f"Cannot update stats: webhook_url={bool(self.webhook_url)}, message_id={bool(self.stats_message_id)}")
             return False
+
+        if include_screenshot is None and dig_tool_instance:
+            live_stats_screenshots_enabled = get_param(dig_tool_instance, "live_stats_screenshots_enabled")
+            live_stats_screenshot_interval = get_param(dig_tool_instance, "live_stats_screenshot_interval")
+            if live_stats_screenshots_enabled and live_stats_screenshot_interval:
+                current_time = time.time()
+                if current_time - self.last_screenshot_time >= live_stats_screenshot_interval:
+                    include_screenshot = True
+                    self.last_screenshot_time = current_time
+                else:
+                    include_screenshot = False
+            else:
+                include_screenshot = False
 
         dig_increase = digs - self.previous_stats['digs']
         click_increase = clicks - self.previous_stats['clicks']
@@ -206,6 +208,9 @@ class DiscordNotifier:
         else:
             embed["fields"].append({"name": "📦 Items Found", "value": "No items found yet", "inline": False})
 
+        if include_screenshot:
+            embed["image"] = {"url": "attachment://screenshot.webp"}
+
         payload = {"embeds": [embed]}
 
         try:
@@ -215,7 +220,28 @@ class DiscordNotifier:
             
             edit_url = f"https://discord.com/api/webhooks/{webhook_id}/{webhook_token}/messages/{self.stats_message_id}"
             
-            response = requests.patch(edit_url, json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
+            if include_screenshot:
+                buffer = self._capture_screenshot()
+                if buffer:
+                    try:
+                        payload["attachments"] = []
+                        files = {
+                            "payload_json": (None, json.dumps(payload), "application/json"),
+                            "file": ("screenshot.webp", buffer, "image/webp")
+                        }
+                        response = requests.patch(edit_url, files=files, timeout=10)
+                    finally:
+                        try:
+                            buffer.close()
+                        except:
+                            pass
+                else:
+                    embed.pop("image", None)
+                    payload = {"embeds": [embed], "attachments": []}
+                    response = requests.patch(edit_url, json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
+            else:
+                payload = {"embeds": [embed], "attachments": []}
+                response = requests.patch(edit_url, json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
 
             if response.status_code in [200, 204]:
                 logger.info("Stats message updated successfully")
@@ -262,7 +288,7 @@ class DiscordNotifier:
                 description_parts.append(f"*{' • '.join(increments)} since last milestone*")
 
         if include_screenshot:
-            embed["image"] = {"url": "attachment://screenshot.png"}
+            embed["image"] = {"url": "attachment://screenshot.webp"}
         
         stats_link = self._get_stats_message_link()
         if stats_link:
@@ -279,26 +305,23 @@ class DiscordNotifier:
         return self.send_notification(f"⚠️ Error occurred: {error_message}", user_id, 0xFF9900)
 
     def test_webhook(self, user_id=None, include_screenshot=False):
-        embed = {
-            "title": "🧪 Test Notification",
-            "description": "Discord integration is working!",
-            "color": 0x57F287,
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
-            "footer": {"text": "Dig Tool"}
-        }
-
+        description = "Discord integration is working!"
         stats_link = self._get_stats_message_link()
         if stats_link:
-            embed["description"] += f"\n[📊 View Live Stats]({stats_link})"
+            description += f"\n[📊 View Live Stats]({stats_link})"
 
-        if include_screenshot:
-            embed["image"] = {"url": "attachment://screenshot.png"}
-
-        content = f"<@{user_id}>" if user_id else ""
-        payload = {"content": content, "embeds": [embed]}
-
-        result = self._send_webhook_request(payload, include_screenshot)
-        return bool(result)
+        payload = {
+            "content": f"<@{user_id}>" if user_id else "",
+            "embeds": [{
+                "title": "🧪 Test Notification",
+                "description": description,
+                "color": 0x57F287,
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
+                "footer": {"text": "Dig Tool"},
+                "image": {"url": "attachment://screenshot.webp"} if include_screenshot else None
+            }]
+        }
+        return bool(self._send_webhook_request(payload, include_screenshot))
 
     def send_startup_notification(self, user_id=None):
         startup_success = self.send_notification("🟢 Bot started and ready!", user_id, 0x57F287)
@@ -307,6 +330,64 @@ class DiscordNotifier:
 
     def send_shutdown_notification(self, user_id=None):
         return self.send_notification("🔴 Bot stopped.", user_id, 0xED4245)
+
+    def start_live_stats_thread(self, dig_tool_instance):
+        if self.live_stats_thread and self.live_stats_thread.is_alive():
+            return  # Already running
+        
+        self.live_stats_running = True
+        self.live_stats_thread = threading.Thread(target=self._live_stats_worker, args=(dig_tool_instance,), daemon=True)
+        self.live_stats_thread.start()
+        logger.info("Live stats background thread started")
+
+    def stop_live_stats_thread(self):
+        self.live_stats_running = False
+        if self.live_stats_thread and self.live_stats_thread.is_alive():
+            self.live_stats_thread.join(timeout=2)
+        logger.info("Live stats background thread stopped")
+
+    def _live_stats_worker(self, dig_tool_instance):
+        while self.live_stats_running:
+            try:
+                if not self.stats_message_id:
+                    time.sleep(5)
+                    continue
+
+                live_stats_screenshots_enabled = get_param(dig_tool_instance, "live_stats_screenshots_enabled")
+                live_stats_screenshot_interval = get_param(dig_tool_instance, "live_stats_screenshot_interval")
+                if live_stats_screenshots_enabled and live_stats_screenshot_interval:
+                    current_time = time.time()
+                    if current_time - self.last_screenshot_time >= live_stats_screenshot_interval:
+                        try:
+                            money_value = None
+                            enable_money_detection = get_param(dig_tool_instance, "enable_money_detection")
+                            if enable_money_detection and hasattr(dig_tool_instance, 'money_ocr') and dig_tool_instance.money_ocr:
+                                try:
+                                    money_value = dig_tool_instance.money_ocr.read_money_value()
+                                except Exception as e:
+                                    logger.debug(f"Money OCR failed: {e}")
+                            
+                            item_counts = None
+                            if hasattr(dig_tool_instance, 'item_counts_since_startup'):
+                                item_counts = dig_tool_instance.item_counts_since_startup.copy()
+                            
+                            self.update_stats_message(
+                                digs=dig_tool_instance.dig_count,
+                                clicks=getattr(dig_tool_instance, 'click_count', 0),
+                                money_value=money_value,
+                                item_counts=item_counts,
+                                dig_tool_instance=dig_tool_instance,
+                                include_screenshot=True
+                            )
+                            self.last_screenshot_time = current_time
+                            logger.debug(f"Live stats screenshot sent (interval: {live_stats_screenshot_interval}s)")
+                        except Exception as e:
+                            logger.error(f"Error in live stats update: {e}")
+                
+                time.sleep(1)
+            except Exception as e:
+                logger.error(f"Error in live stats worker: {e}")
+                time.sleep(5)
 
     def send_item_notification(self, rarity, user_id=None, include_screenshot=False, full_item_text=None, item_area=None):
         rarity_colors = {
@@ -329,7 +410,7 @@ class DiscordNotifier:
         }
 
         if include_screenshot:
-            embed["image"] = {"url": "attachment://screenshot.png"}
+            embed["image"] = {"url": "attachment://screenshot.webp"}
 
         stats_link = self._get_stats_message_link()
         if stats_link:
@@ -344,53 +425,46 @@ class DiscordNotifier:
 
 def test_discord_ping(dig_tool_instance):
     try:
-        import tkinter as tk
-        webhook_url = dig_tool_instance.param_vars.get('webhook_url', tk.StringVar()).get()
-        server_id = dig_tool_instance.param_vars.get('server_id', tk.StringVar()).get()
-        include_screenshot = dig_tool_instance.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
-        user_id = dig_tool_instance.param_vars.get('user_id', tk.StringVar()).get()
-
+        webhook_url = get_param(dig_tool_instance, "webhook_url")
         if not webhook_url:
             dig_tool_instance.update_status("Webhook URL not set!")
             return
 
         dig_tool_instance.update_status("Testing Discord ping...")
         dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+        server_id = get_param(dig_tool_instance, "server_id")
         if server_id:
             dig_tool_instance.discord_notifier.set_server_id(server_id)
 
         def test_and_report():
             try:
-                success = dig_tool_instance.discord_notifier.test_webhook(user_id if user_id else None, include_screenshot)
-                status = "Discord ping test completed successfully!" if success else "Discord ping test failed!"
-                dig_tool_instance.update_status(status)
+                user_id = get_param(dig_tool_instance, "user_id")
+                include_screenshot = get_param(dig_tool_instance, "include_screenshot_in_discord")
+                success = dig_tool_instance.discord_notifier.test_webhook(user_id or None, include_screenshot)
+                dig_tool_instance.update_status("Discord ping test completed successfully!" if success else "Discord ping test failed!")
             except Exception as e:
                 dig_tool_instance.update_status(f"Discord ping test error: {e}")
                 logger.error(f"Discord ping test error: {e}")
         
-        threading.Thread(target=test_and_report, daemon=True).start()
-
+        run_in_background(test_and_report)
     except Exception as e:
         dig_tool_instance.update_status(f"Discord ping test error: {e}")
 
 
 def check_milestone_notifications(dig_tool_instance):
     try:
-        import tkinter as tk
-        webhook_url = dig_tool_instance.param_vars.get('webhook_url', tk.StringVar()).get()
-        server_id = dig_tool_instance.param_vars.get('server_id', tk.StringVar()).get()
-        include_screenshot = dig_tool_instance.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
-        user_id = dig_tool_instance.param_vars.get('user_id', tk.StringVar()).get()
-        milestone_interval = dig_tool_instance.param_vars.get('milestone_interval', tk.IntVar()).get()
-        enable_money_detection = dig_tool_instance.param_vars.get('enable_money_detection', tk.BooleanVar()).get()
-
-        if not webhook_url or milestone_interval <= 0:
+        webhook_url = get_param(dig_tool_instance, "webhook_url")
+        if not webhook_url:
             return
 
-        if (dig_tool_instance.dig_count > 0 and 
-            dig_tool_instance.dig_count % milestone_interval == 0 and 
-            dig_tool_instance.dig_count != dig_tool_instance.last_milestone_notification):
-            
+        milestone_interval = get_param(dig_tool_instance, "milestone_interval")
+        should_send_milestone = (milestone_interval > 0 and 
+                               dig_tool_instance.dig_count > 0 and 
+                               dig_tool_instance.dig_count % milestone_interval == 0 and 
+                               dig_tool_instance.dig_count != dig_tool_instance.last_milestone_notification)
+
+        if should_send_milestone:
+            enable_money_detection = get_param(dig_tool_instance, "enable_money_detection")
             if enable_money_detection:
                 if not dig_tool_instance.money_ocr.initialized:
                     if not dig_tool_instance.money_ocr.initialize_ocr():
@@ -398,58 +472,75 @@ def check_milestone_notifications(dig_tool_instance):
                 
                 if not dig_tool_instance.money_ocr.money_area:
                     dig_tool_instance.update_status("Select money area for Discord notifications...")
-                    
                     def select_area_and_continue():
                         try:
                             if dig_tool_instance.money_ocr.select_money_area():
                                 dig_tool_instance.update_status("Money area selected")
-                                _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot)
+                                _send_milestone_with_money(dig_tool_instance, skip_ocr=False)
                             else:
                                 dig_tool_instance.update_status("Money area not selected, sending milestone without money value")
-                                _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot, skip_ocr=True)
+                                _send_milestone_with_money(dig_tool_instance, skip_ocr=True)
                         except Exception as e:
                             logger.error(f"Error in area selection: {e}")
-                            _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot, skip_ocr=True)
-                    
-                    threading.Thread(target=select_area_and_continue, daemon=True).start()
+                            _send_milestone_with_money(dig_tool_instance, skip_ocr=True)
+                    run_in_background(select_area_and_continue)
                 else:
-                    _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot)
+                    _send_milestone_with_money(dig_tool_instance, skip_ocr=False)
             else:
-                _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot, skip_ocr=True)
+                _send_milestone_with_money(dig_tool_instance, skip_ocr=True)
             
-            if hasattr(dig_tool_instance, 'discord_notifier') and dig_tool_instance.discord_notifier.stats_message_id:
+            dig_tool_instance.last_milestone_notification = dig_tool_instance.dig_count
+        
+        should_update_stats = (hasattr(dig_tool_instance, 'discord_notifier') and 
+                              dig_tool_instance.discord_notifier.stats_message_id)
+
+        if should_update_stats:
+            money_value = None
+            enable_money_detection = get_param(dig_tool_instance, "enable_money_detection")
+            if enable_money_detection and hasattr(dig_tool_instance, 'money_ocr') and dig_tool_instance.money_ocr:
                 try:
-                    money_value = None
-                    if enable_money_detection and hasattr(dig_tool_instance, 'money_ocr') and dig_tool_instance.money_ocr:
-                        try:
-                            money_value = dig_tool_instance.money_ocr.read_money_value()
-                        except Exception as e:
-                            logger.debug(f"Money OCR failed: {e}")
-                    
-                    item_counts = None
-                    if hasattr(dig_tool_instance, 'item_counts_since_startup'):
-                        item_counts = dig_tool_instance.item_counts_since_startup.copy()
-                    
-                    success = dig_tool_instance.discord_notifier.update_stats_message(
+                    money_value = dig_tool_instance.money_ocr.read_money_value()
+                except Exception as e:
+                    logger.debug(f"Money OCR failed: {e}")
+            
+            item_counts = None
+            if hasattr(dig_tool_instance, 'item_counts_since_startup'):
+                item_counts = dig_tool_instance.item_counts_since_startup.copy()
+            
+            live_stats_per_dig_enabled = get_param(dig_tool_instance, "live_stats_per_dig_enabled")
+            if live_stats_per_dig_enabled:
+                try:
+                    dig_tool_instance.discord_notifier.update_stats_message(
+                        digs=dig_tool_instance.dig_count,
+                        clicks=getattr(dig_tool_instance, 'click_count', 0),
+                        money_value=money_value,
+                        item_counts=item_counts,
+                        dig_tool_instance=dig_tool_instance,
+                        include_screenshot=False
+                    )
+                except Exception as e:
+                    logger.error(f"Error updating Discord stats: {e}")
+            elif not should_send_milestone:
+                try:
+                    dig_tool_instance.discord_notifier.update_stats_message(
                         digs=dig_tool_instance.dig_count,
                         clicks=getattr(dig_tool_instance, 'click_count', 0),
                         money_value=money_value,
                         item_counts=item_counts,
                         dig_tool_instance=dig_tool_instance
                     )
-                    
                 except Exception as e:
                     logger.error(f"Error updating Discord stats: {e}")
-            
-            dig_tool_instance.last_milestone_notification = dig_tool_instance.dig_count
 
     except Exception as e:
         logger.error(f"Error in check_milestone_notifications: {e}")
         dig_tool_instance.update_status(f"Milestone notification error: {e}")
 
 
-def _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot, skip_ocr=False):
+def _send_milestone_with_money(dig_tool_instance, skip_ocr=False):
+    webhook_url = get_param(dig_tool_instance, "webhook_url")
     dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+    server_id = get_param(dig_tool_instance, "server_id")
     if server_id:
         dig_tool_instance.discord_notifier.set_server_id(server_id)
     
@@ -465,8 +556,8 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_i
             success = dig_tool_instance.discord_notifier.send_milestone_notification(
                 digs=dig_tool_instance.dig_count,
                 clicks=0,
-                user_id=user_id if user_id else None,
-                include_screenshot=include_screenshot,
+                user_id=get_param(dig_tool_instance, "user_id") or None,
+                include_screenshot=get_param(dig_tool_instance, "include_screenshot_in_discord"),
                 money_value=money_value,
                 item_counts=dig_tool_instance.item_counts_since_startup.copy(),
                 dig_tool_instance=dig_tool_instance
@@ -476,41 +567,37 @@ def _send_milestone_with_money(dig_tool_instance, webhook_url, server_id, user_i
         except Exception as e:
             logger.error(f"Error in milestone notification thread: {e}")
     
-    threading.Thread(target=send_milestone, daemon=True).start()
+    run_in_background(send_milestone)
 
 
 def send_startup_notification(dig_tool_instance):
     try:
-        import tkinter as tk
-        webhook_url = dig_tool_instance.param_vars.get("webhook_url", tk.StringVar()).get()
-        server_id = dig_tool_instance.param_vars.get("server_id", tk.StringVar()).get()
-        user_id = dig_tool_instance.param_vars.get("user_id", tk.StringVar()).get()
+        webhook_url = get_param(dig_tool_instance, "webhook_url")
         if webhook_url:
             dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+            server_id = get_param(dig_tool_instance, "server_id")
             if server_id:
                 dig_tool_instance.discord_notifier.set_server_id(server_id)
             
             def send_startup():
                 try:
+                    user_id = get_param(dig_tool_instance, "user_id")
                     success = dig_tool_instance.discord_notifier.send_startup_notification(user_id)
+                    if success:
+                        dig_tool_instance.discord_notifier.start_live_stats_thread(dig_tool_instance)
                     if not success:
                         logger.error("Failed to send startup notification")
                 except Exception as e:
                     logger.error(f"Error in startup notification thread: {e}")
             
-            threading.Thread(target=send_startup, daemon=True).start()
+            run_in_background(send_startup)
     except Exception as e:
         logger.error(f"Error in send_startup_notification: {e}")
 
 
 def check_item_notifications(dig_tool_instance):
     try:
-        import tkinter as tk
-        webhook_url = dig_tool_instance.param_vars.get('webhook_url', tk.StringVar()).get()
-        server_id = dig_tool_instance.param_vars.get('server_id', tk.StringVar()).get()
-        include_screenshot = dig_tool_instance.param_vars.get('include_screenshot_in_discord', tk.BooleanVar()).get()
-        user_id = dig_tool_instance.param_vars.get('user_id', tk.StringVar()).get()
-
+        webhook_url = get_param(dig_tool_instance, "webhook_url")
         if not webhook_url:
             return
 
@@ -529,22 +616,24 @@ def check_item_notifications(dig_tool_instance):
                 try:
                     if dig_tool_instance.item_ocr.select_item_area():
                         dig_tool_instance.update_status("Item area selected")
-                        _check_item_text(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot)
+                        _check_item_text(dig_tool_instance)
                     else:
                         dig_tool_instance.update_status("Item area not selected")
                 except Exception as e:
                     logger.error(f"Error in item area selection: {e}")
             
-            threading.Thread(target=select_area_and_continue, daemon=True).start()
+            run_in_background(select_area_and_continue)
         else:
-            _check_item_text(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot)
+            _check_item_text(dig_tool_instance)
 
     except Exception as e:
         logger.error(f"Error in check_item_notifications: {e}")
 
 
-def _check_item_text(dig_tool_instance, webhook_url, server_id, user_id, include_screenshot):
+def _check_item_text(dig_tool_instance):
+    webhook_url = get_param(dig_tool_instance, "webhook_url")
     dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+    server_id = get_param(dig_tool_instance, "server_id")
     if server_id:
         dig_tool_instance.discord_notifier.set_server_id(server_id)
     
@@ -571,8 +660,10 @@ def _check_item_text(dig_tool_instance, webhook_url, server_id, user_id, include
                     
                     if rarity.lower() in [r.lower() for r in notification_rarities]:
                         item_area = dig_tool_instance.item_ocr.item_area if hasattr(dig_tool_instance.item_ocr, 'item_area') else None
+                        user_id = get_param(dig_tool_instance, "user_id")
+                        include_screenshot = get_param(dig_tool_instance, "include_screenshot_in_discord")
                         success = dig_tool_instance.discord_notifier.send_item_notification(
-                            rarity, user_id if user_id else None, include_screenshot, item_text, item_area)
+                            rarity, user_id or None, include_screenshot, item_text, item_area)
                         if success:
                             dig_tool_instance.update_status(f"Notified: {item_text}")
                         else:
@@ -581,28 +672,28 @@ def _check_item_text(dig_tool_instance, webhook_url, server_id, user_id, include
         except Exception as e:
             logger.error(f"Error in item check thread: {e}")
     
-    threading.Thread(target=check_item, daemon=True).start()
+    run_in_background(check_item)
 
 
 def send_shutdown_notification(dig_tool_instance):
     try:
-        import tkinter as tk
-        webhook_url = dig_tool_instance.param_vars.get("webhook_url", tk.StringVar()).get()
-        server_id = dig_tool_instance.param_vars.get("server_id", tk.StringVar()).get()
-        user_id = dig_tool_instance.param_vars.get("user_id", tk.StringVar()).get()
+        webhook_url = get_param(dig_tool_instance, "webhook_url")
         if webhook_url:
             dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
+            server_id = get_param(dig_tool_instance, "server_id")
             if server_id:
                 dig_tool_instance.discord_notifier.set_server_id(server_id)
+            dig_tool_instance.discord_notifier.stop_live_stats_thread()
             
             def send_shutdown():
                 try:
+                    user_id = get_param(dig_tool_instance, "user_id")
                     success = dig_tool_instance.discord_notifier.send_shutdown_notification(user_id)
                     if not success:
                         logger.error("Failed to send shutdown notification")
                 except Exception as e:
                     logger.error(f"Error in shutdown notification thread: {e}")
             
-            threading.Thread(target=send_shutdown, daemon=True).start()
+            run_in_background(send_shutdown)
     except Exception as e:
         logger.error(f"Error in send_shutdown_notification: {e}")

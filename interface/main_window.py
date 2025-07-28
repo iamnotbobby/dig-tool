@@ -197,6 +197,7 @@ class MainWindow:
         self.money_detection_dependent_widgets = []
         self.item_detection_dependent_widgets = []
         self.walkspeed_dependent_widgets = []
+        self.live_stats_screenshot_dependent_widgets = []
         self.money_test_button = None
         self.item_test_button = None
         self.disabled_tooltips = []
@@ -603,6 +604,12 @@ class MainWindow:
             if hasattr(widget, 'config'):
                 widget.config(state='normal' if walkspeed_enabled else 'disabled')
 
+        # Live stats screenshot dependent widgets
+        live_stats_screenshot_enabled = self.dig_tool.param_vars.get('live_stats_screenshots_enabled', tk.BooleanVar()).get()
+        for widget in self.live_stats_screenshot_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if live_stats_screenshot_enabled else 'disabled')
+
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
                 if tooltip.widget_type == 'shovel':
@@ -624,6 +631,8 @@ class MainWindow:
                         tooltip.set_disabled(True, "Disabled: Enable Post-Sell Engagement Monitoring first.")
                     else:
                         tooltip.set_disabled(False, "")
+                elif tooltip.widget_type == 'live_stats_screenshot':
+                    tooltip.set_disabled(not live_stats_screenshot_enabled, "Disabled: Enable Live Stats Screenshots first.")
 
         if self.money_test_button:
             money_area_set = self.is_money_area_set()
@@ -1268,7 +1277,6 @@ class MainWindow:
         auto_rejoin_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Auto-Rejoin Settings",
                                                       "#f0f0f8")
         rejoin_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Auto-Rejoin", 'auto_rejoin_enabled')
-        Tooltip(rejoin_checkbox, "Automatically rejoin Roblox servers when disconnected or kicked")
         
         create_param_entry(auto_rejoin_subsection.content, "Server Link:", 'roblox_server_link')
         
@@ -1277,17 +1285,26 @@ class MainWindow:
         create_param_entry(auto_rejoin_subsection.content, "Restart Delay (seconds):", 'auto_rejoin_restart_delay')
         
         discord_notif_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Discord Notifications", 'auto_rejoin_discord_notifications')
-        Tooltip(discord_notif_checkbox, "Send Discord notifications for disconnections and rejoin attempts")
 
         # ===== DISCORD PANE =====
         create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Server ID:", 'server_id')
         create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
         create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
-        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
+        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Milestone Notifications",
                               'include_screenshot_in_discord')
-
+        
+        live_stats_per_dig_checkbox = create_checkbox_param(panes['discord'].sub_frame, "Update Per Dig", 
+                              'live_stats_per_dig_enabled')
+        
         create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
+
+        live_stats_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Live Stats Screenshots",
+                                                     "#f0f8ff")
+        live_stats_checkbox = create_checkbox_param(live_stats_subsection.content, "Enable Live Stats Screenshots", 
+                              'live_stats_screenshots_enabled')
+        live_stats_interval_entry = create_param_entry(live_stats_subsection.content, "Screenshot Every X Seconds:", 
+                          'live_stats_screenshot_interval', self.live_stats_screenshot_dependent_widgets, 'live_stats_screenshot')
 
         money_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Money Detection",
                                                            "#e8f8e8")
@@ -1425,6 +1442,7 @@ class MainWindow:
         self.dig_tool.param_vars['velocity_based_width_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['auto_sell_target_engagement_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['dynamic_walkspeed_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['live_stats_screenshots_enabled'].trace_add('write', self.update_dependent_widgets_state)
 
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         

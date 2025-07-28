@@ -93,7 +93,10 @@ class SettingsManager:
             "include_screenshot_in_discord": False,
             "enable_money_detection": False,
             "enable_item_detection": False,
-            "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"]
+            "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"],
+            "live_stats_screenshots_enabled": False,
+            "live_stats_screenshot_interval": 30,
+            "live_stats_per_dig_enabled": False
         }
 
         self.param_descriptions = {
@@ -162,7 +165,10 @@ class SettingsManager:
             "roblox_server_link": "Roblox server link to rejoin (supports share links and direct game URLs).",
             "rejoin_check_interval": "How often to check for disconnection and attempt rejoining (minimum 10 seconds).",
             "auto_rejoin_restart_delay": "Seconds to wait before restarting automation after successful rejoin (minimum 5 seconds).",
-            "auto_rejoin_discord_notifications": "Send Discord notifications for disconnections and rejoin attempts."
+            "auto_rejoin_discord_notifications": "Send Discord notifications for disconnections and rejoin attempts.",
+            "live_stats_screenshots_enabled": "Include screenshots in live stats message updates (off by default).",
+            "live_stats_screenshot_interval": "Update live stats message with screenshot every X seconds.",
+            "live_stats_per_dig_enabled": "Update Discord stats message after every dig (real-time updates)."
         }
 
         self.default_keybinds = {
@@ -331,12 +337,14 @@ class SettingsManager:
                 ("rejoin_check_interval",): (10, None),
                 ("auto_rejoin_restart_delay",): (5, None),
                 ("shovel_slot",): (0, 9),
-                ("shovel_timeout",): (1, None)
+                ("shovel_timeout",): (1, None),
+                ("live_stats_screenshot_interval",): (1, None)
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
                 "sell_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
-                "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps"
+                "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps",
+                "milestone_interval", "initial_item_count", "rejoin_check_interval", "live_stats_screenshot_interval"
             ],
             "float_ranges": {
                 ("velocity_width_multiplier",): (0.0, 5.0),
@@ -349,7 +357,8 @@ class SettingsManager:
                 "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_enabled",
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
                 "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "use_color_picker_detection",
-                "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications"
+                "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications",
+                "include_screenshot_in_discord", "live_stats_screenshots_enabled", "live_stats_per_dig_enabled"
             ],
             "string_params": ["user_id", "server_id", "webhook_url", "roblox_server_link"]
         }
@@ -508,7 +517,7 @@ class SettingsManager:
                         value = get_param(self.dig_tool, key)
 
                         if (
-                            key in ["user_id", "server_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord", "notification_rarities"]
+                            key in ["user_id", "server_id", "webhook_url", "milestone_interval", "money_area", "item_area", "include_screenshot_in_discord", "notification_rarities", "live_stats_screenshots_enabled", "live_stats_screenshot_interval", "live_stats_per_dig_enabled"]
                             and export_options
                             and not export_options.get("discord", True)
                         ):
