@@ -39,6 +39,7 @@ import queue
 from utils.system_utils import (
     set_dig_tool_instance,
     check_display_scale,
+    check_beta_version_warning,
     calculate_window_dimensions,
     get_cached_system_latency,
     update_time_cache,
@@ -108,6 +109,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 check_display_scale()
+check_beta_version_warning(VERSION_BETA)
 
 
 class DigTool:

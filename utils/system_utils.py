@@ -93,6 +93,9 @@ def check_display_scale():
         if scale != 100:
             root = tk.Tk()
             root.withdraw()
+            root.attributes('-topmost', True)
+            root.grab_set()
+            
             result = messagebox.askquestion(
                 "Display Scaling Warning",
                 f"Your Windows display scaling (DPI) is set to {scale}%.\n\n"
@@ -104,6 +107,7 @@ def check_display_scale():
                 "3. Restart this application\n\n"
                 "Do you want to continue anyway?",
                 icon="warning",
+                parent=root
             )
             root.destroy()
 
@@ -112,12 +116,38 @@ def check_display_scale():
                 sys.exit(0)
             else:
                 logger.warning(
-                    f"User chose to continue with {scale}% display scaling - detection may be unreliable"
+                    f"User chose to continue with {scale}% display scaling"
                 )
         else:
             logger.info("Display scaling check passed (100%)")
     except Exception as e:
         logger.warning(f"Could not detect display scaling: {e}")
+        pass
+
+
+def check_beta_version_warning(version_beta=None):
+    try:
+        if version_beta is not None:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            root.grab_set()
+            
+            messagebox.showwarning(
+                "Beta Version Warning",
+                "You are on a BETA version!\n\n"
+                "Do not expect to get support without using the appropriate channels in the Discord.\n\n"
+                "Please consider getting the beta role.",
+                icon="warning",
+                parent=root
+            )
+            root.destroy()
+            
+            logger.warning(f"Beta version warning shown (VERSION_BETA = {version_beta})")
+        else:
+            pass
+    except Exception as e:
+        logger.warning(f"Could not check beta version: {e}")
         pass
 
 
