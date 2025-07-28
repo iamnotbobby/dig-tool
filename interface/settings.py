@@ -166,9 +166,9 @@ class SettingsManager:
             "rejoin_check_interval": "How often to check for disconnection and attempt rejoining (minimum 10 seconds).",
             "auto_rejoin_restart_delay": "Seconds to wait before restarting automation after successful rejoin (minimum 5 seconds).",
             "auto_rejoin_discord_notifications": "Send Discord notifications for disconnections and rejoin attempts.",
-            "live_stats_screenshots_enabled": "Include screenshots in live stats message updates (off by default).",
+            "live_stats_screenshots_enabled": "Include screenshots in live stats message updates.",
             "live_stats_screenshot_interval": "Update live stats message with screenshot every X seconds.",
-            "live_stats_per_dig_enabled": "Update Discord stats message after every dig (real-time updates)."
+            "live_stats_per_dig_enabled": "Update Discord stats message after every dig."
         }
 
         self.default_keybinds = {
