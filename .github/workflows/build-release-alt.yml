@@ -2,19 +2,14 @@ name: Build and Release
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Release tag (e.g., v1.0-beta)'
-        required: true
-        default: 'v1.0-beta'
-      release_name:
-        description: 'Release name'
-        required: true
-        default: 'Beta Release v1.0'
-      is_beta_release:
-        description: 'Mark as beta release'
+      override_version:
+        description: 'Override version (leave empty to auto-detect from main.py)'
         required: false
-        default: true
-        type: boolean
+        default: ''
+      override_beta:
+        description: 'Override beta version (leave empty to auto-detect from main.py)'
+        required: false
+        default: ''
       custom_notes:
         description: 'Additional release notes (optional)'
         required: false
@@ -51,6 +46,73 @@ jobs:
           refreshenv
         shell: powershell
 
+      - name: Extract version information
+        id: extract_version
+        run: |
+          $overrideVersion = "${{ github.event.inputs.override_version }}"
+          $overrideBeta = "${{ github.event.inputs.override_beta }}"
+          
+          if ($overrideVersion -and $overrideVersion.Trim() -ne "") {
+            $version = $overrideVersion.Trim()
+            echo "Using override version: $version"
+          } else {
+            $mainPyContent = Get-Content -Path "main.py" -Raw
+            if ($mainPyContent -match 'VERSION\s*=\s*"([^"]+)"') {
+              $version = $matches[1]
+              echo "Auto-detected version from main.py: $version"
+            } else {
+              throw "Could not extract VERSION from main.py"
+            }
+          }
+          
+          if ($overrideBeta -and $overrideBeta.Trim() -ne "") {
+            $betaVersion = $overrideBeta.Trim()
+            echo "Using override beta version: $betaVersion"
+          } else {
+            $mainPyContent = Get-Content -Path "main.py" -Raw
+            if ($mainPyContent -match 'VERSION_BETA\s*=\s*(\d+|None)') {
+              $betaMatch = $matches[1]
+              if ($betaMatch -eq "None") {
+                $betaVersion = $null
+                echo "Auto-detected VERSION_BETA from main.py: None (stable release)"
+              } else {
+                $betaVersion = $betaMatch
+                echo "Auto-detected VERSION_BETA from main.py: $betaVersion"
+              }
+            } else {
+              echo "Could not extract VERSION_BETA from main.py, assuming stable release"
+              $betaVersion = $null
+            }
+          }
+          
+          if ($betaVersion) {
+            $fullVersion = "$version-beta.$betaVersion"
+            $releaseTag = "v$fullVersion"
+            $releaseName = "Beta Release v$fullVersion"
+            $isBeta = "true"
+          } else {
+            $fullVersion = $version
+            $releaseTag = "v$fullVersion"
+            $releaseName = "Release v$fullVersion"
+            $isBeta = "false"
+          }
+          
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "beta_version=$betaVersion" >> $env:GITHUB_OUTPUT
+          echo "full_version=$fullVersion" >> $env:GITHUB_OUTPUT
+          echo "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
+          echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+          echo "is_beta=$isBeta" >> $env:GITHUB_OUTPUT
+          
+          echo "Final version info:"
+          echo "  Version: $version"
+          echo "  Beta: $betaVersion"
+          echo "  Full: $fullVersion"
+          echo "  Tag: $releaseTag"
+          echo "  Name: $releaseName"
+          echo "  Is Beta: $isBeta"
+        shell: powershell
+      
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
@@ -86,8 +148,8 @@ jobs:
       - name: Generate executable name with version
         id: exe_name
         run: |
-          $releaseTag = "${{ github.event.inputs.release_tag }}"
-          $version = $releaseTag -replace '^v', '' -replace '[^a-zA-Z0-9.-]', '-'
+          $fullVersion = "${{ steps.extract_version.outputs.full_version }}"
+          $version = $fullVersion -replace '[^a-zA-Z0-9.-]', '-'
           $exeName = "DigTool-$version"
           
           echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
@@ -178,14 +240,14 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "${{ github.event.inputs.release_tag }}" -m "Release ${{ github.event.inputs.release_name }}"
-          git push origin "${{ github.event.inputs.release_tag }}"
+          git tag -a "${{ steps.extract_version.outputs.release_tag }}" -m "${{ steps.extract_version.outputs.release_name }}"
+          git push origin "${{ steps.extract_version.outputs.release_tag }}"
        
       - name: Generate automated release notes
         id: generate_notes
         run: |
-          $releaseTag = "${{ github.event.inputs.release_tag }}"
-          $isBeta = "${{ github.event.inputs.is_beta_release }}" -eq "true"
+          $releaseTag = "${{ steps.extract_version.outputs.release_tag }}"
+          $isBeta = "${{ steps.extract_version.outputs.is_beta }}" -eq "true"
           $customNotes = "${{ github.event.inputs.custom_notes }}"
           
           $notes = ""
@@ -212,11 +274,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.release_tag }}
-          name: ${{ github.event.inputs.release_name }}
+          tag_name: ${{ steps.extract_version.outputs.release_tag }}
+          name: ${{ steps.extract_version.outputs.release_name }}
           body: ${{ steps.generate_notes.outputs.release_notes }}
           draft: false
-          prerelease: ${{ github.event.inputs.is_beta_release }}
+          prerelease: ${{ steps.extract_version.outputs.is_beta }}
           files: |
             ${{ steps.get_exe_info.outputs.exe_path }}
             dist/VERIFICATION.txt
@@ -224,7 +286,9 @@ jobs:
       - name: Output release info
         run: |
           echo "Release created successfully!"
-          echo "Tag: ${{ github.event.inputs.release_tag }}"
+          echo "Tag: ${{ steps.extract_version.outputs.release_tag }}"
+          echo "Name: ${{ steps.extract_version.outputs.release_name }}"
+          echo "Version: ${{ steps.extract_version.outputs.full_version }}"
           echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
           echo "Full path: ${{ steps.get_exe_info.outputs.exe_path }}"
           echo "Bootloader: ${{ steps.get_exe_info.outputs.bootloader_type }}"

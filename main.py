@@ -3,6 +3,15 @@ import os
 import sys
 import traceback
 
+VERSION = "1.5.4"
+VERSION_BETA = 6
+
+def get_window_title():
+    version = VERSION
+    if VERSION_BETA is not None:
+        version += f"-beta.{VERSION_BETA}"
+    return f"Dig Tool - v{version}"
+
 from utils.system_utils import check_dependencies
 
 check_dependencies()
@@ -114,7 +123,7 @@ class DigTool:
             self.root = TkinterDnD.Tk()
         else:
             self.root = tk.Tk()
-        self.root.title("Dig Tool")
+        self.root.title(get_window_title())
 
         self.root.wm_iconbitmap(
             os.path.join(getattr(sys, "_MEIPASS", ""), "assets/icon.ico")

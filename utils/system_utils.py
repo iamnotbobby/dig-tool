@@ -97,7 +97,7 @@ def check_display_scale():
                 "Display Scaling Warning",
                 f"Your Windows display scaling (DPI) is set to {scale}%.\n\n"
                 "For best results, set display scaling to 100% (Default) in Windows Display Settings.\n"
-                "Detection may not work properly with scaling enabled.\n\n"
+                "Dig Tool may not work properly with scaling enabled.\n\n"
                 "To fix this:\n"
                 "1. Right-click on desktop → Display settings\n"
                 "2. Set 'Scale and layout' to 100%\n"
