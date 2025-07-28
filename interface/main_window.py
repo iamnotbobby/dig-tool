@@ -198,6 +198,7 @@ class MainWindow:
         self.item_detection_dependent_widgets = []
         self.walkspeed_dependent_widgets = []
         self.live_stats_screenshot_dependent_widgets = []
+        self.discord_dependent_widgets = []
         self.money_test_button = None
         self.item_test_button = None
         self.disabled_tooltips = []
@@ -299,6 +300,9 @@ class MainWindow:
                         return
                 finally:
                     self._validating_auto_sell = False
+
+    def validate_discord_toggle(self, *args):
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def is_sell_button_set(self):
         return self.dig_tool.automation_manager.sell_button_position is not None
@@ -537,6 +541,7 @@ class MainWindow:
 
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+        discord_enabled = self.dig_tool.param_vars.get('discord_enabled', tk.BooleanVar()).get()
         
         self._prev_auto_walk_enabled = auto_walk_enabled
 
@@ -606,9 +611,15 @@ class MainWindow:
 
         # Live stats screenshot dependent widgets
         live_stats_screenshot_enabled = self.dig_tool.param_vars.get('live_stats_screenshots_enabled', tk.BooleanVar()).get()
+        live_stats_enabled = discord_enabled and live_stats_screenshot_enabled
         for widget in self.live_stats_screenshot_dependent_widgets:
             if hasattr(widget, 'config'):
-                widget.config(state='normal' if live_stats_screenshot_enabled else 'disabled')
+                widget.config(state='normal' if live_stats_enabled else 'disabled')
+
+        # Discord dependent widgets
+        for widget in self.discord_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if discord_enabled else 'disabled')
 
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
@@ -624,6 +635,8 @@ class MainWindow:
                     tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first.")
                 elif tooltip.widget_type == 'velocity':
                     tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first.")
+                elif tooltip.widget_type == 'discord':
+                    tooltip.set_disabled(not discord_enabled, "Disabled: Enable Discord first.")
                 elif tooltip.widget_type == 'engagement_timeout':
                     if not sell_enabled:
                         tooltip.set_disabled(True, "Disabled: Auto-sell must be enabled first.")
@@ -632,18 +645,25 @@ class MainWindow:
                     else:
                         tooltip.set_disabled(False, "")
                 elif tooltip.widget_type == 'live_stats_screenshot':
-                    tooltip.set_disabled(not live_stats_screenshot_enabled, "Disabled: Enable Live Stats Screenshots first.")
+                    if not discord_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Discord first.")
+                    elif not live_stats_screenshot_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Live Stats Screenshots first.")
+                    else:
+                        tooltip.set_disabled(False, "")
 
         if self.money_test_button:
             money_area_set = self.is_money_area_set()
-            if money_area_set:
+            discord_and_money_enabled = discord_enabled and money_area_set
+            if discord_and_money_enabled:
                 self.money_test_button.config(state='normal', fg="#000000")
             else:
                 self.money_test_button.config(state='disabled', fg="#666666")
 
         if self.item_test_button:
             item_area_set = self.is_item_area_set()
-            if item_area_set:
+            discord_and_item_enabled = discord_enabled and item_area_set
+            if discord_and_item_enabled:
                 self.item_test_button.config(state='normal', fg="#000000")
             else:
                 self.item_test_button.config(state='disabled', fg="#666666")
@@ -1287,48 +1307,59 @@ class MainWindow:
         discord_notif_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Discord Notifications", 'auto_rejoin_discord_notifications')
 
         # ===== DISCORD PANE =====
-        create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
-        create_param_entry(panes['discord'].sub_frame, "Discord Server ID:", 'server_id')
-        create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
-        create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
+        discord_enable_checkbox = create_checkbox_param(panes['discord'].sub_frame, "Enable Discord", 'discord_enabled',
+                                                        validation_callback=self.validate_discord_toggle)
+        
+        create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Discord Server ID:", 'server_id', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval', self.discord_dependent_widgets, 'discord')
         create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Milestone Notifications",
-                              'include_screenshot_in_discord')
+                              'include_screenshot_in_discord', self.discord_dependent_widgets, 'discord')
         
         live_stats_per_dig_checkbox = create_checkbox_param(panes['discord'].sub_frame, "Update Per Dig", 
-                              'live_stats_per_dig_enabled')
+                              'live_stats_per_dig_enabled', self.discord_dependent_widgets, 'discord')
         
-        create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
+        test_discord_btn = create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
+        self.discord_dependent_widgets.append(test_discord_btn)
 
         live_stats_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Live Stats Screenshots",
                                                      "#f0f8ff")
         live_stats_checkbox = create_checkbox_param(live_stats_subsection.content, "Enable Live Stats Screenshots", 
-                              'live_stats_screenshots_enabled')
+                              'live_stats_screenshots_enabled', self.discord_dependent_widgets, 'discord')
         live_stats_interval_entry = create_param_entry(live_stats_subsection.content, "Screenshot Every X Seconds:", 
                           'live_stats_screenshot_interval', self.live_stats_screenshot_dependent_widgets, 'live_stats_screenshot')
+        self.discord_dependent_widgets.append(live_stats_interval_entry)
 
         money_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Money Detection",
                                                            "#e8f8e8")
         create_checkbox_param(money_detection_subsection.content, "Enable Money Detection", 'enable_money_detection',
+                              dependent_list=self.discord_dependent_widgets, widget_type='discord',
                               validation_callback=self.validate_money_detection_toggle)
         money_area_btn = create_section_button(money_detection_subsection.content, "Select Money Area", 
                               lambda: select_money_area(self.dig_tool))
+        self.discord_dependent_widgets.append(money_area_btn)
         StatusTooltip(money_area_btn, "Click to select the money detection area",
                       "Money area is set. Click to change it.", self.is_money_area_set)
         self.money_test_button = create_section_button(money_detection_subsection.content, "Test Money OCR", 
                               lambda: test_money_ocr(self.dig_tool))
+        self.discord_dependent_widgets.append(self.money_test_button)
         StatusTooltip(self.money_test_button, "Money area must be set first before testing OCR.",
                       "Click to test money OCR detection.", self.is_money_area_set)
 
         item_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Item Detection",
                                                           "#f0f8f0")
         create_checkbox_param(item_detection_subsection.content, "Enable Item Detection", 'enable_item_detection',
+                              dependent_list=self.discord_dependent_widgets, widget_type='discord',
                               validation_callback=self.validate_item_detection_toggle)
         item_area_btn = create_section_button(item_detection_subsection.content, "Select Item Area", 
                               lambda: select_item_area(self.dig_tool))
+        self.discord_dependent_widgets.append(item_area_btn)
         StatusTooltip(item_area_btn, "Click to select the item detection area",
                       "Item area is set. Click to change it.", self.is_item_area_set)
         self.item_test_button = create_section_button(item_detection_subsection.content, "Test Item OCR", 
                               lambda: test_item_ocr(self.dig_tool))
+        self.discord_dependent_widgets.append(self.item_test_button)
         StatusTooltip(self.item_test_button, "Item area must be set first before testing OCR.",
                       "Click to test item OCR detection.", self.is_item_area_set)
 
@@ -1342,7 +1373,7 @@ class MainWindow:
         create_multi_checkbox_param(item_detection_subsection.content, "Notification Rarities:", 'notification_rarities',
                                    ["scarce", "legendary", "mythical", "divine", "prismatic"],
                                    colors=notification_rarity_colors,
-                                   dependent_list=self.item_detection_dependent_widgets, widget_type='item_detection')
+                                   dependent_list=self.discord_dependent_widgets, widget_type='discord')
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
         self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))

@@ -425,6 +425,11 @@ class DiscordNotifier:
 
 def test_discord_ping(dig_tool_instance):
     try:
+        discord_enabled = get_param(dig_tool_instance, "discord_enabled")
+        if not discord_enabled:
+            dig_tool_instance.update_status("Discord notifications are disabled!")
+            return
+
         webhook_url = get_param(dig_tool_instance, "webhook_url")
         if not webhook_url:
             dig_tool_instance.update_status("Webhook URL not set!")
@@ -453,6 +458,10 @@ def test_discord_ping(dig_tool_instance):
 
 def check_milestone_notifications(dig_tool_instance):
     try:
+        discord_enabled = get_param(dig_tool_instance, "discord_enabled")
+        if not discord_enabled:
+            return
+
         webhook_url = get_param(dig_tool_instance, "webhook_url")
         if not webhook_url:
             return
@@ -572,6 +581,10 @@ def _send_milestone_with_money(dig_tool_instance, skip_ocr=False):
 
 def send_startup_notification(dig_tool_instance):
     try:
+        discord_enabled = get_param(dig_tool_instance, "discord_enabled")
+        if not discord_enabled:
+            return
+
         webhook_url = get_param(dig_tool_instance, "webhook_url")
         if webhook_url:
             dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)
@@ -597,6 +610,10 @@ def send_startup_notification(dig_tool_instance):
 
 def check_item_notifications(dig_tool_instance):
     try:
+        discord_enabled = get_param(dig_tool_instance, "discord_enabled")
+        if not discord_enabled:
+            return
+
         webhook_url = get_param(dig_tool_instance, "webhook_url")
         if not webhook_url:
             return
@@ -677,6 +694,10 @@ def _check_item_text(dig_tool_instance):
 
 def send_shutdown_notification(dig_tool_instance):
     try:
+        discord_enabled = get_param(dig_tool_instance, "discord_enabled")
+        if not discord_enabled:
+            return
+
         webhook_url = get_param(dig_tool_instance, "webhook_url")
         if webhook_url:
             dig_tool_instance.discord_notifier.set_webhook_url(webhook_url)

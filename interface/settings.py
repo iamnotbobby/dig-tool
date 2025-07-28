@@ -96,7 +96,8 @@ class SettingsManager:
             "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"],
             "live_stats_screenshots_enabled": False,
             "live_stats_screenshot_interval": 30,
-            "live_stats_per_dig_enabled": False
+            "live_stats_per_dig_enabled": False,
+            "discord_enabled": False
         }
 
         self.param_descriptions = {
@@ -168,7 +169,8 @@ class SettingsManager:
             "auto_rejoin_discord_notifications": "Send Discord notifications for disconnections and rejoin attempts.",
             "live_stats_screenshots_enabled": "Include screenshots in live stats message updates.",
             "live_stats_screenshot_interval": "Update live stats message with screenshot every X seconds.",
-            "live_stats_per_dig_enabled": "Update Discord stats message after every dig."
+            "live_stats_per_dig_enabled": "Update Discord stats message after every dig.",
+            "discord_enabled": "Enable Discord notifications for milestones, rare items, and status updates."
         }
 
         self.default_keybinds = {
@@ -338,7 +340,8 @@ class SettingsManager:
                 ("auto_rejoin_restart_delay",): (5, None),
                 ("shovel_slot",): (0, 9),
                 ("shovel_timeout",): (1, None),
-                ("live_stats_screenshot_interval",): (1, None)
+                ("live_stats_screenshot_interval",): (1, None),
+                ("max_wait_time",): (1000, None)
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
@@ -358,7 +361,7 @@ class SettingsManager:
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
                 "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "use_color_picker_detection",
                 "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications",
-                "include_screenshot_in_discord", "live_stats_screenshots_enabled", "live_stats_per_dig_enabled"
+                "include_screenshot_in_discord", "live_stats_screenshots_enabled", "live_stats_per_dig_enabled", "discord_enabled"
             ],
             "string_params": ["user_id", "server_id", "webhook_url", "roblox_server_link"]
         }

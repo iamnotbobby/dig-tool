@@ -60,6 +60,9 @@ class RobloxStatusMonitor:
         with self._notification_lock:
             try:
                 from utils.config_management import get_param
+                discord_enabled = get_param(self.dig_tool, "discord_enabled")
+                if not discord_enabled:
+                    return
                 if not get_param(self.dig_tool, "auto_rejoin_discord_notifications"):
                     return
                 current_time = time.time()
