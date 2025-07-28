@@ -31,6 +31,9 @@
 
 Dig Tool is built on a modular Python architecture using computer vision libraries for real-time screen analysis, high-performance capture systems, and Windows OCR for text recognition. The application uses an event-driven design with multithreaded processing to handle detection, automation, and UI management concurrently.
 
+> [!IMPORTANT]
+> This documentation covers only a core subset of Dig Tool's functionality. Please consider reading the codebase to understand further.
+
 ---
 
 ## Core Technologies
