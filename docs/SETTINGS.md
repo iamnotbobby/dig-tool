@@ -110,13 +110,25 @@ Uses automatic threshold calculation instead of manual saturation settings. Can 
 Minimum area (in pixels) for detected regions when using Otsu detection. This filters out tiny regions that aren't valid zones.
 
 **Otsu Max Area (0-∞)**  
-Maximum area (in pixels) for detected regions when using Otsu detection. This prevents detection of huge areas that aren't dig zones. Leave empty for no upper limit. 
+Maximum area (in pixels) for detected regions when using Otsu detection. This prevents detection of huge areas that aren't dig zones. Leave empty for no upper limit.
+
+**Otsu Morph Kernel Size (0-∞)**  
+Size of morphological operations kernel for noise reduction. 0 to disable, higher values = more smoothing.
+
+**Otsu Adaptive Area Filtering**  
+Use adaptive area filtering based on image size instead of fixed pixel values.
+
+**Otsu Area Percentile (0.01-10.0)**  
+Minimum area as percentage of image size when using adaptive area filtering. 
+
+**Otsu Disable Color Lock**  
+Disable color locking for Otsu detection. When enabled, detection runs continuously without locking to specific colors. 
 
 **Use Color Picker Detection**  
 Uses a specific color you pick to detect target zones. Enable this, then click "Pick Color from Screen" to select your target color. Very precise when you know the exact color you want to detect, but cannot be used with Otsu Detection or Saturation Threshold. Will also not work in situations where environments may change (e.g., grass turns snowy).
 
 **Color Tolerance (1-90)**  
-How close colors need to be to your picked color to be detected. Higher values allow more lenient color matching, lower values require more precise matching. 
+How close colors need to be to your picked color to be detected. Higher values allow more lenient color matching, lower values require more precise matching.
 
 ---
 
@@ -126,7 +138,6 @@ These settings control how the tool behaves during operation.
 
 ### Prediction
 
-**Prediction**  
 Predicts where the line will be and clicks earlier to compensate for delays. Can improve accuracy on fast systems but may cause issues if prediction is wrong. Disable if you're getting inconsistent hits or weird behavior.
 
 **Prediction Confidence Threshold (0.0-1.0)**  
@@ -146,8 +157,7 @@ How long to wait after clicking before scanning for new targets. This prevents m
 
 ### Custom Cursor
 
-**Use Custom Cursor**  
-Uses a custom cursor position instead of auto-detection. Cannot be used with Auto-Walk. For setups where you want to click a specific spot manually. Must set cursor position first.
+Uses a custom cursor position instead of clicking where your cursor is at. Cannot be used with Auto-Walk. For setups where you want to click a specific spot manually. Must set cursor position first.
 
 **Cursor Position Setup**  
 Click "Set Cursor Position" button to record a specific screen position for custom cursor mode. Use if you want consistent clicking at one exact spot.
@@ -156,18 +166,15 @@ Click "Set Cursor Position" button to record a specific screen position for cust
 
 ## Auto-Walk
 
-These settings control the automation features that work together to automate digging activities.
+Automatically moves your character around while digging. Cannot be used with Custom Cursor. Covers more ground automatically using built-in patterns or custom ones you create.
 
 ### Auto-Walk Settings
-
-**Auto Walk Enabled**  
-Automatically moves your character around while digging. Cannot be used with Custom Cursor. Covers more ground automatically using built-in patterns or custom ones you create.
 
 **Walk Duration (0-∞)**  
 How long to hold down movement keys in milliseconds. Higher values create longer movement steps, lower values create shorter, more precise movements.
 
-**Max Wait Time (0-∞)**  
-Maximum time to wait for target engagement after moving. If no target found, advances to next movement step.
+**Max Wait Time (1000-∞)**  
+Maximum time to wait for target engagement after moving in milliseconds. If no target found, advances to next movement step. 
 
 **Dynamic Walkspeed**  
 Increases walk duration based on how much items you collect to simulate the walkspeed decrease in-game. Uses a mathematical equation to calculate this.
@@ -184,7 +191,6 @@ Starting walkspeed decrease that must be expressed as a decimal rather than a pe
 
 ### Auto-Sell
 
-**Auto Sell**  
 Automatically sells items after a certain number of digs. Must set up sell button position or use UI navigation. Keeps inventory from reaching the in-game item limit and potential auto-walk overlap.
 
 **Sell Every X Digs (1-∞)**  
@@ -209,17 +215,32 @@ How long to wait for target engagement after selling. If no engagement detected,
 
 ### Auto-Shovel
 
-**Auto Shovel Enabled**  
 Automatically re-equips your shovel when it breaks or gets unequipped. This was added to fix a game bug where your shovel is out but you can't move or dig.
 
 **Shovel Slot (0-9)**  
-Which inventory slot your shovel is in (0-9, where 0 = slot 1, 1 = slot 2, etc.). Must match your actual shovel location.
+Which inventory slot your shovel is in (0-9, where 0 = slot 10). Must match your actual shovel location.
 
 **Shovel Timeout (1-∞)**  
-How long to wait before re-equipping after no dig activity.
+How long to wait in minutes before re-equipping after no dig activity. 
 
 **Shovel Equip Mode**  
 Choose "Single" (presses the shovel key once) or "Double" (presses the shovel key twice quickly). Double mode is usually more reliable as it's the most intended.
+
+### Auto-Rejoin
+
+Automatically rejoins Roblox servers when disconnected or kicked. Helps maintain continuous automation when connection issues occur.
+
+**Roblox Server Link**  
+Roblox server link to rejoin (supports share links and direct game URLs). Required for auto-rejoin to work.
+
+**Rejoin Check Interval (10-∞)**  
+How often to check for disconnection and attempt rejoining in seconds.
+
+**Auto Rejoin Restart Delay (5-∞)**  
+Seconds to wait before restarting automation after successful rejoin. 
+
+**Auto Rejoin Discord Notifications**  
+Send Discord notifications for disconnections and rejoin attempts. Helps track when connection issues occur.
 
 ---
 
@@ -230,7 +251,7 @@ These settings control Discord notifications for milestones and rare items.
 ### General Notifications
 
 **Webhook URL**  
-Discord webhook URL for sending notifications. Required for any Discord notifications to work. C
+Discord webhook URL for sending notifications. Required for any Discord notifications to work.
 
 **Server ID**  
 Your Discord server's ID number. Optional - notifications work without this but it won't provide a message link to return back to live stats.
@@ -244,9 +265,19 @@ How often to send dig count milestone notifications. Set to 100 to get notified 
 **Include Screenshot in Discord**  
 Attaches screenshots to Discord notifications. Shows what was happening when notification was sent.
 
+### Live Stats
+
+**Live Stats Screenshots**  
+Include screenshots in live stats message updates. Provides visual feedback of your digging progress in Discord.
+
+**Live Stats Screenshot Interval (1-∞)**  
+Update live stats message with screenshot every X seconds. 
+
+**Live Stats Per Dig**  
+Update Discord stats message after every single dig. 
+
 ### Money Detection
 
-**Money Detection**  
 Detects and tracks your in-game money amount. Must set up money area first. Includes money information in Discord notifications.
 
 **Money Area Setup**  
@@ -265,7 +296,6 @@ This will show the detected money value in the status box within the main window
 
 ### Item Detection
 
-**Item Detection**  
 Detects rare items and sends Discord notifications. Must set up item area first. Get notified immediately when you find rare items.
 
 **Item Area Setup**  

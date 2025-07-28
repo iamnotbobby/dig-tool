@@ -130,6 +130,8 @@ class RobloxStatusMonitor:
                 self._recently_rejoined = False
                 if hasattr(self.dig_tool, 'rejoiner') and hasattr(self.dig_tool.rejoiner, '_current_attempt_start'):
                     self.dig_tool.rejoiner._current_attempt_start = None
+                    self.dig_tool.rejoiner._max_attempts_reached = False
+                    self.dig_tool.rejoiner.rejoin_attempts = 0
                 self._resume_automation_after_rejoin()
         elif self.disconnect_keyword in line:
             reason = (match := re.search(self.disconnect_regex, line)) and match.group(1) or "N/A"
@@ -298,6 +300,7 @@ class RobloxRejoiner:
         self._is_rejoining = False
         self._current_attempt_start = None
         self._max_attempts = 5
+        self._max_attempts_reached = False  
 
     def get_server_url(self):
         from utils.config_management import get_param
@@ -336,9 +339,13 @@ class RobloxRejoiner:
     def should_rejoin(self):
         from utils.config_management import get_param
         with self._rejoin_lock:
-            return (not self._is_rejoining and get_param(self.dig_tool, "auto_rejoin_enabled") and 
-                    get_param(self.dig_tool, "roblox_server_link") and get_param(self.dig_tool, "rejoin_check_interval") > 0 and
-                    time.time() - self.last_rejoin_time >= self.min_rejoin_interval and self.status_monitor.can_rejoin() and 
+            return (not self._is_rejoining and 
+                    not self._max_attempts_reached and 
+                    get_param(self.dig_tool, "auto_rejoin_enabled") and 
+                    get_param(self.dig_tool, "roblox_server_link") and 
+                    get_param(self.dig_tool, "rejoin_check_interval") > 0 and
+                    time.time() - self.last_rejoin_time >= self.min_rejoin_interval and 
+                    self.status_monitor.can_rejoin() and 
                     self.status_monitor._automation_was_running)
 
     def attempt_rejoin(self):
@@ -352,8 +359,9 @@ class RobloxRejoiner:
             if time.time() - self.last_rejoin_time < self.min_rejoin_interval:
                 return False
             if self.rejoin_attempts >= self._max_attempts:
+                self._max_attempts_reached = True
                 self.status_monitor.send_discord_notification(f"❌ **Auto-rejoin stopped**: Maximum attempts ({self._max_attempts}) reached", color=0xFF4757)
-                logger.error(f"Auto-rejoin: Maximum attempts ({self._max_attempts}) reached, stopping")
+                logger.error(f"Auto-rejoin: Maximum attempts ({self._max_attempts}) reached, stopping permanently")
                 return False
             logger.info(f"Auto-rejoin: Attempting to rejoin server...")
             self.last_rejoin_time = time.time()
@@ -389,8 +397,10 @@ class RobloxRejoiner:
             if (self._current_attempt_start and hasattr(self.status_monitor, '_recently_rejoined') and self.status_monitor._recently_rejoined):
                 logger.warning("Auto-rejoin: No connection confirmation after 60s, retrying...")
                 self.status_monitor._recently_rejoined = False
-                if self.rejoin_attempts < self._max_attempts:
+                if self.rejoin_attempts < self._max_attempts and not self._max_attempts_reached:
                     threading.Thread(target=self.attempt_rejoin, daemon=True).start()
+                else:
+                    logger.warning("Auto-rejoin: Connection timeout - max attempts reached, not retrying")
         threading.Thread(target=check_connection, daemon=True).start()
 
     def start_monitoring(self):
@@ -406,6 +416,8 @@ class RobloxRejoiner:
         from utils.config_management import get_param
         auto_rejoin_enabled = get_param(self.dig_tool, "auto_rejoin_enabled")
         if auto_rejoin_enabled and self.status_monitor._stop_event.is_set():
+            self._max_attempts_reached = False
+            self.rejoin_attempts = 0
             self.status_monitor._stop_event.clear()
             self.status_monitor.start()
         elif not auto_rejoin_enabled and not self.status_monitor._stop_event.is_set():
