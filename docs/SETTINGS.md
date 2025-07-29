@@ -207,6 +207,18 @@ The default UI navigation sequence is not for everyone because of UI updates or 
 **Auto Sell UI Sequence**  
 Keyboard sequence for UI navigation auto-sell. Format as comma-separated keys like "down,up,enter". Available keys: down, up, left, right, enter. Only used when Auto Sell Method is "UI Navigation". Enter should be your last step and this is when it will press the sell button.
 
+**UI Navigation Key**  
+The key used to navigate between UI elements during auto-sell.
+
+**Inventory Key**  
+The key used to open and close the inventory during auto-sell. 
+
+**Inventory Open Delay (0-∞)**  
+Time in milliseconds to wait after opening the inventory. 
+
+**Inventory Close Delay (0-∞)**  
+Time in milliseconds to wait after closing the inventory before completing the auto-sell process. 
+
 **Auto Sell Target Engagement**  
 Waits for target re-engagement after auto-sell completion to ensure the tool properly returns to digging after selling. This will press the ``g`` key once to close the inventory in the circumstances that the inventory may still open after auto-sell. Typically, there are no issues related to having this enabled and there may be an underlying issue.
 

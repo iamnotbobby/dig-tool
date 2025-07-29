@@ -191,10 +191,13 @@ class AutoSellManager:
                     logger.info(f"Disabled shift keys for auto-sell: {disabled_shifts}")
                     time.sleep(0.2)
 
-                self.keyboard_controller.press("g")
-                self.keyboard_controller.release("g")
+                inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+                self.keyboard_controller.press(inventory_key)
+                self.keyboard_controller.release(inventory_key)
 
-                time.sleep(0.5)
+                inventory_open_delay = get_param(self.dig_tool, "auto_sell_inventory_open_delay")
+                inventory_open_delay_seconds = inventory_open_delay / 1000.0
+                time.sleep(inventory_open_delay_seconds)
                 
                 if not self.sell_button_position or len(self.sell_button_position) != 2:
                     logger.error("Auto-sell failed: no sell button position set or invalid format")
@@ -205,7 +208,7 @@ class AutoSellManager:
                 
                 x = self.sell_button_position[0]
                 y = self.sell_button_position[1]
-                sell_delay = get_param(self.dig_tool, "sell_delay") or 1000
+                sell_delay = get_param(self.dig_tool, "sell_delay")
                 sell_delay_seconds = sell_delay / 1000.0
                 time.sleep(sell_delay_seconds)
 
@@ -214,17 +217,22 @@ class AutoSellManager:
                 if success:
                     logger.info("Sell click successful")
                     time.sleep(2.5)
-                    self.keyboard_controller.press("g")
-                    self.keyboard_controller.release("g")
-                    time.sleep(1.0)
+                    inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+                    self.keyboard_controller.press(inventory_key)
+                    self.keyboard_controller.release(inventory_key)
+                    
+                    inventory_close_delay = get_param(self.dig_tool, "auto_sell_inventory_close_delay")
+                    inventory_close_delay_seconds = inventory_close_delay / 1000.0
+                    time.sleep(inventory_close_delay_seconds)
 
                     self._process_sell_completion()
                 else:
                     logger.error("Auto-sell failed: AutoIt click error")
                     self.dig_tool.update_status("Auto-sell failed: AutoIt click error")
                     
-                    self.keyboard_controller.press("g")
-                    self.keyboard_controller.release("g")
+                    inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+                    self.keyboard_controller.press(inventory_key)
+                    self.keyboard_controller.release(inventory_key)
                     time.sleep(0.5)
 
             self.is_selling = False
@@ -278,19 +286,22 @@ class AutoSellManager:
                     logger.info(f"Disabled shift keys for auto-sell: {disabled_shifts}")
                     time.sleep(0.2)
 
-                inventory_key = "g"
-                user_sequence = get_param(self.dig_tool, "auto_sell_ui_sequence") or "down,up,enter"
-                sell_sequence = f"\\,{user_sequence},\\"
+                inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+                user_sequence = get_param(self.dig_tool, "auto_sell_ui_sequence")
+                ui_navigation_key = get_param(self.dig_tool, "auto_sell_ui_navigation_key")
+                sell_sequence = f"{ui_navigation_key},{user_sequence},{ui_navigation_key}"
                 step_delay = 0.5
-                sell_delay = get_param(self.dig_tool, "sell_delay") or 1000
+                sell_delay = get_param(self.dig_tool, "sell_delay")
                 sell_delay_seconds = sell_delay / 1000.0
-                inventory_open_delay = 0.9
-                inventory_close_delay = 0.8
+                inventory_open_delay = get_param(self.dig_tool, "auto_sell_inventory_open_delay")
+                inventory_open_delay_seconds = inventory_open_delay / 1000.0
+                inventory_close_delay = get_param(self.dig_tool, "auto_sell_inventory_close_delay")
+                inventory_close_delay_seconds = inventory_close_delay / 1000.0
 
                 logger.info(f"Using sequence: '{sell_sequence}' (user: '{user_sequence}')")
 
                 self._send_key_safe(inventory_key)
-                time.sleep(inventory_open_delay)
+                time.sleep(inventory_open_delay_seconds)
 
                 if sell_sequence:
                     sequence_steps = [step.strip() for step in sell_sequence.split(',') if step.strip()]
@@ -311,7 +322,7 @@ class AutoSellManager:
 
                 time.sleep(3.0)
                 self._send_key_safe(inventory_key)
-                time.sleep(inventory_close_delay)
+                time.sleep(inventory_close_delay_seconds)
 
                 self._process_sell_completion("UI Nav")
 
@@ -358,7 +369,7 @@ class AutoSellManager:
                 logger.debug("Post-sell engagement monitoring disabled by user setting")
                 return
                 
-            target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout") or 5.0
+            target_engagement_timeout = get_param(self.dig_tool, "auto_sell_target_engagement_timeout")
             
             if target_engagement_timeout <= 0:
                 logger.debug("Post-sell engagement monitoring disabled (timeout <= 0)")
@@ -405,7 +416,8 @@ class AutoSellManager:
     def _apply_auto_sell_fallback(self):
         try:
             logger.info("Auto-sell fallback: Re-closing inventory to ensure proper state")
-            self._send_key_safe("g")
+            inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+            self._send_key_safe(inventory_key)
             time.sleep(0.8)
             
             if hasattr(self.dig_tool, 'automation_manager') and get_param(self.dig_tool, "auto_walk_enabled"):
@@ -475,17 +487,20 @@ class AutoSellManager:
             if not find_and_focus_roblox_window():
                 logger.warning("Could not focus Roblox window for UI navigation test")
             
-            inventory_key = "g"
-            user_sequence = get_param(self.dig_tool, "auto_sell_ui_sequence") or "down,up,enter"
-            sell_sequence = f"\\,{user_sequence},\\"
+            inventory_key = get_param(self.dig_tool, "auto_sell_inventory_key")
+            user_sequence = get_param(self.dig_tool, "auto_sell_ui_sequence")
+            ui_navigation_key = get_param(self.dig_tool, "auto_sell_ui_navigation_key")
+            sell_sequence = f"{ui_navigation_key},{user_sequence},{ui_navigation_key}"
             step_delay = 0.3
-            inventory_open_delay = 0.7
-            inventory_close_delay = 0.8
+            inventory_open_delay = get_param(self.dig_tool, "auto_sell_inventory_open_delay")
+            inventory_open_delay_seconds = inventory_open_delay / 1000.0
+            inventory_close_delay = get_param(self.dig_tool, "auto_sell_inventory_close_delay")
+            inventory_close_delay_seconds = inventory_close_delay / 1000.0
 
             logger.info(f"Using sequence: '{sell_sequence}' (user: '{user_sequence}')")
             
             self._send_key_safe(inventory_key)
-            time.sleep(inventory_open_delay)
+            time.sleep(inventory_open_delay_seconds)
 
             if sell_sequence:
                 sequence_steps = [step.strip() for step in sell_sequence.split(',') if step.strip()]
@@ -500,7 +515,7 @@ class AutoSellManager:
                 logger.warning("No sell sequence found in config!")
 
             self._send_key_safe(inventory_key)
-            time.sleep(inventory_close_delay)
+            time.sleep(inventory_close_delay_seconds)
 
             self.dig_tool.update_status("UI navigation test completed successfully!")
             logger.info("UI navigation test sequence completed")

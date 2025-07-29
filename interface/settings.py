@@ -54,6 +54,10 @@ class SettingsManager:
             "sell_delay": 1000,
             "auto_sell_method": "button_click",
             "auto_sell_ui_sequence": "down,up,enter",
+            "auto_sell_ui_navigation_key": "\\",
+            "auto_sell_inventory_key": "g",
+            "auto_sell_inventory_open_delay": 900,
+            "auto_sell_inventory_close_delay": 900,
             "auto_sell_target_engagement_enabled": True,
             "auto_sell_target_engagement_timeout": 120.0, 
             # Otsu detection parameters
@@ -126,6 +130,10 @@ class SettingsManager:
             "sell_delay": "Delay in milliseconds before clicking the sell button.",
             "auto_sell_method": "Method for auto-selling: 'button_click' (click specific position) or 'ui_navigation' (use keyboard shortcuts).",
             "auto_sell_ui_sequence": "Keyboard sequence for UI navigation auto-sell. Use comma-separated keys from: down, up, left, right, enter. Example: 'down,up,enter'. Backslash keys are automatically added.",
+            "auto_sell_ui_navigation_key": "Key used to navigate between UI elements during auto-sell.",
+            "auto_sell_inventory_key": "Key to open and close the inventory during auto-sell.",
+            "auto_sell_inventory_open_delay": "Delay in milliseconds after opening inventory before executing sell sequence.",
+            "auto_sell_inventory_close_delay": "Delay in milliseconds after closing inventory before completing auto-sell.",
             "auto_sell_target_engagement_enabled": "Enable waiting for target engagement after auto-sell completion. When disabled, auto-sell will not wait for re-engagement. Helpful in casews where inventory might stay open.",
             "auto_sell_target_engagement_timeout": "Time to wait for target engagement after auto-sell completion (seconds). If no engagement detected, applies auto-sell fallback to re-close inventory.",
             "auto_walk_enabled": "Automatically move around while digging.",
@@ -345,7 +353,7 @@ class SettingsManager:
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
-                "sell_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
+                "sell_delay", "auto_sell_inventory_open_delay", "auto_sell_inventory_close_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
                 "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps",
                 "milestone_interval", "initial_item_count", "rejoin_check_interval", "live_stats_screenshot_interval"
             ],
@@ -363,7 +371,7 @@ class SettingsManager:
                 "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications",
                 "include_screenshot_in_discord", "live_stats_screenshots_enabled", "live_stats_per_dig_enabled", "discord_enabled"
             ],
-            "string_params": ["user_id", "server_id", "webhook_url", "roblox_server_link"]
+            "string_params": ["user_id", "server_id", "webhook_url", "roblox_server_link", "auto_sell_inventory_key", "auto_sell_ui_navigation_key"]
         }
 
     def _validate_ui_sequence(self, value):

@@ -1236,12 +1236,39 @@ class MainWindow:
         self.ui_sequence_entry = create_param_entry(self.ui_sequence_frame, "UI Navigation Sequence:", 'auto_sell_ui_sequence',
                                                    self.sell_dependent_widgets, 'sell')
         
+        self.ui_navigation_key_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        
+        self.ui_navigation_key_entry = create_param_entry(self.ui_navigation_key_frame, "UI Navigation Key:", 'auto_sell_ui_navigation_key',
+                                                         self.sell_dependent_widgets, 'sell')
+        
        
         self.ui_sequence_widgets = [self.ui_sequence_frame]
+        self.ui_navigation_key_widgets = [self.ui_navigation_key_frame]
         
         
         create_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
                           self.sell_dependent_widgets, 'sell')
+        
+        self.inventory_key_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_key_entry = create_param_entry(self.inventory_key_frame, "Inventory Key:", 'auto_sell_inventory_key',
+                                                     self.sell_dependent_widgets, 'sell')
+        self.inventory_key_frame.pack(fill='x')
+        
+        self.inventory_key_widgets = [self.inventory_key_frame]
+        
+        self.inventory_open_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_open_delay_entry = create_param_entry(self.inventory_open_delay_frame, "Inventory Open Delay (ms):", 'auto_sell_inventory_open_delay',
+                                                           self.sell_dependent_widgets, 'sell')
+        self.inventory_open_delay_frame.pack(fill='x')
+        
+        self.inventory_open_delay_widgets = [self.inventory_open_delay_frame]
+        
+        self.inventory_close_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_close_delay_entry = create_param_entry(self.inventory_close_delay_frame, "Inventory Close Delay (ms):", 'auto_sell_inventory_close_delay',
+                                                            self.sell_dependent_widgets, 'sell')
+        self.inventory_close_delay_frame.pack(fill='x')
+        
+        self.inventory_close_delay_widgets = [self.inventory_close_delay_frame]
         
         create_checkbox_param(auto_sell_subsection.content, "Enable Post-Sell Engagement Monitoring",
                              'auto_sell_target_engagement_enabled',
@@ -1261,29 +1288,34 @@ class MainWindow:
              
                 for widget in self.ui_sequence_widgets:
                     widget.pack_forget()  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
+                    widget.pack_forget()  # type: ignore
                
                 for widget in self.sell_button_widgets:
-                    widget.pack(fill='x', padx=10, pady=5)  # type: ignore
+                    widget.pack(fill='x', padx=PARAM_PADX, pady=BUTTON_PADY)  # type: ignore
                 
                 for widget in self.sell_delay_widgets:
-                    widget.pack(fill='x', padx=10, pady=2)  # type: ignore
+                    widget.pack(fill='x')  # type: ignore
+                    
             elif method == "ui_navigation":
                 self.test_sell_button.config(text="Test UI Navigation")
              
                 for widget in self.ui_sequence_widgets:
-                    widget.pack(fill='x', padx=10, pady=2)  # type: ignore
+                    widget.pack(fill='x')  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
+                    widget.pack(fill='x')  # type: ignore
             
                 for widget in self.sell_delay_widgets:
                     widget.pack_forget()  # type: ignore
                 
                 for widget in self.sell_button_widgets:
                     widget.pack_forget()  # type: ignore
-            
-                for widget in self.sell_delay_widgets:
-                    widget.pack_forget()  # type: ignore
+                    
             else:
                 self.test_sell_button.config(text="Test Sell")
                 for widget in self.ui_sequence_widgets:
+                    widget.pack_forget()  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
                     widget.pack_forget()  # type: ignore
                 for widget in self.sell_delay_widgets:
                     widget.pack_forget()  # type: ignore
