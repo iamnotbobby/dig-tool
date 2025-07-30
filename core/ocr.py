@@ -146,10 +146,11 @@ class AreaSelector:
         return None
 
 class MoneyOCR(BaseOCR):
-    def __init__(self):
+    def __init__(self, dig_tool_instance=None):
         super().__init__()
         self.money_area = None
         self.screen_capture = ScreenCapture()
+        self.dig_tool_instance = dig_tool_instance
         
     def select_money_area(self):
         try:
@@ -280,15 +281,39 @@ class MoneyOCR(BaseOCR):
             pass
         
         try:
+            base_tolerance = 35
+            if self.dig_tool_instance:
+                from utils.config_management import get_param
+                base_tolerance = get_param(self.dig_tool_instance, "money_color_tolerance")
+            
             green_ranges = [
                 {'low': np.array([154, 245, 129]), 'high': np.array([174, 255, 149])},
                 {'low': np.array([149, 240, 124]), 'high': np.array([179, 255, 154])},
+                {'low': np.array([140, 220, 110]), 'high': np.array([185, 255, 165])},
+                {'low': np.array([130, 200, 100]), 'high': np.array([195, 255, 175])},
+                {'low': np.array([120, 180, 90]), 'high': np.array([200, 255, 185])},
+                {'low': np.array([100, 150, 80]), 'high': np.array([210, 255, 195])},
             ]
             
+            tolerance_multipliers = [1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
+            adjusted_ranges = []
+            
+            for i, range_def in enumerate(green_ranges):
+                multiplier = tolerance_multipliers[min(i, len(tolerance_multipliers) - 1)]
+                tolerance_adjustment = int(base_tolerance * multiplier)
+                
+                low_adjusted = np.maximum(range_def['low'] - tolerance_adjustment, 0)
+                high_adjusted = np.minimum(range_def['high'] + tolerance_adjustment, 255)
+                
+                adjusted_ranges.append({'low': low_adjusted, 'high': high_adjusted})
+            
             green_mask = np.zeros(img_array.shape[:2], dtype=bool)
-            for range_def in green_ranges:
+            for range_def in adjusted_ranges:
                 mask = np.all((img_array >= range_def['low']) & (img_array <= range_def['high']), axis=2)
                 green_mask = green_mask | mask
+                
+                if np.sum(green_mask) > (img_array.shape[0] * img_array.shape[1] * 0.1):
+                    break
             
             if np.any(green_mask):
                 result = np.zeros_like(img_array)

@@ -299,6 +299,9 @@ Ensure when you're selecting that you're selecting a rectangle of the area where
 
 ![Money Area Setup Example](/assets/docs/settings/set_money_area_example.png)
 
+**Color Tolerance (0-100)**  
+Adjusts how lenient the money text detection is for different coloring. Lower the value if you want it to be more lenient.
+
 **Test Money OCR**  
 Tests if money detection is working properly. Use after setting up money area to verify it works. Shows the detected money value or error message.
 

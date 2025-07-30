@@ -1368,6 +1368,9 @@ class MainWindow:
         create_checkbox_param(money_detection_subsection.content, "Enable Money Detection", 'enable_money_detection',
                               dependent_list=self.discord_dependent_widgets, widget_type='discord',
                               validation_callback=self.validate_money_detection_toggle)
+        money_tolerance_entry = create_param_entry(money_detection_subsection.content, "Color Tolerance:", 
+                          'money_color_tolerance', self.money_detection_dependent_widgets, 'money_detection')
+        self.discord_dependent_widgets.append(money_tolerance_entry)
         money_area_btn = create_section_button(money_detection_subsection.content, "Select Money Area", 
                               lambda: select_money_area(self.dig_tool))
         self.discord_dependent_widgets.append(money_area_btn)

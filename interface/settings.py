@@ -97,6 +97,7 @@ class SettingsManager:
             "include_screenshot_in_discord": False,
             "enable_money_detection": False,
             "enable_item_detection": False,
+            "money_color_tolerance": 35,
             "notification_rarities": ["scarce", "legendary", "mythical", "divine", "prismatic"],
             "live_stats_screenshots_enabled": False,
             "live_stats_screenshot_interval": 30,
@@ -161,6 +162,7 @@ class SettingsManager:
             "item_area": "Selected screen area for item detection in Discord notifications.",
             "enable_money_detection": "Enable automatic detection and notification of money values during digging.",
             "enable_item_detection": "Enable automatic detection and notification of rare items during digging.",
+            "money_color_tolerance": "Color tolerance for money text detection.",
             "notification_rarities": "Select which item rarities will trigger Discord notifications when found.",
             "auto_shovel_enabled": "Automatically re-equip shovel when no activity detected for specified time.",
             "shovel_slot": "Hotbar slot number (0-9) where your shovel is located. 0 = slot 10.",
@@ -349,11 +351,12 @@ class SettingsManager:
                 ("shovel_slot",): (0, 9),
                 ("shovel_timeout",): (1, None),
                 ("live_stats_screenshot_interval",): (1, None),
-                ("max_wait_time",): (1000, None)
+                ("max_wait_time",): (1000, None),
+                ("money_color_tolerance",): (0, 100)
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
-                "sell_delay", "auto_sell_inventory_open_delay", "auto_sell_inventory_close_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance",
+                "sell_delay", "auto_sell_inventory_open_delay", "auto_sell_inventory_close_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance", "money_color_tolerance",
                 "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps",
                 "milestone_interval", "initial_item_count", "rejoin_check_interval", "live_stats_screenshot_interval"
             ],

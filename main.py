@@ -156,7 +156,7 @@ class DigTool:
         self.roblox_rejoiner = RobloxRejoiner(self)
         
         from core.ocr import MoneyOCR, ItemOCR
-        self.money_ocr = MoneyOCR()
+        self.money_ocr = MoneyOCR(self)
         self.item_ocr = ItemOCR()
 
         self.settings_manager.load_all_settings()
