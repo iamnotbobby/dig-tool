@@ -128,7 +128,7 @@ class DigTool:
         self.root.title(get_window_title())
 
         self.root.wm_iconbitmap(
-            os.path.join(getattr(sys, "_MEIPASS", ""), "assets/icon.ico")
+            os.path.join(sys._MEIPASS, "assets/icon.ico")
             if hasattr(sys, "_MEIPASS")
             else "assets/icon.ico"
         )
