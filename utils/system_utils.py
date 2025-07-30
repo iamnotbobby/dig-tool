@@ -26,9 +26,15 @@ def check_dependencies():
         "requests": "requests",
         "autoit": "pyautoit",
         "mss": "mss",
+        "psutil": "psutil",
+        "PyInstaller": "PyInstaller",
+        "tkinterdnd2": "tkinterdnd2",
+        "pyautogui": "pyautogui",
         "winrt.windows.media.ocr": "winrt-Windows.Media.Ocr",
         "winrt.windows.graphics.imaging": "winrt-Windows.Graphics.Imaging",
         "winrt.windows.storage.streams": "winrt-Windows.Storage.Streams",
+        "winrt.windows.foundation": "winrt-Windows.Foundation",
+        "watchdog": "watchdog",
     }
     missing_packages = []
     for module, package in required_packages.items():
