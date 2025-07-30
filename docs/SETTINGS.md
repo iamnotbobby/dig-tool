@@ -328,7 +328,7 @@ Tests if item detection is working properly. Use after setting up item area to v
 
 Similar to testing money OCR, it will also show the item rarity in the status box within te main window.
 
-![test Item OCR](/assets/docs/settings/test_item_ocr_example.png)
+![Test Item OCR](/assets/docs/settings/test_item_ocr_example.png)
 
 ---
 
