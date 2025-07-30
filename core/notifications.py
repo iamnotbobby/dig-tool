@@ -26,6 +26,8 @@ class DiscordNotifier:
             'money_value': None,
             'item_counts': {}
         }
+        self._update_lock = threading.Lock()
+        self._pending_update = False
 
     def set_webhook_url(self, webhook_url):
         self.webhook_url = webhook_url
@@ -153,6 +155,18 @@ class DiscordNotifier:
             return False
 
     def update_stats_message(self, digs, clicks=0, money_value=None, item_counts=None, dig_tool_instance=None, include_screenshot=None):
+        with self._update_lock:
+            if self._pending_update:
+                return True
+            self._pending_update = True
+            
+        try:
+            return self._update_stats_message_internal(digs, clicks, money_value, item_counts, dig_tool_instance, include_screenshot)
+        finally:
+            with self._update_lock:
+                self._pending_update = False
+
+    def _update_stats_message_internal(self, digs, clicks=0, money_value=None, item_counts=None, dig_tool_instance=None, include_screenshot=None):
         if not self.webhook_url or not self.stats_message_id:
             logger.error(f"Cannot update stats: webhook_url={bool(self.webhook_url)}, message_id={bool(self.stats_message_id)}")
             return False
@@ -265,6 +279,19 @@ class DiscordNotifier:
             logger.warning("Discord webhook URL not set!")
             return False
 
+        with self._update_lock:
+            if self._pending_update:
+                logger.warning("Update already in progress, skipping milestone notification")
+                return False
+            self._pending_update = True
+
+        try:
+            return self._send_milestone_notification_internal(digs, clicks, user_id, include_screenshot, money_value, item_counts, dig_tool_instance)
+        finally:
+            with self._update_lock:
+                self._pending_update = False
+
+    def _send_milestone_notification_internal(self, digs, clicks, user_id=None, include_screenshot=False, money_value=None, item_counts=None, dig_tool_instance=None):
         dig_increase = digs - self.previous_stats['digs']
         click_increase = clicks - self.previous_stats['clicks']
 
@@ -300,7 +327,17 @@ class DiscordNotifier:
         content = f"<@{user_id}>" if user_id else ""
         payload = {"content": content, "embeds": [embed]}
 
-        return self._send_webhook_request(payload, include_screenshot)    
+        success = self._send_webhook_request(payload, include_screenshot)
+        
+        if success:
+            self.previous_stats = {
+                'digs': digs,
+                'clicks': clicks,
+                'money_value': money_value,
+                'item_counts': item_counts.copy() if item_counts else {}
+            }
+            
+        return success    
     def send_error_notification(self, error_message, user_id=None):
         return self.send_notification(f"⚠️ Error occurred: {error_message}", user_id, 0xFF9900)
 
@@ -358,6 +395,11 @@ class DiscordNotifier:
                 if live_stats_screenshots_enabled and live_stats_screenshot_interval:
                     current_time = time.time()
                     if current_time - self.last_screenshot_time >= live_stats_screenshot_interval:
+                        with self._update_lock:
+                            if self._pending_update:
+                                time.sleep(1)
+                                continue
+                                
                         try:
                             money_value = None
                             enable_money_detection = get_param(dig_tool_instance, "enable_money_detection")
@@ -379,7 +421,6 @@ class DiscordNotifier:
                                 dig_tool_instance=dig_tool_instance,
                                 include_screenshot=True
                             )
-                            self.last_screenshot_time = current_time
                             logger.debug(f"Live stats screenshot sent (interval: {live_stats_screenshot_interval}s)")
                         except Exception as e:
                             logger.error(f"Error in live stats update: {e}")
@@ -501,9 +542,14 @@ def check_milestone_notifications(dig_tool_instance):
             dig_tool_instance.last_milestone_notification = dig_tool_instance.dig_count
         
         should_update_stats = (hasattr(dig_tool_instance, 'discord_notifier') and 
-                              dig_tool_instance.discord_notifier.stats_message_id)
+                              dig_tool_instance.discord_notifier.stats_message_id and
+                              not should_send_milestone)
 
         if should_update_stats:
+            with dig_tool_instance.discord_notifier._update_lock:
+                if dig_tool_instance.discord_notifier._pending_update:
+                    return
+                    
             money_value = None
             enable_money_detection = get_param(dig_tool_instance, "enable_money_detection")
             if enable_money_detection and hasattr(dig_tool_instance, 'money_ocr') and dig_tool_instance.money_ocr:
@@ -529,7 +575,7 @@ def check_milestone_notifications(dig_tool_instance):
                     )
                 except Exception as e:
                     logger.error(f"Error updating Discord stats: {e}")
-            elif not should_send_milestone:
+            else:
                 try:
                     dig_tool_instance.discord_notifier.update_stats_message(
                         digs=dig_tool_instance.dig_count,
