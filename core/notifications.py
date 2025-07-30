@@ -351,7 +351,7 @@ class DiscordNotifier:
         }
 
         description_parts = []
-        description_parts.append(f"🎯 **{digs:,} digs reached!**")
+        description_parts.append(f"⛏️ *{digs:,} digs reached since last milestone!*")
 
         if include_screenshot:
             embed["image"] = {"url": "attachment://screenshot.webp"}
