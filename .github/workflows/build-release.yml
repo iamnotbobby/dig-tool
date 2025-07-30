@@ -1,0 +1,316 @@
+name: Build and Release
+on:
+  workflow_dispatch:
+    inputs:
+      override_version:
+        description: 'Override version (leave empty to auto-detect)'
+        required: false
+        default: ''
+      override_beta:
+        description: 'Override beta version (leave empty to auto-detect)'
+        required: false
+        default: ''
+      override_release_name:
+        description: 'Override release name (leave empty to auto-generate)'
+        required: false
+        default: ''
+      custom_notes:
+        description: 'Additional release notes (optional)'
+        required: false
+        default: ''
+      use_custom_bootloader:
+        description: 'Build with custom bootloader (reduces AV false positives)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  
+         
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Install system dependencies for bootloader compilation
+        if: ${{ github.event.inputs.use_custom_bootloader == 'true' }}
+        run: |
+          choco install visualstudio2022-workload-vctools -y
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          refreshenv
+        shell: powershell
+
+      - name: Extract version information
+        id: extract_version
+        run: |
+          $overrideVersion = "${{ github.event.inputs.override_version }}"
+          $overrideBeta = "${{ github.event.inputs.override_beta }}"
+          
+          if ($overrideVersion -and $overrideVersion.Trim() -ne "") {
+            $version = $overrideVersion.Trim()
+            echo "Using override version: $version"
+          } else {
+            $mainPyContent = Get-Content -Path "main.py" -Raw
+            if ($mainPyContent -match 'VERSION\s*=\s*"([^"]+)"') {
+              $version = $matches[1]
+              echo "Auto-detected version from main.py: $version"
+            } else {
+              throw "Could not extract VERSION from main.py"
+            }
+          }
+          
+          if ($overrideBeta -and $overrideBeta.Trim() -ne "") {
+            $betaVersion = $overrideBeta.Trim()
+            echo "Using override beta version: $betaVersion"
+          } else {
+            $mainPyContent = Get-Content -Path "main.py" -Raw
+            if ($mainPyContent -match 'VERSION_BETA\s*=\s*(\d+|None)') {
+              $betaMatch = $matches[1]
+              if ($betaMatch -eq "None") {
+                $betaVersion = $null
+                echo "Auto-detected VERSION_BETA from main.py: None (stable release)"
+              } else {
+                $betaVersion = $betaMatch
+                echo "Auto-detected VERSION_BETA from main.py: $betaVersion"
+              }
+            } else {
+              echo "Could not extract VERSION_BETA from main.py, assuming stable release"
+              $betaVersion = $null
+            }
+          }
+          
+          if ($betaVersion) {
+            $fullVersion = "$version-beta.$betaVersion"
+            $releaseTag = "v$fullVersion"
+            $autoReleaseName = "Beta Release v$fullVersion"
+            $isBeta = "true"
+          } else {
+            $fullVersion = $version
+            $releaseTag = "v$fullVersion"
+            $autoReleaseName = "Release v$fullVersion"
+            $isBeta = "false"
+          }
+          
+          $overrideReleaseName = "${{ github.event.inputs.override_release_name }}"
+          if ($overrideReleaseName -and $overrideReleaseName.Trim() -ne "") {
+            $releaseName = $overrideReleaseName.Trim()
+            echo "Using override release name: $releaseName"
+          } else {
+            $releaseName = $autoReleaseName
+            echo "Using auto-generated release name: $releaseName"
+          }
+          
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "beta_version=$betaVersion" >> $env:GITHUB_OUTPUT
+          echo "full_version=$fullVersion" >> $env:GITHUB_OUTPUT
+          echo "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
+          echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+          echo "is_beta=$isBeta" >> $env:GITHUB_OUTPUT
+          
+          echo "Final version info:"
+          echo "  Version: $version"
+          echo "  Beta: $betaVersion"
+          echo "  Full: $fullVersion"
+          echo "  Tag: $releaseTag"
+          echo "  Name: $releaseName"
+          echo "  Is Beta: $isBeta"
+        shell: powershell
+      
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install wheel setuptools
+      
+      - name: Build custom PyInstaller bootloader
+        if: ${{ github.event.inputs.use_custom_bootloader == 'true' }}
+        run: |
+          git clone https://github.com/pyinstaller/pyinstaller.git pyinstaller-source
+          cd pyinstaller-source
+          
+          cd bootloader
+          python waf distclean all
+          
+          cd ..
+          pip install .
+          
+          echo "Custom bootloader built and installed successfully"
+        shell: powershell
+
+      - name: Install standard PyInstaller
+        if: ${{ github.event.inputs.use_custom_bootloader == 'false' }}
+        run: |
+          pip install pyinstaller
+        shell: powershell
+
+      - name: Verify PyInstaller installation
+        run: |
+          pyinstaller --version
+          python -c "import PyInstaller; print('PyInstaller location:', PyInstaller.__path__[0])"
+        shell: powershell
+      
+      - name: Generate executable name with version
+        id: exe_name
+        run: |
+          $fullVersion = "${{ steps.extract_version.outputs.full_version }}"
+          $version = $fullVersion -replace '[^a-zA-Z0-9.-]', '-'
+          $exeName = "DigTool-$version"
+          
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "Generated executable name: $exeName"
+        shell: powershell
+         
+      - name: Build Executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --hidden-import=winrt.windows.foundation --hidden-import=winrt.windows.media.ocr --hidden-import=winrt.windows.graphics.imaging --hidden-import=winrt.windows.storage.streams --distpath=dist --workpath=build --specpath=. --clean main.py
+         
+      - name: Get executable info and generate verification file
+        id: get_exe_info
+        run: |
+          $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
+          $exePath = "dist/$exeName"
+          $fileSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+          
+          $sha256Hash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
+          $md5Hash = (Get-FileHash -Path $exePath -Algorithm MD5).Hash
+          
+          $bootloaderType = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "Custom" } else { "Standard" }
+          
+          $verificationContent = "# DigTool Build Verification`n"
+          $verificationContent += "# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')`n"
+          $verificationContent += "# File: $exeName`n"
+          $verificationContent += "# Size: ${fileSize}MB`n`n"
+          $verificationContent += "## File Integrity (Checksums)`n"
+          $verificationContent += "SHA256: $sha256Hash`n"
+          $verificationContent += "MD5: $md5Hash`n`n"
+          $verificationContent += "### Verification Commands`n"
+          $verificationContent += "Windows: certutil -hashfile $exeName SHA256`n"
+          $verificationContent += "Linux/Mac: sha256sum $exeName`n`n"
+          $verificationContent += "## Build Attestation`n"
+          $verificationContent += "Workflow: ${{ github.workflow }}`n"
+          $verificationContent += "Run ID: ${{ github.run_id }}`n"
+          $verificationContent += "Run Number: ${{ github.run_number }}`n"
+          $verificationContent += "Actor: ${{ github.actor }}`n"
+          $verificationContent += "Repository: ${{ github.repository }}`n"
+          $verificationContent += "Branch/Ref: ${{ github.ref }}`n"
+          $verificationContent += "Commit SHA: ${{ github.sha }}`n"
+          $verificationContent += "Timestamp: $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')`n"
+          $verificationContent += "Bootloader: $bootloaderType PyInstaller Bootloader`n`n"
+          $verificationContent += "## Verification Links`n"
+          $verificationContent += "GitHub Actions Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`n"
+          $verificationContent += "Source Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}`n`n"
+          $verificationContent += "## JSON Attestation`n"
+
+          $attestation = @{
+            "build_info" = @{
+              "workflow" = "${{ github.workflow }}"
+              "run_id" = "${{ github.run_id }}"
+              "run_number" = "${{ github.run_number }}"
+              "actor" = "${{ github.actor }}"
+              "repository" = "${{ github.repository }}"
+              "ref" = "${{ github.ref }}"
+              "sha" = "${{ github.sha }}"
+              "timestamp" = "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
+              "bootloader_type" = "$bootloaderType"
+            }
+            "executable" = @{
+              "name" = "$exeName"
+              "sha256" = "$sha256Hash"
+              "md5" = "$md5Hash"
+              "size_mb" = "$fileSize"
+            }
+            "verification" = @{
+              "github_actions_url" = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "commit_url" = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+            }
+          }
+          
+          $attestationJson = $attestation | ConvertTo-Json -Depth 10 -Compress:$false
+          $verificationContent += $attestationJson
+          
+          $verificationContent | Out-File -FilePath "dist/VERIFICATION.txt" -Encoding UTF8
+          
+          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
+          echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
+          echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
+          echo "bootloader_type=$bootloaderType" >> $env:GITHUB_OUTPUT
+          echo "Built executable: $exeName (${fileSize}MB) with $bootloaderType bootloader"
+          echo "SHA256: $sha256Hash"
+        shell: powershell
+        
+      - name: Create and push tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a "${{ steps.extract_version.outputs.release_tag }}" -m "${{ steps.extract_version.outputs.release_name }}"
+          git push origin "${{ steps.extract_version.outputs.release_tag }}"
+       
+      - name: Generate automated release notes
+        id: generate_notes
+        run: |
+          $releaseTag = "${{ steps.extract_version.outputs.release_tag }}"
+          $isBeta = "${{ steps.extract_version.outputs.is_beta }}" -eq "true"
+          $customNotes = "${{ github.event.inputs.custom_notes }}"
+          
+          $notes = ""
+          
+          if ($isBeta) {
+            $notes += "**BETA RELEASE**`n`n"
+            $notes += "Please report any issues within the [discord](https://discord.com/invite/mxE7dzXMGf).`n`n"
+          } else {
+            $notes += "Join our [Discord](https://discord.com/invite/mxE7dzXMGf) for support and updates!`n`n"
+          }
+          
+          if ($customNotes -and $customNotes.Trim() -ne "") {
+            $notes += "$customNotes`n`n"
+          }
+          
+          $notes += "> **File Integrity Verification:** ``${{ steps.get_exe_info.outputs.sha256_hash }}```n"
+          $notes += "[Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+         
+          echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
+          echo "$notes" >> $env:GITHUB_OUTPUT
+          echo "EOF" >> $env:GITHUB_OUTPUT
+        shell: powershell
+       
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.extract_version.outputs.release_tag }}
+          name: ${{ steps.extract_version.outputs.release_name }}
+          body: ${{ steps.generate_notes.outputs.release_notes }}
+          draft: false
+          prerelease: ${{ steps.extract_version.outputs.is_beta }}
+          files: |
+            ${{ steps.get_exe_info.outputs.exe_path }}
+            dist/VERIFICATION.txt
+         
+      - name: Output release info
+        run: |
+          echo "Release created successfully!"
+          echo "Tag: ${{ steps.extract_version.outputs.release_tag }}"
+          echo "Name: ${{ steps.extract_version.outputs.release_name }}"
+          echo "Version: ${{ steps.extract_version.outputs.full_version }}"
+          echo "Asset: ${{ steps.get_exe_info.outputs.exe_name }}"
+          echo "Full path: ${{ steps.get_exe_info.outputs.exe_path }}"
+          echo "Bootloader: ${{ steps.get_exe_info.outputs.bootloader_type }}"
+        shell: powershell
+
+      - name: Cleanup build artifacts
+        if: always()
+        run: |
+          if (Test-Path "pyinstaller-source") {
+            Remove-Item -Recurse -Force "pyinstaller-source"
+          }
+        shell: powershell
