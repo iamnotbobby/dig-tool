@@ -1,3 +1,6 @@
+> [!NOTE]  
+> This guide is meant for versions v1.5.4 and higher. Some parts of the guide may be applicable on earlier versions.
+
 # 🥄 Dig Tool — Usage Guide
 
 ## Table of Contents
