@@ -33,8 +33,6 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
----
-
 ## 🚀 Getting Started
 
 1. **Launch Dig Tool**
@@ -81,8 +79,6 @@
 
    - Press <kbd>F1</kbd> or your assigned hotkey to start Dig Tool.
    - You can pause or stop at any time by pressing the hotkey again.
-  
----
 
 ## 🎮 Basic Controls
 
@@ -92,8 +88,6 @@
 | Show / Hide Main GUI | `F2`               |
 | Show / Hide Overlay  | `F3`               | 
 | Show / Hide Auto-Walk Overlay  | `F4`               | 
-
----
 
 ## 📚 How To
 
@@ -114,6 +108,8 @@ Alternatively, you can also just drag and drop the `.json` configuration file on
 
 If you want other community-made settings join the [Discord](https://discord.com/invite/mxE7dzXMGf).
 
+---
+
 ### How to import custom walk patterns
 
 You can import `.json` pattern files to define how your character walks during Dig Tool execution.
@@ -132,6 +128,8 @@ You can import `.json` pattern files to define how your character walks during D
    ![Load File Dialog](/assets/docs/load_filedialog.png)
 
 If you want other community-made patterns join the [Discord](https://discord.com/invite/mxE7dzXMGf).
+
+---
 
 ### How to create your own custom walk pattern
 
@@ -171,6 +169,8 @@ You can create and record your own custom walk patterns to define exactly how yo
    - Return to `Available Patterns` and you will see your new custom pattern listed.  
      ![Custom Walk Pattern New Pattern](/assets/docs/custom_walk_pattern_new_pattern.png)
 
+---
+
 ### How to set up Discord notifications
 
 Configure Dig Tool to send notifications to your Discord server via a webhook.
@@ -196,6 +196,8 @@ Configure Dig Tool to send notifications to your Discord server via a webhook.
    
    - Click "Test Discord Notification" to verify it's working.
 
+---
+
 ### How to set up money detection
 
 Enable automatic money tracking.
@@ -216,6 +218,8 @@ Enable automatic money tracking.
      ![Test Money OCR Example](/assets/docs/settings/test_money_ocr_example.png)
    - Decrease the color tolerance if nothing appears.
 
+---
+
 ### How to set up item detection
 
 Track rare items and get notified when you dig up valuable loot.
@@ -234,6 +238,8 @@ Track rare items and get notified when you dig up valuable loot.
    
    - Test by clicking `Test Item OCR` to ensure it works. You will see it appear in the status box.  
      ![Test Item OCR](/assets/docs/settings/test_item_ocr_example.png)
+
+---
 
 ### How to use color picker detection
 
@@ -258,13 +264,9 @@ Use color picker detection for more precise zone detection.
    
    - Done! Adjust color tolerance accordingly if the detection is too sensitive or not sensitive enough.
 
----
-
 ## ⚙️ Settings Overview
 
 For a comprehensive guide to all available settings and their detailed explanations, please refer to the [Settings Documentation](/docs/SETTINGS.md).
-
----
 
 ## 🔧 Troubleshooting
 
@@ -334,6 +336,7 @@ If your Dig Tool **fails to get strong hits**, or **only gets them randomly**, t
 4. **Review your settings:**
 
    Your settings can cause Dig Tool to perform poorly. Review [settings](/docs/SETTINGS.md) for an overview on all of the settings.
+---
 
 ### ❌ Dig Tool does not detect anything
 
@@ -354,6 +357,8 @@ This is an issue related to the detection method you're using.
 3. **Try a different detection method:**
    
    - If adjusting the threshold doesn't work, you will need to adjust your color settings or use a different detection method such as Otsu's Detection.
+
+---
 
 ### ❌ Dig Tool stops walking during auto-walk
 
@@ -378,6 +383,8 @@ This usually happens for several reasons.
    
    - If you can move around in-game with your camera, but moving with WASD does not work and you cannot dig:
    - Under `Auto-Walk` section, go to `Shovel Management` and enable `Auto-Shovel`.
+     
+---
 
 ### ❌ Auto-sell does not open the inventory
 
@@ -386,6 +393,8 @@ This happens when using a different keyboard layout.
 #### How to fix:
 
 - If you are using a different keyboard layout (not QWERTY), you will need to change the inventory key under `Auto-Walk > Auto-Sell Settings > Inventory Key`.
+
+---
 
 ### ❌ Auto-sell does not use UI navigation correctly
 
@@ -403,6 +412,8 @@ This happens because UI navigation sequences are different for every user.
 2. **Check the UI navigation key:**
    
    - If auto-sell does not enable UI navigation at all (as indicated by a ROBLOX notification in the bottom right of the screen) and you're not using QWERTY, you will need to change the UI navigation key at `Auto-Walk > Auto-Sell Settings > UI Navigation Key`.
+
+---
 
 ### ❌ Windows Defender blocked or deleted the executable
 
@@ -422,8 +433,6 @@ Windows Defender may **incorrectly flag Dig Tool as harmful** and block or delet
 > [!IMPORTANT]
 > This issue is a **false positive**. Dig Tool does not contain any malicious code.
 
----
-
 ## 💬 Get Help & Report Bugs
 
 If you're experiencing issues that aren't covered in the troubleshooting section, or if you need additional help with Dig Tool, this section can help you.
@@ -442,6 +451,8 @@ Found a bug? Help me improve Dig Tool by reporting it:
    - Under `Debug > Show Debug Console` this will show debug messages. Include this.
    Note: You will need to send me a message on Discord rather than in the official channels.
 
+---
+
 ### Getting Additional Help
 
 Need help setting up Dig Tool or have questions about specific features?
@@ -451,6 +462,8 @@ Need help setting up Dig Tool or have questions about specific features?
   - Shared configuration settings
   - Custom walk patterns
 - **Get support from the community via a dedicated support channel**
+
+---
 
 ### Before Asking for Help
 
