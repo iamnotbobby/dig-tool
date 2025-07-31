@@ -60,12 +60,12 @@ jobs:
             $version = $overrideVersion.Trim()
             echo "Using override version: $version"
           } else {
-            $mainPyContent = Get-Content -Path "main.py" -Raw
-            if ($mainPyContent -match 'VERSION\s*=\s*"([^"]+)"') {
+            $pyprojectContent = Get-Content -Path "pyproject.toml" -Raw
+            if ($pyprojectContent -match 'version\s*=\s*"([^"]+)"') {
               $version = $matches[1]
-              echo "Auto-detected version from main.py: $version"
+              echo "Auto-detected version from pyproject.toml: $version"
             } else {
-              throw "Could not extract VERSION from main.py"
+              throw "Could not extract version from pyproject.toml"
             }
           }
           
@@ -73,18 +73,18 @@ jobs:
             $betaVersion = $overrideBeta.Trim()
             echo "Using override beta version: $betaVersion"
           } else {
-            $mainPyContent = Get-Content -Path "main.py" -Raw
-            if ($mainPyContent -match 'VERSION_BETA\s*=\s*(\d+|None)') {
+            $pyprojectContent = Get-Content -Path "pyproject.toml" -Raw
+            if ($pyprojectContent -match '\[tool\.dig-tool\][\s\S]*?version-beta\s*=\s*(\d+|null|none)') {
               $betaMatch = $matches[1]
-              if ($betaMatch -eq "None") {
+              if ($betaMatch -eq "null" -or $betaMatch -eq "none") {
                 $betaVersion = $null
-                echo "Auto-detected VERSION_BETA from main.py: None (stable release)"
+                echo "Auto-detected version-beta from pyproject.toml: None (stable release)"
               } else {
                 $betaVersion = $betaMatch
-                echo "Auto-detected VERSION_BETA from main.py: $betaVersion"
+                echo "Auto-detected version-beta from pyproject.toml: $betaVersion"
               }
             } else {
-              echo "Could not extract VERSION_BETA from main.py, assuming stable release"
+              echo "Could not extract version-beta from pyproject.toml, assuming stable release"
               $betaVersion = $null
             }
           }
@@ -128,7 +128,7 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
+          pip install .
           pip install wheel setuptools
       
       - name: Build custom PyInstaller bootloader
@@ -169,32 +169,48 @@ jobs:
           echo "Generated executable name: $exeName"
         shell: powershell
          
-      - name: Build Executable with PyInstaller
+      - name: Build Executable with build.py
         run: |
-          pyinstaller --onefile --windowed --name="${{ steps.exe_name.outputs.exe_name }}" --icon=assets/icon.ico --add-data="assets;assets" --add-data="core;core" --add-data="interface;interface" --add-data="utils;utils" --collect-all=autoit --hidden-import=winrt.windows.foundation --hidden-import=winrt.windows.media.ocr --hidden-import=winrt.windows.graphics.imaging --hidden-import=winrt.windows.storage.streams --distpath=dist --workpath=build --specpath=. --clean main.py
+          echo "Building executable using build.py..."
+          python build.py
+          
+          echo "Build completed. Listing dist directory:"
+          Get-ChildItem -Path "dist" -Recurse | ForEach-Object { echo "  $($_.FullName)" }
+        shell: powershell
          
       - name: Get executable info and generate verification file
         id: get_exe_info
         run: |
-          $exeName = (Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1).Name
-          $exePath = "dist/$exeName"
-          $fileSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+          $originalExe = Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1
+          if (-not $originalExe) {
+            throw "No executable found in dist directory"
+          }
           
-          $sha256Hash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
-          $md5Hash = (Get-FileHash -Path $exePath -Algorithm MD5).Hash
+          $fullVersion = "${{ steps.extract_version.outputs.full_version }}"
+          $versionSafe = $fullVersion -replace '[^a-zA-Z0-9.-]', '-'
+          $newExeName = "DigTool-$versionSafe.exe"
+          $originalPath = $originalExe.FullName
+          $newPath = "dist/$newExeName"
+          
+          Rename-Item -Path $originalPath -NewName $newExeName
+          echo "Renamed executable from $($originalExe.Name) to $newExeName"
+          
+          $fileSize = [math]::Round((Get-Item $newPath).Length / 1MB, 2)
+          $sha256Hash = (Get-FileHash -Path $newPath -Algorithm SHA256).Hash
+          $md5Hash = (Get-FileHash -Path $newPath -Algorithm MD5).Hash
           
           $bootloaderType = if ("${{ github.event.inputs.use_custom_bootloader }}" -eq "true") { "Custom" } else { "Standard" }
           
           $verificationContent = "# DigTool Build Verification`n"
           $verificationContent += "# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')`n"
-          $verificationContent += "# File: $exeName`n"
+          $verificationContent += "# File: $newExeName`n"
           $verificationContent += "# Size: ${fileSize}MB`n`n"
           $verificationContent += "## File Integrity (Checksums)`n"
           $verificationContent += "SHA256: $sha256Hash`n"
           $verificationContent += "MD5: $md5Hash`n`n"
           $verificationContent += "### Verification Commands`n"
-          $verificationContent += "Windows: certutil -hashfile $exeName SHA256`n"
-          $verificationContent += "Linux/Mac: sha256sum $exeName`n`n"
+          $verificationContent += "Windows: certutil -hashfile $newExeName SHA256`n"
+          $verificationContent += "Linux/Mac: sha256sum $newExeName`n`n"
           $verificationContent += "## Build Attestation`n"
           $verificationContent += "Workflow: ${{ github.workflow }}`n"
           $verificationContent += "Run ID: ${{ github.run_id }}`n"
@@ -223,7 +239,7 @@ jobs:
               "bootloader_type" = "$bootloaderType"
             }
             "executable" = @{
-              "name" = "$exeName"
+              "name" = "$newExeName"
               "sha256" = "$sha256Hash"
               "md5" = "$md5Hash"
               "size_mb" = "$fileSize"
@@ -239,13 +255,13 @@ jobs:
           
           $verificationContent | Out-File -FilePath "dist/VERIFICATION.txt" -Encoding UTF8
           
-          echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
-          echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          echo "exe_name=$newExeName" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$newPath" >> $env:GITHUB_OUTPUT
           echo "file_size=$fileSize" >> $env:GITHUB_OUTPUT
           echo "sha256_hash=$sha256Hash" >> $env:GITHUB_OUTPUT
           echo "md5_hash=$md5Hash" >> $env:GITHUB_OUTPUT
           echo "bootloader_type=$bootloaderType" >> $env:GITHUB_OUTPUT
-          echo "Built executable: $exeName (${fileSize}MB) with $bootloaderType bootloader"
+          echo "Built executable: $newExeName (${fileSize}MB) with $bootloaderType bootloader"
           echo "SHA256: $sha256Hash"
         shell: powershell
         

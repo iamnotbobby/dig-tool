@@ -48,7 +48,6 @@ Dig Tool is built on a modular Python architecture using computer vision librari
 
 **Input Control:**
 - **PyNput** (`pynput`) - Primary input automation and hotkey detection  
-- **PyAutoIt** (`PyAutoIt`) - Primary input method for auto-sell functionality
 - **PyAutoGUI** (`pyautogui`) - Fallback input methods
 - **PyWin32** (`pywin32`) - Windows API integration for cursor positioning
 
@@ -77,7 +76,7 @@ Dig Tool is built on a modular Python architecture using computer vision librari
 
 **`main.py`** - Application entry point and main controller. Initializes the GUI, coordinates all system components, manages global state, and handles the primary event loop for detection and automation.
 
-**`compile.py`** - Build script for creating standalone executables. Uses PyInstaller to package the application with all dependencies into a single executable file for distribution.
+**`build.py`** - Build script for creating standalone executables. Uses PyInstaller to package the application with all dependencies into a single executable file for distribution.
 
 ### Core System (`core/`)
 

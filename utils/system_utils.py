@@ -28,7 +28,6 @@ def check_dependencies():
         "win32gui": "pywin32",
         "pynput": "pynput",
         "requests": "requests",
-        "autoit": "pyautoit",
         "mss": "mss",
         "psutil": "psutil",
         "PyInstaller": "PyInstaller",
@@ -839,3 +838,59 @@ def update_time_cache(dig_tool_instance):
         dig_tool_instance._current_time_cache = now
         dig_tool_instance._current_time_ms_cache = now * 1000
         dig_tool_instance._last_time_update = now
+
+
+def _get_version_info():
+    try:
+        import sys
+        if getattr(sys, 'frozen', False):
+            try:
+                import os
+                if hasattr(sys, '_MEIPASS'):
+                    version_file = os.path.join(sys._MEIPASS, 'version_info.txt')
+                    if os.path.exists(version_file):
+                        with open(version_file, 'r') as f:
+                            lines = f.read().strip().split('\n')
+                            version = lines[0] if len(lines) > 0 else "1.5.4"
+                            beta = lines[1] if len(lines) > 1 and lines[1] != 'none' else None
+                            return version, int(beta) if beta else None
+            except Exception:
+                pass
+            
+            return None
+        
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent
+        pyproject_path = project_root / "pyproject.toml"
+        
+        version = None
+        version_beta = None
+        
+        if pyproject_path.exists():
+            with open(pyproject_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('version = '):
+                    version = line.split('=')[1].strip().strip('"\'')
+                    break
+            
+            in_dig_tool_section = False
+            for line in content.split('\n'):
+                line = line.strip()
+                if line == '[tool.dig-tool]':
+                    in_dig_tool_section = True
+                    continue
+                elif line.startswith('[') and in_dig_tool_section:
+                    break
+                elif in_dig_tool_section and line.startswith('version-beta = '):
+                    beta_value = line.split('=')[1].strip()
+                    if beta_value and beta_value not in ['null', 'none', '']:
+                        version_beta = int(beta_value)
+                    break
+        
+        return version, version_beta
+        
+    except Exception:
+        return None
