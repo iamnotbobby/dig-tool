@@ -750,9 +750,11 @@ class SettingsManager:
                                     converted_value = float(value)
                                     param_var.set(converted_value)
                                 elif isinstance(param_var, tk.IntVar):
-                                    converted_value = int(
-                                        float(str(value).replace("JS:", ""))
-                                    )
+                                    value_str = str(value).replace("JS:", "")
+                                    if value_str == '' or value_str is None:
+                                        converted_value = self.default_params.get(key, 0)
+                                    else:
+                                        converted_value = int(float(value_str))
                                     param_var.set(converted_value)
                                 else:
                                     if key in self._get_multi_checkbox_params():
@@ -1668,7 +1670,10 @@ class SettingsManager:
                             if param_type == tk.BooleanVar:
                                 converted_value = bool(value)
                             elif param_type == tk.IntVar:
-                                converted_value = int(value)
+                                if value == '' or value is None:
+                                    converted_value = self.default_params[key]
+                                else:
+                                    converted_value = int(value)
                             elif param_type == tk.DoubleVar:
                                 converted_value = float(value)
                             else:

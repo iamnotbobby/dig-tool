@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dig-tool"
+version = "1.5.4"
+description = "Dig Tool"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "iamnotbobby"},
+]
+requires-python = ">=3.8"
+dependencies = [
+    "opencv-python",
+    "numpy",
+    "keyboard", 
+    "psutil",
+    "pillow",
+    "pywin32",
+    "pynput",
+    "requests",
+    "mss",
+    "tkinterdnd2",
+    "pyautogui",
+    "winrt-Windows.Media.Ocr",
+    "winrt-Windows.Graphics.Imaging", 
+    "winrt-Windows.Storage.Streams",
+    "winrt-Windows.Foundation",
+    "watchdog",
+    "PyAutoIt",
+]
+
+[tool.setuptools]
+packages = ["core", "interface", "utils"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.ico", "*.png", "*.jpg", "*.md", "*.txt"]
+
+[tool.dig-tool]
+# version-beta = 7
+
+[project.optional-dependencies]
+build = [
+    "nuitka",
+    "PyInstaller",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "tab"
+docstring-code-format = true

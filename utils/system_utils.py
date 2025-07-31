@@ -14,46 +14,6 @@ import gc
 import keyboard
 from utils.debug_logger import logger
 
-
-def check_dependencies():
-    # Skip dependency check when running as Pyinstaller-bundled
-    if getattr(sys, 'frozen', False):
-        return
-    
-    required_packages = {
-        "cv2": "opencv-python",
-        "numpy": "numpy",
-        "PIL": "Pillow",
-        "keyboard": "keyboard",
-        "win32gui": "pywin32",
-        "pynput": "pynput",
-        "requests": "requests",
-        "autoit": "pyautoit",
-        "mss": "mss",
-        "psutil": "psutil",
-        "PyInstaller": "PyInstaller",
-        "tkinterdnd2": "tkinterdnd2",
-        "pyautogui": "pyautogui",
-        "winrt.windows.media.ocr": "winrt-Windows.Media.Ocr",
-        "winrt.windows.graphics.imaging": "winrt-Windows.Graphics.Imaging",
-        "winrt.windows.storage.streams": "winrt-Windows.Storage.Streams",
-        "winrt.windows.foundation": "winrt-Windows.Foundation",
-        "watchdog": "watchdog",
-    }
-    missing_packages = []
-    for module, package in required_packages.items():
-        try:
-            importlib.import_module(module)
-        except ImportError:
-            missing_packages.append(package)
-    if missing_packages:
-        logger.error("Missing required packages:")
-        for package in missing_packages:
-            logger.error(f"  pip install {package}")
-        logger.error("\nPlease install the missing packages and try again.")
-        sys.exit(1)
-
-
 def get_display_scale():
     try:
         user32 = ctypes.windll.user32
@@ -604,8 +564,15 @@ def measure_system_latency(game_area=None, cam=None):
                 
                 processing_start = time.perf_counter()
                 if len(screenshot.shape) == 3:
+                    hsv = cv2.cvtColor(screenshot, cv2.COLOR_BGR2HSV)
+                    saturation = hsv[:, :, 1]
+                    _, mask = cv2.threshold(saturation, 50, 255, cv2.THRESH_BINARY)
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if contours:
+                        main_contour = max(contours, key=cv2.contourArea)
+                        _ = cv2.boundingRect(main_contour)
                     gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-                    _, mask = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+                    _ = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
                 processing_time = time.perf_counter()
                 processing_latency = (processing_time - processing_start) * 1000
                 processing_measurements.append(processing_latency)
@@ -618,20 +585,14 @@ def measure_system_latency(game_area=None, cam=None):
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             try:
-                # Measure system call overhead without actually clicking
-                # This measures the timing of API calls that would be used for clicking
-                # without actually interfering with the user's experience
-                
-                # Get current cursor position (simulates click preparation)
                 point = ctypes.wintypes.POINT()
                 ctypes.windll.user32.GetCursorPos(ctypes.pointer(point))
-                
-                # Simulate the timing overhead of preparing click coordinates
-                # without actually sending mouse events
-                current_pos = (point.x, point.y)
-                
-                # Measure time for system API calls that clicking would use
-                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                _ = point.x, point.y 
+                try:
+                    ctypes.windll.user32.GetCursorPos(ctypes.pointer(point))
+                    _ = ctypes.windll.user32.GetForegroundWindow()
+                except Exception:
+                    pass
                 
             except Exception:
                 continue
@@ -662,9 +623,20 @@ def measure_system_latency(game_area=None, cam=None):
         base_latency = avg_screenshot + avg_processing + avg_click
         
         try:
-            device = win32api.EnumDisplaySettings(None, -1)
-            refresh_rate = device.DisplayFrequency
-        except:
+            user32 = ctypes.windll.user32
+            
+            hdc = user32.GetDC(0)
+            refresh_rate = ctypes.windll.gdi32.GetDeviceCaps(hdc, 116)
+            user32.ReleaseDC(0, hdc)
+            
+            if refresh_rate <= 1:
+                device = win32api.EnumDisplaySettings(None, -1)
+                refresh_rate = device.DisplayFrequency
+            
+            if refresh_rate <= 1:
+                refresh_rate = 60
+                
+        except Exception:
             refresh_rate = 60
             
         if refresh_rate >= 240:
@@ -839,3 +811,59 @@ def update_time_cache(dig_tool_instance):
         dig_tool_instance._current_time_cache = now
         dig_tool_instance._current_time_ms_cache = now * 1000
         dig_tool_instance._last_time_update = now
+
+
+def _get_version_info():
+    try:
+        import sys
+        if getattr(sys, 'frozen', False):
+            try:
+                import os
+                if hasattr(sys, '_MEIPASS'):
+                    version_file = os.path.join(sys._MEIPASS, 'version_info.txt')
+                    if os.path.exists(version_file):
+                        with open(version_file, 'r') as f:
+                            lines = f.read().strip().split('\n')
+                            version = lines[0] if len(lines) > 0 else "1.5.4"
+                            beta = lines[1] if len(lines) > 1 and lines[1] != 'none' else None
+                            return version, int(beta) if beta else None
+            except Exception:
+                pass
+            
+            return None
+        
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent
+        pyproject_path = project_root / "pyproject.toml"
+        
+        version = None
+        version_beta = None
+        
+        if pyproject_path.exists():
+            with open(pyproject_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('version = '):
+                    version = line.split('=')[1].strip().strip('"\'')
+                    break
+            
+            in_dig_tool_section = False
+            for line in content.split('\n'):
+                line = line.strip()
+                if line == '[tool.dig-tool]':
+                    in_dig_tool_section = True
+                    continue
+                elif line.startswith('[') and in_dig_tool_section:
+                    break
+                elif in_dig_tool_section and line.startswith('version-beta = '):
+                    beta_value = line.split('=')[1].strip()
+                    if beta_value and beta_value not in ['null', 'none', '']:
+                        version_beta = int(beta_value)
+                    break
+        
+        return version, version_beta
+        
+    except Exception:
+        return None
