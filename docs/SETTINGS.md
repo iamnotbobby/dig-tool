@@ -1,3 +1,6 @@
+> [!TIP]
+> You can hover over any setting in the tool to see a brief tooltip explanation. This guide provides more detailed information about each option.
+
 # 🔧 Dig Tool — Settings Options Guide
 
 ## Table of Contents
@@ -25,16 +28,9 @@
 - [Debug](#debug)
   - [Debug & Performance](#debug--performance)
 
----
-
 ## Overview
 
 This guide explains every setting and option available in the Dig Tool. Each setting is described in simple terms to help you understand what it does and how it affects the tool's behavior.
-
-> [!TIP]
-> You can hover over any setting in the tool to see a brief tooltip explanation. This guide provides more detailed information about each option.
-
----
 
 ## Detection
 
