@@ -64,7 +64,6 @@ from utils.screen_capture import ScreenCapture
 from utils.system_utils import (
     calculate_window_dimensions,
     check_beta_version_warning,
-    check_dependencies,
     check_display_scale,
     get_cached_system_latency,
     set_dig_tool_instance,
@@ -87,9 +86,6 @@ def get_window_title():
     if version_beta is not None:
         version += f"-beta.{version_beta}"
     return f"Dig Tool - v{version}"
-
-
-check_dependencies()
 
 try:
     PROCESS_PER_MONITOR_DPI_AWARE = 2

@@ -171,8 +171,8 @@ jobs:
          
       - name: Build Executable with build.py
         run: |
-          echo "Building executable using build.py..."
-          python build.py
+          echo "Building executable using scripts/build.py..."
+          python scripts/build.py
           
           echo "Build completed. Listing dist directory:"
           Get-ChildItem -Path "dist" -Recurse | ForEach-Object { echo "  $($_.FullName)" }

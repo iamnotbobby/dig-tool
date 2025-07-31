@@ -67,6 +67,7 @@ base_args = [
     '--add-data=interface;interface',
     '--add-data=utils;utils',
     f'--add-data={version_info_file};.',
+    '--exclude-module=scripts',
     '--distpath=dist',
     '--workpath=build',
     '--specpath=.',

@@ -14,45 +14,6 @@ import gc
 import keyboard
 from utils.debug_logger import logger
 
-
-def check_dependencies():
-    # Skip dependency check when running as Pyinstaller-bundled
-    if getattr(sys, 'frozen', False):
-        return
-    
-    required_packages = {
-        "cv2": "opencv-python",
-        "numpy": "numpy",
-        "PIL": "Pillow",
-        "keyboard": "keyboard",
-        "win32gui": "pywin32",
-        "pynput": "pynput",
-        "requests": "requests",
-        "mss": "mss",
-        "psutil": "psutil",
-        "PyInstaller": "PyInstaller",
-        "tkinterdnd2": "tkinterdnd2",
-        "pyautogui": "pyautogui",
-        "winrt.windows.media.ocr": "winrt-Windows.Media.Ocr",
-        "winrt.windows.graphics.imaging": "winrt-Windows.Graphics.Imaging",
-        "winrt.windows.storage.streams": "winrt-Windows.Storage.Streams",
-        "winrt.windows.foundation": "winrt-Windows.Foundation",
-        "watchdog": "watchdog",
-    }
-    missing_packages = []
-    for module, package in required_packages.items():
-        try:
-            importlib.import_module(module)
-        except ImportError:
-            missing_packages.append(package)
-    if missing_packages:
-        logger.error("Missing required packages:")
-        for package in missing_packages:
-            logger.error(f"  pip install {package}")
-        logger.error("\nPlease install the missing packages and try again.")
-        sys.exit(1)
-
-
 def get_display_scale():
     try:
         user32 = ctypes.windll.user32

@@ -48,6 +48,7 @@ Dig Tool is built on a modular Python architecture using computer vision librari
 
 **Input Control:**
 - **PyNput** (`pynput`) - Primary input automation and hotkey detection  
+- **PyAutoIt** (`PyAutoIt`) - Primary input method for auto-sell functionality
 - **PyAutoGUI** (`pyautogui`) - Fallback input methods
 - **PyWin32** (`pywin32`) - Windows API integration for cursor positioning
 
