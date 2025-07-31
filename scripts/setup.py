@@ -40,10 +40,12 @@ def main():
     
     if is_dev:
         run_command(f"{pip_path} install -e .", "Installing Dig Tool in development mode")
+        run_command(f"{pip_path} install -e \".[build]\"", "Installing build dependencies (PyInstaller)")
         print("\n🚀 Development setup complete!")
         activate_cmd = "env\\Scripts\\activate" if sys.platform == "win32" else "source env/bin/activate"
         print(f"Activate environment: {activate_cmd}")
         print(f"Run application: {python_path} main.py")
+        print(f"Build application: {python_path} scripts/build.py")
     else:
         run_command(f"{pip_path} install .", "Installing Dig Tool")
         print("\n🚀 Setup complete!")

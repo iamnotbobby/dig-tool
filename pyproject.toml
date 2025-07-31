@@ -44,7 +44,6 @@ include-package-data = true
 
 [project.optional-dependencies]
 build = [
-    "nuitka",
     "PyInstaller",
 ]
 
