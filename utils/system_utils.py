@@ -16,6 +16,10 @@ from utils.debug_logger import logger
 
 
 def check_dependencies():
+    # Skip dependency check when running as Pyinstaller-bundled
+    if getattr(sys, 'frozen', False):
+        return
+    
     required_packages = {
         "cv2": "opencv-python",
         "numpy": "numpy",
