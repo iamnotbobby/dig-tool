@@ -40,7 +40,7 @@ include-package-data = true
 "*" = ["*.ico", "*.png", "*.jpg", "*.md", "*.txt"]
 
 [tool.dig-tool]
-version-beta = 7
+# version-beta = 7
 
 [project.optional-dependencies]
 build = [

@@ -564,8 +564,15 @@ def measure_system_latency(game_area=None, cam=None):
                 
                 processing_start = time.perf_counter()
                 if len(screenshot.shape) == 3:
+                    hsv = cv2.cvtColor(screenshot, cv2.COLOR_BGR2HSV)
+                    saturation = hsv[:, :, 1]
+                    _, mask = cv2.threshold(saturation, 50, 255, cv2.THRESH_BINARY)
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if contours:
+                        main_contour = max(contours, key=cv2.contourArea)
+                        _ = cv2.boundingRect(main_contour)
                     gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-                    _, mask = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+                    _ = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
                 processing_time = time.perf_counter()
                 processing_latency = (processing_time - processing_start) * 1000
                 processing_measurements.append(processing_latency)
@@ -578,20 +585,14 @@ def measure_system_latency(game_area=None, cam=None):
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             try:
-                # Measure system call overhead without actually clicking
-                # This measures the timing of API calls that would be used for clicking
-                # without actually interfering with the user's experience
-                
-                # Get current cursor position (simulates click preparation)
                 point = ctypes.wintypes.POINT()
                 ctypes.windll.user32.GetCursorPos(ctypes.pointer(point))
-                
-                # Simulate the timing overhead of preparing click coordinates
-                # without actually sending mouse events
-                current_pos = (point.x, point.y)
-                
-                # Measure time for system API calls that clicking would use
-                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                _ = point.x, point.y 
+                try:
+                    ctypes.windll.user32.GetCursorPos(ctypes.pointer(point))
+                    _ = ctypes.windll.user32.GetForegroundWindow()
+                except Exception:
+                    pass
                 
             except Exception:
                 continue
@@ -622,9 +623,20 @@ def measure_system_latency(game_area=None, cam=None):
         base_latency = avg_screenshot + avg_processing + avg_click
         
         try:
-            device = win32api.EnumDisplaySettings(None, -1)
-            refresh_rate = device.DisplayFrequency
-        except:
+            user32 = ctypes.windll.user32
+            
+            hdc = user32.GetDC(0)
+            refresh_rate = ctypes.windll.gdi32.GetDeviceCaps(hdc, 116)
+            user32.ReleaseDC(0, hdc)
+            
+            if refresh_rate <= 1:
+                device = win32api.EnumDisplaySettings(None, -1)
+                refresh_rate = device.DisplayFrequency
+            
+            if refresh_rate <= 1:
+                refresh_rate = 60
+                
+        except Exception:
             refresh_rate = 60
             
         if refresh_rate >= 240:
