@@ -74,7 +74,7 @@ jobs:
             echo "Using override beta version: $betaVersion"
           } else {
             $pyprojectContent = Get-Content -Path "pyproject.toml" -Raw
-            if ($pyprojectContent -match '\[tool\.dig-tool\][\s\S]*?version-beta\s*=\s*(\d+|null|none)') {
+            if ($pyprojectContent -match '\[tool\.dig-tool\][\s\S]*?(?:^|\n)(?!\s*#)\s*version-beta\s*=\s*(\d+|null|none)') {
               $betaMatch = $matches[1]
               if ($betaMatch -eq "null" -or $betaMatch -eq "none") {
                 $betaVersion = $null
