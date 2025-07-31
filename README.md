@@ -67,10 +67,7 @@ python main.py
 
 Compile yourself: `python build.py`
 
-For development:
-```bash
-pip install -e .
-```
+For development: `pip install -e .`
 
 > [!NOTE]
 > Option 1 is recommended for most users as it requires no technical setup. Choose Option 2 if you want to modify the source or prefer running from source.
