@@ -4,7 +4,7 @@ import sys
 import traceback
 
 VERSION = "1.5.4"
-VERSION_BETA = 6
+VERSION_BETA = None
 
 def get_window_title():
     version = VERSION
