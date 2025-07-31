@@ -5,10 +5,13 @@ import numpy as np
 import win32gui, win32ui, win32con, win32api
 import os
 import sys
-import time
 import ctypes
+import ctypes.wintypes
 import tkinter as tk
 from tkinter import messagebox
+import threading
+import gc
+import keyboard
 from utils.debug_logger import logger
 
 
@@ -23,6 +26,15 @@ def check_dependencies():
         "requests": "requests",
         "autoit": "pyautoit",
         "mss": "mss",
+        "psutil": "psutil",
+        "PyInstaller": "PyInstaller",
+        "tkinterdnd2": "tkinterdnd2",
+        "pyautogui": "pyautogui",
+        "winrt.windows.media.ocr": "winrt-Windows.Media.Ocr",
+        "winrt.windows.graphics.imaging": "winrt-Windows.Graphics.Imaging",
+        "winrt.windows.storage.streams": "winrt-Windows.Storage.Streams",
+        "winrt.windows.foundation": "winrt-Windows.Foundation",
+        "watchdog": "watchdog",
     }
     missing_packages = []
     for module, package in required_packages.items():
@@ -87,17 +99,21 @@ def check_display_scale():
         if scale != 100:
             root = tk.Tk()
             root.withdraw()
+            root.attributes('-topmost', True)
+            root.grab_set()
+            
             result = messagebox.askquestion(
                 "Display Scaling Warning",
                 f"Your Windows display scaling (DPI) is set to {scale}%.\n\n"
                 "For best results, set display scaling to 100% (Default) in Windows Display Settings.\n"
-                "Detection may not work properly with scaling enabled.\n\n"
+                "Dig Tool may not work properly with scaling enabled.\n\n"
                 "To fix this:\n"
                 "1. Right-click on desktop → Display settings\n"
                 "2. Set 'Scale and layout' to 100%\n"
                 "3. Restart this application\n\n"
                 "Do you want to continue anyway?",
                 icon="warning",
+                parent=root
             )
             root.destroy()
 
@@ -106,12 +122,38 @@ def check_display_scale():
                 sys.exit(0)
             else:
                 logger.warning(
-                    f"User chose to continue with {scale}% display scaling - detection may be unreliable"
+                    f"User chose to continue with {scale}% display scaling"
                 )
         else:
             logger.info("Display scaling check passed (100%)")
     except Exception as e:
         logger.warning(f"Could not detect display scaling: {e}")
+        pass
+
+
+def check_beta_version_warning(version_beta=None):
+    try:
+        if version_beta is not None:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            root.grab_set()
+            
+            messagebox.showwarning(
+                "Beta Version Warning",
+                "You are on a BETA version!\n\n"
+                "Do not expect to get support without using the appropriate channels in the Discord.\n\n"
+                "Please consider getting the beta role.",
+                icon="warning",
+                parent=root
+            )
+            root.destroy()
+            
+            logger.warning(f"Beta version warning shown (VERSION_BETA = {version_beta})")
+        else:
+            pass
+    except Exception as e:
+        logger.warning(f"Could not check beta version: {e}")
         pass
 
 
@@ -142,7 +184,8 @@ def send_click():
     
     if _dig_tool_instance:
         try:
-            click_method = _dig_tool_instance.get_param('click_method')
+            from utils.config_management import get_param
+            click_method = get_param(_dig_tool_instance, 'click_method')
         except:
             click_method = 'win32api'
     else:
@@ -221,6 +264,72 @@ def find_window_by_title(title_pattern, exact_match=False):
             if title_pattern.lower() in window["title"].lower():
                 return window
     return None
+
+
+def find_and_focus_roblox_window():
+    try:
+        roblox_patterns = ["Roblox", "roblox"]
+        roblox_window = None
+
+        for pattern in roblox_patterns:
+            roblox_window = find_window_by_title(pattern, exact_match=False)
+            if roblox_window:
+                logger.debug(f"Found Roblox window: {roblox_window['title']}")
+                break
+
+        if roblox_window:
+            success = focus_window_no_resize(roblox_window["hwnd"])
+            if success:
+                logger.info(
+                    f"Successfully focused Roblox window: {roblox_window['title']}"
+                )
+                time.sleep(0.2)
+                return True
+            else:
+                logger.warning("Failed to focus Roblox window")
+                return False
+        else:
+            logger.warning("Roblox window not found")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error focusing Roblox window: {e}")
+        return False
+
+
+def focus_window_no_resize(hwnd):
+    try:
+        win32gui.SetForegroundWindow(hwnd)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to focus window: {e}")
+        return False
+
+
+def focus_roblox_window_legacy():
+    try:
+        windows = get_window_list()
+        roblox_patterns = ["Roblox", "roblox"]
+
+        for pattern in roblox_patterns:
+            for window in windows:
+                if pattern.lower() in window["title"].lower():
+                    if focus_window_no_resize(window["hwnd"]):
+                        logger.info(
+                            f"Successfully focused Roblox window: {window['title']}"
+                        )
+                        return True
+                    else:
+                        logger.warning(
+                            f"Found Roblox window but failed to focus: {window['title']}"
+                        )
+
+        logger.warning("Roblox window not found")
+        return False
+
+    except Exception as e:
+        logger.error(f"Error focusing Roblox window: {e}")
+        return False
 
 
 def capture_window(hwnd):
@@ -505,8 +614,21 @@ def measure_system_latency(game_area=None, cam=None):
         for _ in range(test_iterations):
             click_start = time.perf_counter()
             try:
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                # Measure system call overhead without actually clicking
+                # This measures the timing of API calls that would be used for clicking
+                # without actually interfering with the user's experience
+                
+                # Get current cursor position (simulates click preparation)
+                point = ctypes.wintypes.POINT()
+                ctypes.windll.user32.GetCursorPos(ctypes.pointer(point))
+                
+                # Simulate the timing overhead of preparing click coordinates
+                # without actually sending mouse events
+                current_pos = (point.x, point.y)
+                
+                # Measure time for system API calls that clicking would use
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                
             except Exception:
                 continue
             click_end = time.perf_counter()
@@ -573,3 +695,143 @@ def measure_system_latency(game_area=None, cam=None):
     except Exception as e:
         logger.error(f"System latency measurement failed: {e}")
         return 25
+
+
+def calculate_window_dimensions():
+    screen_width, screen_height = get_screen_resolution()
+    
+    if screen_width <= 1366 and screen_height <= 768:
+        width = 480
+        base_height = 480  
+    elif screen_width <= 1600 and screen_height <= 900:
+        width = 490
+        base_height = 510 
+    elif screen_width <= 1920 and screen_height <= 1080:
+        width = 500
+        base_height = 550  
+    elif screen_width <= 2560 and screen_height <= 1440:
+        width = 520
+        base_height = 630
+    elif screen_width <= 3840 and screen_height <= 2160:
+        width = 540
+        base_height = 730
+    else:
+        width = 560
+        base_height = 780
+
+
+    width = max(width, 400)
+    base_height = max(base_height, 480) 
+    
+   
+    width = min(width, 600)
+    base_height = min(base_height, int(screen_height * 0.85))  # Max 85% of screen height
+    
+    return width, base_height
+
+
+def get_cached_system_latency(dig_tool_instance):
+    if hasattr(dig_tool_instance, "_cached_latency") and hasattr(
+        dig_tool_instance, "_latency_measurement_time"
+    ):
+        if time.time() - dig_tool_instance._latency_measurement_time < 300:
+            return dig_tool_instance._cached_latency
+
+    if not hasattr(dig_tool_instance, "_cached_latency") or not hasattr(
+        dig_tool_instance, "_latency_measurement_time"
+    ):
+        logger.info("Measuring system latency (one-time measurement)...")
+        measured_latency = measure_system_latency_for_instance(dig_tool_instance)
+        dig_tool_instance._cached_latency = measured_latency
+        dig_tool_instance._latency_measurement_time = time.time()
+        return measured_latency
+
+    return dig_tool_instance._cached_latency
+
+
+def force_latency_remeasurement(dig_tool_instance):
+    if hasattr(dig_tool_instance, "_latency_measurement_time"):
+        dig_tool_instance._latency_measurement_time = 0
+
+    new_latency = measure_system_latency_for_instance(dig_tool_instance)
+    dig_tool_instance._cached_latency = new_latency
+    return new_latency
+
+def measure_system_latency_for_instance(dig_tool_instance):
+    import time
+    
+    if hasattr(dig_tool_instance, "_measured_latency") and hasattr(
+        dig_tool_instance, "_latency_measurement_time"
+    ):
+        if time.time() - dig_tool_instance._latency_measurement_time < 30:
+            return dig_tool_instance._measured_latency
+          
+    game_area = getattr(dig_tool_instance, "game_area", None)
+    dig_tool_instance._measured_latency = measure_system_latency(game_area, dig_tool_instance.cam)
+    dig_tool_instance._latency_measurement_time = time.time()
+    return dig_tool_instance._measured_latency
+
+
+def perform_final_cleanup(dig_tool_instance):
+    if dig_tool_instance.overlay:
+        dig_tool_instance.overlay.destroy_overlay()
+        dig_tool_instance.overlay = None
+    if dig_tool_instance.autowalk_overlay:
+        dig_tool_instance.autowalk_overlay.destroy_overlay()
+        dig_tool_instance.autowalk_overlay = None
+    if dig_tool_instance.color_modules_overlay:
+        dig_tool_instance.color_modules_overlay.destroy_overlay()
+        dig_tool_instance.color_modules_overlay = None
+
+    if hasattr(dig_tool_instance, "automation_manager") and dig_tool_instance.automation_manager:
+        dig_tool_instance.automation_manager.cleanup()
+        del dig_tool_instance.automation_manager
+        dig_tool_instance.automation_manager = None
+
+    if hasattr(dig_tool_instance, "roblox_rejoiner") and dig_tool_instance.roblox_rejoiner:
+        dig_tool_instance.roblox_rejoiner.stop_monitoring()
+        del dig_tool_instance.roblox_rejoiner
+        dig_tool_instance.roblox_rejoiner = None
+
+    try:
+        keyboard.unhook_all()
+    except:
+        pass
+
+    try:
+        dig_tool_instance.cam.close()
+    except:
+        pass
+
+    for _ in range(3):
+        gc.collect()
+
+    try:
+        import comtypes
+        comtypes.CoUninitialize()
+    except:
+        pass
+
+    dig_tool_instance.root.after(100, lambda: force_exit(dig_tool_instance))
+
+
+def force_exit(dig_tool_instance):
+    try:
+        dig_tool_instance.root.destroy()
+    except:
+        pass
+
+    def delayed_exit():
+        time.sleep(0.2)
+        os._exit(0)
+
+    exit_thread = threading.Thread(target=delayed_exit, daemon=True)
+    exit_thread.start()
+
+
+def update_time_cache(dig_tool_instance):
+    now = time.time()
+    if now - dig_tool_instance._last_time_update > 0.001:
+        dig_tool_instance._current_time_cache = now
+        dig_tool_instance._current_time_ms_cache = now * 1000
+        dig_tool_instance._last_time_update = now

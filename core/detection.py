@@ -12,18 +12,6 @@ def detect_by_saturation(hsv, saturation_threshold):
 def detect_by_otsu_with_area_filter(
     hsv, min_area=50, max_area=None, morph_kernel_size=3
 ):
-    """
-    Alternative detection method using Otsu's thresholding with area filtering.
-
-    Args:
-        hsv: HSV image array
-        min_area: Minimum contour area to keep (default: 50)
-        max_area: Maximum contour area to keep (None for no upper limit)
-        morph_kernel_size: Size of morphological operations kernel (default: 3)
-
-    Returns:
-        Binary mask with detected regions
-    """
     # Extract saturation channel
     saturation = hsv[:, :, 1]
 
@@ -67,17 +55,6 @@ def detect_by_otsu_with_area_filter(
 
 
 def detect_by_otsu_adaptive_area(hsv, area_percentile=0.1, morph_kernel_size=3):
-    """
-    Otsu detection with adaptive area filtering based on image size.
-
-    Args:
-        hsv: HSV image array
-        area_percentile: Minimum area as percentage of image size (default: 0.1%)
-        morph_kernel_size: Size of morphological operations kernel
-
-    Returns:
-        Binary mask with detected regions and threshold value
-    """
     height, width = hsv.shape[:2]
     image_area = height * width
     min_area = int(image_area * (area_percentile / 100.0))
@@ -445,20 +422,6 @@ def calculate_velocity_based_sweet_spot_width(
     velocity_multiplier=1.5,
     max_velocity_factor=500.0,
 ):
-    """
-    Calculate dynamic sweet spot width based on velocity.
-    Higher velocity = wider sweet spot for easier targeting.
-
-    Args:
-        base_width_percent: Base sweet spot width percentage
-        velocity: Current line velocity in pixels/second
-        enabled: Whether the feature is enabled
-        velocity_multiplier: How much velocity affects the width (0.0-5.0)
-        max_velocity_factor: Maximum velocity for normalization (default: 500.0)
-
-    Returns:
-        Dynamic sweet spot width percentage
-    """
     if not enabled or velocity_multiplier <= 0:
         return base_width_percent
 
@@ -476,18 +439,6 @@ def calculate_velocity_based_sweet_spot_width(
 
 
 def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_detailed_logging=False):
-    """
-    Detection method using a user-picked color with tolerance.
-
-    Args:
-        hsv: HSV image array
-        target_color_hsv: Target color in HSV format [H, S, V]
-        color_tolerance: Tolerance for color matching (default: 30)
-        enable_detailed_logging: Whether to log detailed debug information (default: False)
-
-    Returns:
-        Binary mask with detected regions matching the target color
-    """
     try:
         from utils.debug_logger import logger
         
@@ -504,20 +455,35 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
         if enable_detailed_logging:
             logger.debug(f"Color picker detection: Target HSV={target_color_hsv}, Tolerance={color_tolerance}")
         
+        target_value = target_color_hsv[2]
+        target_saturation = target_color_hsv[1]
+        
+        is_very_dark = target_value < 30
+        is_low_saturation = target_saturation < 40
+        
+        if is_very_dark or is_low_saturation:
+            h_tolerance = min(color_tolerance * 3, 179)
+            s_tolerance = min(color_tolerance * 4, 255)
+            v_tolerance = min(color_tolerance * 2, 255)
+        else:
+            h_tolerance = color_tolerance
+            s_tolerance = color_tolerance
+            v_tolerance = color_tolerance
+        
         lower_bound = np.array(
             [
-                max(0, target_color_hsv[0] - color_tolerance),
-                max(0, target_color_hsv[1] - color_tolerance),
-                max(0, target_color_hsv[2] - color_tolerance),
+                max(0, target_color_hsv[0] - h_tolerance),
+                max(0, target_color_hsv[1] - s_tolerance),
+                max(0, target_color_hsv[2] - v_tolerance),
             ],
             dtype=np.uint8,
         )
 
         upper_bound = np.array(
             [
-                min(179, target_color_hsv[0] + color_tolerance),
-                min(255, target_color_hsv[1] + color_tolerance),
-                min(255, target_color_hsv[2] + color_tolerance),
+                min(179, target_color_hsv[0] + h_tolerance),
+                min(255, target_color_hsv[1] + s_tolerance),
+                min(255, target_color_hsv[2] + v_tolerance),
             ],
             dtype=np.uint8,
         )
@@ -525,12 +491,12 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
         if enable_detailed_logging:
             logger.debug(f"HSV bounds: Lower={lower_bound}, Upper={upper_bound}")
 
-        if target_color_hsv[0] - color_tolerance < 0:
+        if target_color_hsv[0] - h_tolerance < 0:
             mask1 = cv2.inRange(
                 hsv,
                 np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
                 np.array(
-                    [target_color_hsv[0] + color_tolerance, upper_bound[1], upper_bound[2]],
+                    [target_color_hsv[0] + h_tolerance, upper_bound[1], upper_bound[2]],
                     dtype=np.uint8,
                 ),
             )
@@ -538,7 +504,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
                 hsv,
                 np.array(
                     [
-                        180 + target_color_hsv[0] - color_tolerance,
+                        180 + target_color_hsv[0] - h_tolerance,
                         lower_bound[1],
                         lower_bound[2],
                     ],
@@ -549,7 +515,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
             mask = cv2.bitwise_or(mask1, mask2)
             if enable_detailed_logging:
                 logger.debug("Applied hue wraparound (low)")
-        elif target_color_hsv[0] + color_tolerance > 179:
+        elif target_color_hsv[0] + h_tolerance > 179:
             mask1 = cv2.inRange(
                 hsv,
                 np.array([lower_bound[0], lower_bound[1], lower_bound[2]], dtype=np.uint8),
@@ -560,7 +526,7 @@ def detect_by_color_picker(hsv, target_color_hsv, color_tolerance=30, enable_det
                 np.array([0, lower_bound[1], lower_bound[2]], dtype=np.uint8),
                 np.array(
                     [
-                        target_color_hsv[0] + color_tolerance - 180,
+                        target_color_hsv[0] + h_tolerance - 180,
                         upper_bound[1],
                         upper_bound[2],
                     ],
@@ -612,3 +578,34 @@ def rgb_to_hsv_single(rgb_color):
         from utils.debug_logger import logger
         logger.error(f"rgb_to_hsv_single conversion failed: {e}, input: {rgb_color}")
         return np.array([0, 0, 0], dtype=np.uint8)
+
+
+def check_line_movement(dig_tool_instance, line_pos, target_fps):
+    line_movement_check_frames = max(
+        int(dig_tool_instance.base_line_movement_check_frames * (target_fps / 120.0)), 10
+    )
+
+    dig_tool_instance.line_moving_history.append(line_pos)
+
+    if len(dig_tool_instance.line_moving_history) > line_movement_check_frames:
+        dig_tool_instance.line_moving_history.pop(0)
+
+    if len(dig_tool_instance.line_moving_history) < 10:
+        return False
+
+    valid_positions = [pos for pos in dig_tool_instance.line_moving_history if pos != -1]
+
+    if len(valid_positions) < 5:
+        return False
+
+    min_pos = min(valid_positions)
+    max_pos = max(valid_positions)
+    movement_range = max_pos - min_pos
+
+    return movement_range >= dig_tool_instance.min_movement_threshold
+
+def check_target_engagement(dig_tool_instance, line_pos, target_fps):
+    line_detected = line_pos != -1
+    line_moving = check_line_movement(dig_tool_instance, line_pos, target_fps)
+
+    return line_detected and line_moving

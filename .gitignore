@@ -1,5 +1,5 @@
 .idea
-debug_clicks
+debug
 __pycache__
 main.build
 main.dist
@@ -10,4 +10,6 @@ build
 DigTool.Spec
 custom_patterns.json
 .vscode
+.vs
 .prettierrc
+backup

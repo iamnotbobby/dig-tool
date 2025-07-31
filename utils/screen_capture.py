@@ -3,6 +3,8 @@ import numpy as np
 import threading
 import mss
 import os
+import io
+from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 from utils.debug_logger import logger
 
@@ -152,3 +154,24 @@ class ScreenCapture:
                 return last_screenshot
         self._last_sample = sample.copy()
         return self.capture(bbox)
+
+    # BytesIO buffer for attachment uploads
+    def capture_for_discord(self, bbox=None):
+        try:
+            if bbox:
+                left, top, right, bottom = bbox
+                monitor = {"top": top, "left": left, "width": right - left, "height": bottom - top}
+            else:
+                sct = self._get_sct()
+                monitor = sct.monitors[1]
+            
+            sct = self._get_sct()
+            screenshot = sct.grab(monitor)
+            img = Image.frombytes("RGB", screenshot.size, screenshot.rgb)
+            buffer = io.BytesIO()
+            img.save(buffer, format='WEBP', quality=25, optimize=True)
+            buffer.seek(0)
+            return buffer
+        except Exception as e:
+            logger.error(f"Error capturing screenshot for Discord: {e}")
+            return None

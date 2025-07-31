@@ -1,15 +1,43 @@
+import json
 import tkinter as tk
 from tkinter import Label, Button, Frame, Checkbutton, ttk
 try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
+    from tkinterdnd2 import DND_FILES
     DND_AVAILABLE = True
 except ImportError:
     DND_AVAILABLE = False
     DND_FILES = None
 from interface.components import CollapsiblePane, AccordionManager, Tooltip
 from utils.debug_logger import logger
+from utils.pattern_utils import (
+    open_custom_pattern_manager,
+    on_walk_pattern_changed,
+)
+from utils.input_management import (
+    apply_keybinds,
+)
+from utils.ui_management import (
+    test_sell_button_click,
+    show_settings_info,
+    show_debug_console,
+    toggle_preview_window,
+    toggle_debug_window,
+    toggle_main_on_top,
+    toggle_preview_on_top,
+    toggle_debug_on_top,
+)
+from utils.input_management import (
+    start_area_selection,
+    start_sell_button_selection,
+    start_cursor_position_selection,
+    toggle_gui,
+    toggle_overlay,
+    toggle_autowalk_overlay,
+    toggle_color_modules_overlay,
+)
 import os
-import json
+from core.notifications import test_discord_ping
+from utils.input_management import select_money_area, test_money_ocr, select_item_area, test_item_ocr
 
 
 class DisabledTooltip:
@@ -19,6 +47,7 @@ class DisabledTooltip:
         self.original_tooltip = original_tooltip
         self.tooltip_window = None
         self.is_disabled = False
+        self.widget_type = None
 
         self.widget.bind("<Enter>", self.show_tooltip)
         self.widget.bind("<Leave>", self.hide_tooltip)
@@ -95,7 +124,7 @@ class StatusTooltip:
         self.tooltip_window = tk.Toplevel(self.widget)
         self.tooltip_window.wm_overrideredirect(True)
         self.tooltip_window.wm_attributes('-topmost', True)
-        bg_color = "#e8f5e8" if is_set else "#fff0e0"  # Light green if set, light orange if not set
+        bg_color = "#ffffe0"
         label = tk.Label(self.tooltip_window, text=text, justify='left', background=bg_color, relief='solid',
                          borderwidth=1, font=("Segoe UI", 9, "normal"), wraplength=300, padx=8, pady=6)
         label.pack()
@@ -127,14 +156,14 @@ class CollapsibleSubsection:
         self.is_open = tk.BooleanVar(value=False)
 
         self.container = Frame(parent, bg=parent.cget('bg'))
-        self.container.pack(fill='x', pady=(4, 2), padx=8)
+        self.container.pack(fill='x', pady=(1, 0), padx=4)  
 
         self.header = Frame(self.container, bg=bg_color, relief='raised', bd=1)
         self.header.pack(fill='x')
 
-        self.toggle_btn = Button(self.header, text=f"▶ {title}", font=("Segoe UI", 9, 'bold'),
+        self.toggle_btn = Button(self.header, text=f"▶ {title}", font=("Segoe UI", 8, 'bold'),
                                  bg=bg_color, fg="#333333", relief='flat', anchor='w',  # Dark gray text
-                                 command=self.toggle, pady=2, padx=8)
+                                 command=self.toggle, pady=0, padx=4)  
         self.toggle_btn.pack(fill='x')
 
         self.content = Frame(self.container, bg=bg_color, relief='sunken', bd=1)
@@ -145,7 +174,7 @@ class CollapsibleSubsection:
             self.toggle_btn.config(text=f"▶ {self.title}")
             self.is_open.set(False)
         else:
-            self.content.pack(fill='x', pady=(0, 2))
+            self.content.pack(fill='x', pady=(0, 1))
             self.toggle_btn.config(text=f"▼ {self.title}")
             self.is_open.set(True)
 
@@ -164,23 +193,19 @@ class MainWindow:
         self.velocity_dependent_widgets = []
         self.otsu_dependent_widgets = []
         self.color_picker_dependent_widgets = []
+        self.engagement_timeout_dependent_widgets = []
+        self.money_detection_dependent_widgets = []
+        self.item_detection_dependent_widgets = []
+        self.walkspeed_dependent_widgets = []
+        self.live_stats_screenshot_dependent_widgets = []
+        self.discord_dependent_widgets = []
+        self.money_test_button = None
+        self.item_test_button = None
         self.disabled_tooltips = []
         self.status_tooltips = []
 
-    def validate_param_entry(self, var_key, value):
-        if not hasattr(self, '_validation_throttle'):
-            self._validation_throttle = {}
-        
-        import time
-        current_time = time.time()
-        
-        if var_key in self._validation_throttle:
-            if current_time - self._validation_throttle[var_key] < 0.1:
-                return True
-        
-        self._validation_throttle[var_key] = current_time
-        
-        if not value or value.strip() == "":
+    def validate_on_focus_out(self, var_key, value):
+        if value == "" or (hasattr(value, 'strip') and value.strip() == ""):
             self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
             return False
         
@@ -188,11 +213,22 @@ class MainWindow:
             if not self.dig_tool.settings_manager.validate_param_value(var_key, value):
                 self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
                 return False
+            else:
+                self.dig_tool.root.after_idle(lambda: self._save_param_value(var_key, value))
         except:
             self.dig_tool.root.after_idle(lambda: self._restore_default_value(var_key))
             return False
         
         return True
+    
+    def _save_param_value(self, var_key, value):
+        try:
+            if hasattr(self.dig_tool.settings_manager, 'save_param_value'):
+                self.dig_tool.settings_manager.save_param_value(var_key, value)
+            elif hasattr(self.dig_tool.settings_manager, 'save_settings'):
+                self.dig_tool.settings_manager.save_settings()
+        except:
+            pass
     
     def _restore_default_value(self, var_key):
         try:
@@ -203,10 +239,6 @@ class MainWindow:
             pass
 
     def validate_cursor_position_toggle(self, *args):
-        if not hasattr(self.dig_tool, 'cursor_position') or not self.dig_tool.cursor_position:
-            if self.dig_tool.param_vars['use_custom_cursor'].get():
-                self.dig_tool.param_vars['use_custom_cursor'].set(False)
-                self.dig_tool.update_status("Error: Set cursor position first before enabling custom cursor!")
         if not hasattr(self.dig_tool, 'cursor_position') or not self.dig_tool.cursor_position:
             if self.dig_tool.param_vars['use_custom_cursor'].get():
                 self.dig_tool.param_vars['use_custom_cursor'].set(False)
@@ -225,11 +257,52 @@ class MainWindow:
             self.dig_tool.param_vars['use_otsu_detection'].set(False)
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
+    def validate_money_detection_toggle(self, *args):
+        if self.dig_tool.param_vars['enable_money_detection'].get():
+            if not self.is_money_area_set():
+                self.dig_tool.param_vars['enable_money_detection'].set(False)
+                self.dig_tool.update_status("Error: Set money area first before enabling money detection!")
+                return
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
+    def validate_item_detection_toggle(self, *args):
+        if self.dig_tool.param_vars['enable_item_detection'].get():
+            if not self.is_item_area_set():
+                self.dig_tool.param_vars['enable_item_detection'].set(False)
+                self.dig_tool.update_status("Error: Set item area first before enabling item detection!")
+                return
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
     def validate_auto_sell_toggle(self, *args):
-        if not self.dig_tool.automation_manager.sell_button_position:
-            if self.dig_tool.param_vars['auto_sell_enabled'].get():
+        if hasattr(self, '_validating_auto_sell') and self._validating_auto_sell:
+            return
+        
+        if self.dig_tool.param_vars['auto_sell_enabled'].get():
+            if not self.dig_tool.automation_manager.sell_button_position:
                 self.dig_tool.param_vars['auto_sell_enabled'].set(False)
                 self.dig_tool.update_status("Error: Set sell button first before enabling auto-sell!")
+                return
+
+            auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+            if not auto_walk_enabled:
+                self._validating_auto_sell = True
+                try:
+                    import tkinter.messagebox as messagebox
+                    result = messagebox.askyesno(
+                        "Auto-Sell Warning",
+                        "Enabling auto-sell without the usage of auto-walk MAY cause problems!\n\n"
+                        "Only enable this if you are automating Dig Tool through another way or will not interfere with the auto-sell process.\n\n"
+                        "Are you sure you want to enable auto-sell?",
+                        icon='warning'
+                    )
+                    if not result:
+                        self.dig_tool.root.after_idle(lambda: self.dig_tool.param_vars['auto_sell_enabled'].set(False))
+                        return
+                finally:
+                    self._validating_auto_sell = False
+
+    def validate_discord_toggle(self, *args):
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def is_sell_button_set(self):
         return self.dig_tool.automation_manager.sell_button_position is not None
@@ -237,29 +310,27 @@ class MainWindow:
     def is_cursor_position_set(self):
         return hasattr(self.dig_tool, 'cursor_position') and self.dig_tool.cursor_position is not None
 
+    def is_money_area_set(self):
+        return hasattr(self.dig_tool, 'money_ocr') and self.dig_tool.money_ocr.money_area is not None
+
+    def is_item_area_set(self):
+        return hasattr(self.dig_tool, 'item_ocr') and self.dig_tool.item_ocr.item_area is not None
+
     def pick_color_from_screen(self):
         import time
         import pyautogui
         import numpy as np
         from core.detection import rgb_to_hsv_single
         
-        self.dig_tool.root.withdraw()
+        self.dig_tool.root.iconify()
         
         try:
             overlay = tk.Toplevel()
             overlay.attributes('-topmost', True)
-            overlay.attributes('-alpha', 0.1)  # Very transparent
-            overlay.configure(bg='black')
+            overlay.attributes('-alpha', 0.3)
+            overlay.configure(bg='#1a1a1a', cursor='crosshair')
             overlay.overrideredirect(True)
             overlay.geometry(f"{overlay.winfo_screenwidth()}x{overlay.winfo_screenheight()}+0+0")
-            
-            instruction_frame = tk.Frame(overlay, bg='black')
-            instruction_frame.place(relx=0.5, rely=0.1, anchor='center')
-            
-            instruction_label = tk.Label(instruction_frame, 
-                                       text="Drag to select an area to sample colors from\nPress ESC to cancel", 
-                                       font=("Arial", 16, "bold"), bg='black', fg='white', justify='center')
-            instruction_label.pack(pady=10)
             
             start_pos = None
             selection_rect = None
@@ -273,7 +344,8 @@ class MainWindow:
                 
                 if selection_rect:
                     selection_rect.destroy()
-                selection_rect = tk.Frame(overlay, bg=overlay.cget('bg'), highlightthickness=2, highlightbackground='lime', highlightcolor='lime')
+                selection_rect = tk.Frame(overlay, highlightthickness=2, highlightbackground='#ff9500', highlightcolor='#ff9500', relief='solid', bd=0)
+                selection_rect.configure(highlightthickness=2)
                 selection_rect.place(x=event.x, y=event.y, width=1, height=1)
             
             def on_motion(event):
@@ -416,7 +488,18 @@ class MainWindow:
                     logger.debug("Enabled color picker detection")  
                     
                     if hasattr(self, 'picked_color_display') and self.picked_color_display:
-                        self.picked_color_display.config(bg=picked_color, text=picked_color)
+                        self.picked_color_display.config(bg=picked_color, text="")
+                        
+                        if hasattr(self, 'picked_color_text') and self.picked_color_text:
+                            hex_clean = picked_color[1:]
+                            r = int(hex_clean[0:2], 16)
+                            g = int(hex_clean[2:4], 16) 
+                            b = int(hex_clean[4:6], 16)
+                            
+                            text_color = "black"
+                            
+                            self.picked_color_text.config(text=picked_color, fg=text_color)
+                        
                         logger.debug("Updated color display widget")
                     else:
                         logger.debug("Color display widget not found")
@@ -434,8 +517,31 @@ class MainWindow:
             self.dig_tool.root.deiconify()
             self.dig_tool.update_status(f"Error sampling colors: {e}")
 
+    def _update_multi_checkbox_param(self, var_key, options, checkbox_vars):
+        selected_options = []
+        for option, var in checkbox_vars.items():
+            if var.get():
+                selected_options.append(option)
+        
+        self.dig_tool.param_vars[var_key].set(json.dumps(selected_options))
+        self.dig_tool.last_known_good_params[var_key] = selected_options
+
+    def _update_multi_checkbox_display(self, var_key, options, checkbox_vars):
+        try:
+            current_value = self.dig_tool.param_vars[var_key].get()
+            if current_value:
+                selected_options = json.loads(current_value) if isinstance(current_value, str) else current_value
+            else:
+                selected_options = self.dig_tool.settings_manager.get_default_value(var_key)
+        except (json.JSONDecodeError, KeyError):
+            selected_options = self.dig_tool.settings_manager.get_default_value(var_key)
+        
+        for option, var in checkbox_vars.items():
+            var.set(option in selected_options)
+
     def update_dependent_widgets_state(self, *args):
         auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
+        discord_enabled = self.dig_tool.param_vars.get('discord_enabled', tk.BooleanVar()).get()
         
         self._prev_auto_walk_enabled = auto_walk_enabled
 
@@ -452,13 +558,9 @@ class MainWindow:
             widget.config(state='normal' if shovel_enabled else 'disabled')
 
         if self.auto_sell_checkbox:
-            if auto_walk_enabled:
-                self.auto_sell_checkbox.config(state='normal', fg="#000000")  # Black text when enabled
-            else:
-                self.auto_sell_checkbox.config(state='disabled', fg="#666666")  # Gray text when disabled
-                self.dig_tool.param_vars['auto_sell_enabled'].set(False)
+            self.auto_sell_checkbox.config(state='normal', fg="#000000")
 
-        sell_enabled = auto_walk_enabled and self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
+        sell_enabled = self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
         for widget in self.sell_dependent_widgets:
             widget.config(state='normal' if sell_enabled else 'disabled')
 
@@ -479,16 +581,92 @@ class MainWindow:
         for widget in self.color_picker_dependent_widgets:
             widget.config(state='normal' if color_picker_enabled else 'disabled')
 
+        engagement_enabled = self.dig_tool.param_vars.get('auto_sell_target_engagement_enabled', tk.BooleanVar()).get()
+        sell_enabled = self.dig_tool.param_vars.get('auto_sell_enabled', tk.BooleanVar()).get()
+        engagement_timeout_enabled = sell_enabled and engagement_enabled
+        for widget in self.engagement_timeout_dependent_widgets:
+            widget.config(state='normal' if engagement_timeout_enabled else 'disabled')
+
+        # Money detection widgets
+        money_detection_enabled = self.dig_tool.param_vars.get('enable_money_detection', tk.BooleanVar()).get()
+        for widget in self.money_detection_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if money_detection_enabled else 'disabled')
+            else:
+                logger.warning(f"Widget in money_detection_dependent_widgets has no config method: {type(widget)}")
+
+        # Item detection widgets
+        item_detection_enabled = self.dig_tool.param_vars.get('enable_item_detection', tk.BooleanVar()).get()
+        for widget in self.item_detection_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if item_detection_enabled else 'disabled')
+            else:
+                logger.warning(f"Widget in item_detection_dependent_widgets has no config method: {type(widget)}")
+
+        # Walkspeed dependent widgets
+        walkspeed_enabled = self.dig_tool.param_vars.get('dynamic_walkspeed_enabled', tk.BooleanVar()).get()
+        for widget in self.walkspeed_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if walkspeed_enabled else 'disabled')
+
+        # Live stats screenshot dependent widgets
+        live_stats_screenshot_enabled = self.dig_tool.param_vars.get('live_stats_screenshots_enabled', tk.BooleanVar()).get()
+        live_stats_enabled = discord_enabled and live_stats_screenshot_enabled
+        for widget in self.live_stats_screenshot_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if live_stats_enabled else 'disabled')
+
+        # Discord dependent widgets
+        for widget in self.discord_dependent_widgets:
+            if hasattr(widget, 'config'):
+                widget.config(state='normal' if discord_enabled else 'disabled')
+
         for tooltip in self.disabled_tooltips:
             if hasattr(tooltip, 'widget_type'):
                 if tooltip.widget_type == 'shovel':
                     tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
                 elif tooltip.widget_type == 'sell':
-                    tooltip.set_disabled(not auto_walk_enabled, "Disabled: Auto-walk must be enabled first.")
+                    if not sell_enabled:
+                        tooltip.set_disabled(True, "Disabled: Auto-sell must be enabled first.")
+                    else:
+                        sell_button_set = self.dig_tool.automation_manager.sell_button_position is not None
+                        tooltip.set_disabled(not sell_button_set, "Disabled: Set sell button position first.")
                 elif tooltip.widget_type == 'cursor':
-                    tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first")
+                    tooltip.set_disabled(not has_cursor_pos, "Disabled: Set cursor position first.")
                 elif tooltip.widget_type == 'velocity':
-                    tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first")
+                    tooltip.set_disabled(not velocity_enabled, "Disabled: Enable Velocity-Based Width first.")
+                elif tooltip.widget_type == 'discord':
+                    tooltip.set_disabled(not discord_enabled, "Disabled: Enable Discord first.")
+                elif tooltip.widget_type == 'engagement_timeout':
+                    if not sell_enabled:
+                        tooltip.set_disabled(True, "Disabled: Auto-sell must be enabled first.")
+                    elif not engagement_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Post-Sell Engagement Monitoring first.")
+                    else:
+                        tooltip.set_disabled(False, "")
+                elif tooltip.widget_type == 'live_stats_screenshot':
+                    if not discord_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Discord first.")
+                    elif not live_stats_screenshot_enabled:
+                        tooltip.set_disabled(True, "Disabled: Enable Live Stats Screenshots first.")
+                    else:
+                        tooltip.set_disabled(False, "")
+
+        if self.money_test_button:
+            money_area_set = self.is_money_area_set()
+            discord_and_money_enabled = discord_enabled and money_area_set
+            if discord_and_money_enabled:
+                self.money_test_button.config(state='normal', fg="#000000")
+            else:
+                self.money_test_button.config(state='disabled', fg="#666666")
+
+        if self.item_test_button:
+            item_area_set = self.is_item_area_set()
+            discord_and_item_enabled = discord_enabled and item_area_set
+            if discord_and_item_enabled:
+                self.item_test_button.config(state='normal', fg="#000000")
+            else:
+                self.item_test_button.config(state='disabled', fg="#666666")
 
     def create_ui(self):
         BG_COLOR = "#f0f0f0"  # Light gray main background
@@ -496,43 +674,94 @@ class MainWindow:
         TEXT_COLOR = "#000000"  # Black text
         BTN_BG = "#e1e1e1"  # Light gray button background
         FONT_FAMILY = "Segoe UI"
-        SECTION_PADY = 5
-        PARAM_PADY = 4
-        PARAM_PADX = 8
-        ENTRY_WIDTH = 15
-        BUTTON_PADY = 8
+        SECTION_PADY = 3  
+        PARAM_PADY = 2    
+        PARAM_PADX = 6    
+        ENTRY_WIDTH = 18
+        BUTTON_PADY = 5   
         LABEL_WIDTH = 25
 
         self.dig_tool.root.configure(bg=BG_COLOR)
-        self.dig_tool.controls_panel = Frame(self.dig_tool.root, bg=BG_COLOR, padx=10, pady=10)
-        self.dig_tool.controls_panel.pack(side=tk.TOP, fill=tk.X, expand=False)
+        
+      
+        main_container = Frame(self.dig_tool.root, bg=BG_COLOR)
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        
+      
+        canvas = tk.Canvas(main_container, bg=BG_COLOR, highlightthickness=0)
+        canvas.pack(fill='both', expand=True)
+        
+        
+        self.dig_tool.controls_panel = Frame(canvas, bg=BG_COLOR)
+        
+        
+        canvas_window = canvas.create_window((0, 0), window=self.dig_tool.controls_panel, anchor="nw")
+        
+        
+        def _on_mousewheel(event):
+            scroll_region = canvas.cget("scrollregion")
+            if scroll_region:
+                x1, y1, x2, y2 = map(float, scroll_region.split())
+                content_height = y2 - y1
+                canvas_height = canvas.winfo_height()
+                
+                if content_height > canvas_height:
+                    canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        def _bind_to_mousewheel(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        def _unbind_from_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+        
+        canvas.bind('<Enter>', _bind_to_mousewheel)
+        canvas.bind('<Leave>', _unbind_from_mousewheel)
+        
+       
+        def _configure_canvas(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas_width = canvas.winfo_width()
+            canvas.itemconfig(canvas_window, width=canvas_width)
+        
+        self.dig_tool.controls_panel.bind('<Configure>', _configure_canvas)
+        canvas.bind('<Configure>', _configure_canvas)
 
-        Label(self.dig_tool.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 14, 'bold'), bg=BG_COLOR,
-              fg=TEXT_COLOR).pack(pady=(0, 8), anchor='center')
+        main_title = Label(self.dig_tool.controls_panel, text="Dig Tool", font=(FONT_FAMILY, 16, 'bold'), 
+                          bg=BG_COLOR, fg="#2c3e50")
+        main_title.pack(pady=(0, 8), anchor='center')
 
-        self.dig_tool.status_label = Label(self.dig_tool.controls_panel, text="Status: Select a game area to begin.",
-                                           font=(FONT_FAMILY, 9), bg=BG_COLOR, fg=TEXT_COLOR, wraplength=780,
-                                           justify='left')
-        self.dig_tool.status_label.pack(fill=tk.X, pady=(0, 10), anchor='w')
+        status_title_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        status_title_frame.pack(fill=tk.X, pady=(0, 3), padx=5)
+        
+        status_title = Label(status_title_frame, text="Status", font=(FONT_FAMILY, 10, 'bold'), 
+                            bg=BG_COLOR, fg="#2c3e50")
+        status_title.pack(anchor='w')
+        
+        separator = Frame(status_title_frame, height=1, bg="#cccccc")
+        separator.pack(fill=tk.X, pady=(2, 0))
 
-        info_panel = Frame(self.dig_tool.controls_panel, bg=FRAME_BG, relief='solid', bd=1)
-        info_panel.pack(fill=tk.X, pady=(0, 10), padx=2)
-
-        info_header = Label(info_panel, text="Configuration Status", font=(FONT_FAMILY, 9, 'bold'), bg=FRAME_BG,
-                            fg=TEXT_COLOR)
-        info_header.pack(pady=(6, 4))
-
-        self.dig_tool.area_info_label = Label(info_panel, text="Game Area: Not set", font=(FONT_FAMILY, 8), bg=FRAME_BG,
-                                              fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.area_info_label.pack(fill='x', padx=12, pady=2)
-
-        self.dig_tool.sell_info_label = Label(info_panel, text="Sell Button: Not set", font=(FONT_FAMILY, 8),
-                                              bg=FRAME_BG, fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.sell_info_label.pack(fill='x', padx=12, pady=2)
-
-        self.dig_tool.cursor_info_label = Label(info_panel, text="Cursor Position: Not set", font=(FONT_FAMILY, 8),
-                                                bg=FRAME_BG, fg="#666666", anchor='w')  # Gray text for info
-        self.dig_tool.cursor_info_label.pack(fill='x', padx=12, pady=(2, 8))
+        status_outer_frame = Frame(self.dig_tool.controls_panel, bg="#b8b8b8", relief='solid', bd=1)
+        status_outer_frame.pack(fill=tk.X, pady=(0, 5), padx=2)
+        
+        status_frame = Frame(status_outer_frame, bg="#e8e8e8", relief='flat', bd=0)
+        status_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        from tkinter import Text
+        self.dig_tool.status_text = Text(status_frame, height=3, font=(FONT_FAMILY, 9), bg="#e8e8e8", 
+                                        fg=TEXT_COLOR, wrap=tk.WORD, relief='flat', bd=0, state='disabled',
+                                        cursor='arrow', highlightthickness=0)
+        self.dig_tool.status_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        
+        self.dig_tool.status_text.config(state='normal')
+        self.dig_tool.status_text.delete(1.0, tk.END)
+        self.dig_tool.status_text.insert(1.0, "Select a game area to begin.")
+        self.dig_tool.status_text.config(state='disabled')
+        
+        indicator_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        indicator_frame.pack(fill=tk.X, pady=(0, 10), padx=2)
+        
+        self.dig_tool.game_area_indicator = Label(indicator_frame, text="✗ Game Area: Not Set", 
+                                                 font=(FONT_FAMILY, 9), bg=BG_COLOR, fg="#cc0000")
+        self.dig_tool.game_area_indicator.pack(anchor='w', padx=5)
 
         actions_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
         actions_frame.pack(fill=tk.X, pady=(0, SECTION_PADY))
@@ -541,8 +770,8 @@ class MainWindow:
                         'pady': 6}
 
         for i, (text, command) in enumerate(
-                [("Select Area", self.dig_tool.start_area_selection), ("Start", self.dig_tool.toggle_detection),
-                 ("Show/Hide", self.dig_tool.toggle_gui), ("Overlay", self.dig_tool.toggle_overlay)]):
+                [("Select Area", lambda: start_area_selection(self.dig_tool)), ("Start", self.dig_tool.toggle_detection),
+                 ("Show/Hide", lambda: toggle_gui(self.dig_tool)), ("Overlay", lambda: toggle_overlay(self.dig_tool))]):
             btn = Button(actions_frame, text=text, command=command, **button_style)
             if text == "Start":
                 self.dig_tool.start_stop_btn = btn
@@ -555,28 +784,19 @@ class MainWindow:
         actions_frame2 = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
         actions_frame2.pack(fill=tk.X, pady=(SECTION_PADY, 0))
 
-        sell_button_btn = Button(actions_frame2, text="Set Sell Button",
-                                 command=self.dig_tool.start_sell_button_selection, **button_style)
-        sell_button_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
-                      "Sell button position is set. Click to change it.", self.is_sell_button_set)
-
-        cursor_pos_btn = Button(actions_frame2, text="Set Cursor Pos",
-                                command=self.dig_tool.start_cursor_position_selection, **button_style)
-        cursor_pos_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        StatusTooltip(cursor_pos_btn, "Click to set a custom cursor position for clicking",
-                      "Cursor position is set. Click to change it.", self.is_cursor_position_set)
-
-        for i, (text, command, attr) in enumerate([("Show Preview", self.dig_tool.toggle_preview_window, 'preview_btn'),
-                                                   ("Show Debug", self.dig_tool.toggle_debug_window, 'debug_btn')]):
+        for i, (text, command, attr) in enumerate([("Show Preview", lambda: toggle_preview_window(self.dig_tool), 'preview_btn'),
+                                                   ("Show Debug", lambda: toggle_debug_window(self.dig_tool), 'debug_btn')]):
             btn = Button(actions_frame2, text=text, command=command, **button_style)
             if attr:
                 setattr(self.dig_tool, attr, btn)
                 btn.config(state=tk.DISABLED)
             btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
+        actions_frame3 = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
+        actions_frame3.pack(fill=tk.X, pady=(SECTION_PADY, 0))
+
         config_frame = Frame(self.dig_tool.controls_panel, bg=BG_COLOR)
-        config_frame.pack(fill='x', expand=True, pady=(8, 0))
+        config_frame.pack(fill='x', pady=(8, 0))
 
         style = ttk.Style()
         style.configure("Header.TButton", font=(FONT_FAMILY, 9, 'bold'), background="#dcdcdc",
@@ -599,7 +819,7 @@ class MainWindow:
         panes = {}
         for name, color in panes_config:
             pane = CollapsiblePane(config_frame, text=name, manager=self.dig_tool.accordion, bg_color=color)
-            pane.pack(fill='x', pady=2)
+            pane.pack(fill='x', pady=1)  
             self.dig_tool.accordion.add_pane(pane)
             panes[name.lower().replace('-', '_')] = pane
 
@@ -622,10 +842,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key] = default_value
 
             if var_type != tk.BooleanVar:
-                vcmd = (self.dig_tool.root.register(lambda value, key=var_key: self.validate_param_entry(key, value)), '%P')
                 entry = tk.Entry(frame, textvariable=self.dig_tool.param_vars[var_key], font=(FONT_FAMILY, 9),
-                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1,
-                                 validate='focusout', validatecommand=vcmd)
+                                 bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=ENTRY_WIDTH, borderwidth=1)
+                entry.bind('<FocusOut>', lambda event, key=var_key: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry.bind('<Return>', lambda event, key=var_key: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry.pack(side='right', ipady=3)
 
                 if dependent_list is not None: dependent_list.append(entry)
@@ -633,6 +853,8 @@ class MainWindow:
                     disabled_tooltip = DisabledTooltip(entry, "", tooltip_text)
                     disabled_tooltip.widget_type = widget_type
                     self.disabled_tooltips.append(disabled_tooltip)
+                
+                return entry
 
         def create_dual_param_entry(parent, text1, var_key1, text2, var_key2, dependent_list=None, widget_type=None):
             frame = Frame(parent, bg=parent.cget('bg'))
@@ -656,10 +878,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key1] = default_value1
 
             if var_type1 != tk.BooleanVar:
-                vcmd1 = (self.dig_tool.root.register(lambda value, key=var_key1: self.validate_param_entry(key, value)), '%P')
                 entry1 = tk.Entry(left_frame, textvariable=self.dig_tool.param_vars[var_key1], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
-                                  validate='focusout', validatecommand=vcmd1)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                entry1.bind('<FocusOut>', lambda event, key=var_key1: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry1.bind('<Return>', lambda event, key=var_key1: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry1.pack(side='right', ipady=3, padx=(4, 8))
                 if dependent_list is not None: dependent_list.append(entry1)
                 if widget_type:
@@ -685,10 +907,10 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key2] = default_value2
 
             if var_type2 != tk.BooleanVar:
-                vcmd2 = (self.dig_tool.root.register(lambda value, key=var_key2: self.validate_param_entry(key, value)), '%P')
                 entry2 = tk.Entry(right_frame, textvariable=self.dig_tool.param_vars[var_key2], font=(FONT_FAMILY, 9),
-                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1,
-                                  validate='focusout', validatecommand=vcmd2)
+                                  bg=FRAME_BG, fg=TEXT_COLOR, relief='solid', width=12, borderwidth=1)
+                entry2.bind('<FocusOut>', lambda event, key=var_key2: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
+                entry2.bind('<Return>', lambda event, key=var_key2: self.validate_on_focus_out(key, self.dig_tool.param_vars[key].get()))
                 entry2.pack(side='right', ipady=3)
                 if dependent_list is not None: dependent_list.append(entry2)
                 if widget_type:
@@ -743,7 +965,7 @@ class MainWindow:
                 self.dig_tool.last_known_good_params[var_key] = default_value
 
             combo = ttk.Combobox(frame, textvariable=self.dig_tool.param_vars[var_key], values=values, state="readonly",
-                                 width=ENTRY_WIDTH - 2, font=(FONT_FAMILY, 9))
+                                 width=ENTRY_WIDTH - 2, font=(FONT_FAMILY, 9), height=8)
             combo.pack(side='right', ipady=3)
 
             if dependent_list is not None: dependent_list.append(combo)
@@ -763,11 +985,70 @@ class MainWindow:
 
             if dependent_list is not None: dependent_list.append(btn)
             if widget_type:
-                disabled_tooltip = DisabledTooltip(btn, "", f"Test button for {text.lower()}")
+                disabled_tooltip = DisabledTooltip(btn, "", f"Test button for {text.lower()}.")
                 disabled_tooltip.widget_type = widget_type
                 self.disabled_tooltips.append(disabled_tooltip)
 
             return btn
+
+        def create_multi_checkbox_param(parent, text, var_key, options, colors=None, dependent_list=None, widget_type=None, 
+                                       validation_callback=None, max_cols=2):
+            frame = Frame(parent, bg=parent.cget('bg'))
+            frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
+
+            label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=parent.cget('bg'), fg=TEXT_COLOR,
+                         width=LABEL_WIDTH, anchor='w')
+            label.pack(side='left')
+
+            tooltip_text = self.dig_tool.settings_manager.get_description(var_key)
+            Tooltip(label, tooltip_text)
+
+            default_value = self.dig_tool.settings_manager.get_default_value(var_key)
+            if var_key not in self.dig_tool.param_vars:
+                self.dig_tool.param_vars[var_key] = tk.StringVar(value=json.dumps(default_value))
+                self.dig_tool.last_known_good_params[var_key] = default_value
+
+            right_frame = Frame(frame, bg=parent.cget('bg'))
+            right_frame.pack(side='right', fill='x', expand=True)
+            
+            checkbox_vars = {}
+            checkbox_widgets = []
+            row, col = 0, 0
+            
+            for option in options:
+                var = tk.BooleanVar()
+                color = colors.get(option, TEXT_COLOR) if colors else TEXT_COLOR
+                
+                checkbox = Checkbutton(right_frame, text=option.title(), variable=var,
+                                     bg=parent.cget('bg'), fg=color, selectcolor=FRAME_BG,
+                                     activebackground=parent.cget('bg'), activeforeground=color,
+                                     font=(FONT_FAMILY, 9), anchor='w', width=12)
+                
+                checkbox.configure(command=lambda v=var_key, o=options, c=checkbox_vars: self._update_multi_checkbox_param(v, o, c))
+                
+                checkbox.grid(row=row, column=col, sticky='ew', padx=3, pady=1)
+                checkbox_vars[option] = var
+                checkbox_widgets.append(checkbox)
+                
+                col += 1
+                if col >= max_cols:
+                    col = 0
+                    row += 1
+
+            for i in range(max_cols):
+                right_frame.grid_columnconfigure(i, weight=1)
+
+            setattr(self, f'{var_key}_checkbox_vars', checkbox_vars)
+            
+            self._update_multi_checkbox_display(var_key, options, checkbox_vars)
+            
+            if dependent_list is not None:
+                dependent_list.extend(checkbox_widgets)
+            
+            if validation_callback:
+                self.dig_tool.param_vars[var_key].trace_add('write', validation_callback)
+
+            return frame
 
         create_dual_param_entry(panes['detection'].sub_frame, "Line Sensitivity:", 'line_sensitivity',
                                 "Line Detection Offset:", 'line_detection_offset')
@@ -782,6 +1063,8 @@ class MainWindow:
         create_checkbox_param(otsu_subsection.content, "Use Otsu Detection", 'use_otsu_detection',
                               validation_callback=self.validate_otsu_toggle)
         create_checkbox_param(otsu_subsection.content, "Adaptive Area Filtering", 'otsu_adaptive_area',
+                              self.otsu_dependent_widgets, 'otsu')
+        create_checkbox_param(otsu_subsection.content, "Disable Color Lock", 'otsu_disable_color_lock',
                               self.otsu_dependent_widgets, 'otsu')
         create_dual_param_entry(otsu_subsection.content, "Min Area (pixels):", 'otsu_min_area',
                                "Max Area (pixels):", 'otsu_max_area',
@@ -807,16 +1090,19 @@ class MainWindow:
         color_frame.pack(fill='x', padx=5, pady=2)
         
         Label(color_frame, text="Sampled Color:", font=("Segoe UI", 9)).pack(side='left', padx=(0, 5))
-        self.picked_color_display = Label(color_frame, text="None", bg='lightgray', relief='solid', bd=1, width=10)
-        self.picked_color_display.pack(side='left', padx=(0, 5))
+        
+        color_display_container = Frame(color_frame, bg=color_frame.cget('bg'))
+        color_display_container.pack(side='left', padx=(0, 5))
+        
+        self.picked_color_display = Label(color_display_container, text="  ", bg='lightgray', relief='solid', bd=1, width=4, height=1)
+        self.picked_color_display.pack()
+        
+        self.picked_color_text = Label(color_display_container, text="None", font=("Segoe UI", 8), bg=color_frame.cget('bg'), fg="black")
+        self.picked_color_text.pack()
         
         self.pick_color_btn = Button(color_frame, text="Sample Area", command=self.pick_color_from_screen)
-        self.pick_color_btn.pack(side='left', padx=(5, 0))
+        self.pick_color_btn.pack(side='left', padx=(5, 0), pady=2)
         self.color_picker_dependent_widgets.append(self.pick_color_btn)
-        
-        test_color_btn = Button(color_frame, text="Test", command=self.test_color_param)
-        test_color_btn.pack(side='left', padx=(5, 0))
-        self.color_picker_dependent_widgets.append(test_color_btn)
         
         create_param_entry(color_picker_subsection.content, "Color Tolerance:", 'color_tolerance',
                           self.color_picker_dependent_widgets, 'color_picker')
@@ -846,25 +1132,27 @@ class MainWindow:
                                                          widget_type='cursor',
                                                          validation_callback=self.validate_cursor_position_toggle)
 
-        create_section_button(cursor_subsection.content, "Set Cursor Position",
-                              self.dig_tool.start_cursor_position_selection,
-                              self.cursor_dependent_widgets, 'cursor')
+        cursor_pos_btn = create_section_button(cursor_subsection.content, "Set Cursor Position",
+                              lambda: start_cursor_position_selection(self.dig_tool))
+        StatusTooltip(cursor_pos_btn, "Click to set a custom cursor position for clicking",
+                      "Cursor position is set. Click to change it.", self.is_cursor_position_set)
 
         # ===== AUTO-WALK PANE =====
         auto_walk_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Auto-Walk", 'auto_walk_enabled')
         create_param_entry(panes['auto_walk'].sub_frame, "Key Duration (ms):", 'walk_duration')
+        create_param_entry(panes['auto_walk'].sub_frame, "Max Wait Time (ms):", 'max_wait_time')
         
         # Decreased Walkspeed settings
         dynamic_walkspeed_check = create_checkbox_param(panes['auto_walk'].sub_frame, "Enable Decreased Walkspeed", 'dynamic_walkspeed_enabled')
-        create_param_entry(panes['auto_walk'].sub_frame, "Initial Item Count:", 'initial_item_count')
-        create_param_entry(panes['auto_walk'].sub_frame, "Initial Walkspeed Decrease:", 'initial_walkspeed_decrease')
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Item Count:", 'initial_item_count', dependent_list=self.walkspeed_dependent_widgets)
+        create_param_entry(panes['auto_walk'].sub_frame, "Initial Walkspeed Decrease:", 'initial_walkspeed_decrease', dependent_list=self.walkspeed_dependent_widgets)
         
         # Auto Walk Overlay button
         overlay_button_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")
         overlay_button_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
         
         autowalk_overlay_btn = Button(overlay_button_frame, text="Open Auto Walk Overlay", 
-                                     command=self.dig_tool.toggle_autowalk_overlay,
+                                     command=lambda: toggle_autowalk_overlay(self.dig_tool),
                                      font=(FONT_FAMILY, 9), bg='#d4e6f1', fg='#2c3e50', 
                                      relief='solid', borderwidth=1, pady=4)
         autowalk_overlay_btn.pack(fill='x')
@@ -878,17 +1166,17 @@ class MainWindow:
               width=LABEL_WIDTH, anchor='w').pack(side='left')
 
         self.dig_tool.walk_pattern_var = tk.StringVar(value="_KC_Nugget_v1")
-        self.dig_tool.walk_pattern_var.trace_add('write', self.dig_tool.on_walk_pattern_changed)
+        self.dig_tool.walk_pattern_var.trace_add('write', lambda *args: on_walk_pattern_changed(self.dig_tool, *args))
         self.walk_pattern_combo = ttk.Combobox(pattern_frame, textvariable=self.dig_tool.walk_pattern_var,
                                                values=list(self.dig_tool.automation_manager.get_pattern_list().keys()),
-                                               state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9))
+                                               state="readonly", width=ENTRY_WIDTH, font=(FONT_FAMILY, 9), height=8)
         self.walk_pattern_combo.pack(side='right', ipady=3)
 
         custom_pattern_frame = Frame(panes['auto_walk'].sub_frame, bg="#e8f0ff")  # Light blue background
         custom_pattern_frame.pack(fill='x', pady=PARAM_PADY, padx=PARAM_PADX)
 
         custom_pattern_btn = Button(custom_pattern_frame, text="Manage Custom Patterns",
-                                    command=self.dig_tool.open_custom_pattern_manager,
+                                    command=lambda: open_custom_pattern_manager(self.dig_tool),
                                     font=(FONT_FAMILY, 9), bg="#4CAF50", fg="white", relief='solid', borderwidth=1,
                                     pady=4)  # Green button
         custom_pattern_btn.pack(side='left', expand=True, fill='x', padx=(0, 2))
@@ -922,54 +1210,225 @@ class MainWindow:
                                                         widget_type='sell',
                                                         validation_callback=self.validate_auto_sell_toggle)
         
+        sell_button_btn = create_section_button(auto_sell_subsection.content, "Set Sell Button",
+                                               lambda: start_sell_button_selection(self.dig_tool))
+        StatusTooltip(sell_button_btn, "Click to set the sell button position for auto-selling",
+                      "Sell button position is set. Click to change it.", self.is_sell_button_set)
+        
+        sell_button_frame = sell_button_btn.master
+        sell_button_frame.pack_forget() # type: ignore
+        
+        self.sell_button_widgets = [sell_button_frame]
+        
+        self.sell_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.sell_delay_entry = create_param_entry(self.sell_delay_frame, "Sell Delay (ms):", 'sell_delay',
+                                                  self.sell_dependent_widgets, 'sell')
+        
+        self.sell_delay_widgets = [self.sell_delay_frame]
+        
         create_dropdown_param(auto_sell_subsection.content, "Auto-Sell Method:", 'auto_sell_method',
                              ['button_click', 'ui_navigation'],
                              self.sell_dependent_widgets, 'sell')
         
-        create_dual_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
-                                "Sell Delay (ms):", 'sell_delay',
-                                self.sell_dependent_widgets, 'sell')
+        
+        self.ui_sequence_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        
+        self.ui_sequence_entry = create_param_entry(self.ui_sequence_frame, "UI Navigation Sequence:", 'auto_sell_ui_sequence',
+                                                   self.sell_dependent_widgets, 'sell')
+        
+        self.ui_navigation_key_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        
+        self.ui_navigation_key_entry = create_param_entry(self.ui_navigation_key_frame, "UI Navigation Key:", 'auto_sell_ui_navigation_key',
+                                                         self.sell_dependent_widgets, 'sell')
+        
+       
+        self.ui_sequence_widgets = [self.ui_sequence_frame]
+        self.ui_navigation_key_widgets = [self.ui_navigation_key_frame]
+        
+        
+        create_param_entry(auto_sell_subsection.content, "Sell Every X Digs:", 'sell_every_x_digs',
+                          self.sell_dependent_widgets, 'sell')
+        
+        self.inventory_key_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_key_entry = create_param_entry(self.inventory_key_frame, "Inventory Key:", 'auto_sell_inventory_key',
+                                                     self.sell_dependent_widgets, 'sell')
+        self.inventory_key_frame.pack(fill='x')
+        
+        self.inventory_key_widgets = [self.inventory_key_frame]
+        
+        self.inventory_open_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_open_delay_entry = create_param_entry(self.inventory_open_delay_frame, "Inventory Open Delay (ms):", 'auto_sell_inventory_open_delay',
+                                                           self.sell_dependent_widgets, 'sell')
+        self.inventory_open_delay_frame.pack(fill='x')
+        
+        self.inventory_open_delay_widgets = [self.inventory_open_delay_frame]
+        
+        self.inventory_close_delay_frame = tk.Frame(auto_sell_subsection.content, bg=auto_sell_subsection.content.cget('bg'))
+        self.inventory_close_delay_entry = create_param_entry(self.inventory_close_delay_frame, "Inventory Close Delay (ms):", 'auto_sell_inventory_close_delay',
+                                                            self.sell_dependent_widgets, 'sell')
+        self.inventory_close_delay_frame.pack(fill='x')
+        
+        self.inventory_close_delay_widgets = [self.inventory_close_delay_frame]
+        
+        create_checkbox_param(auto_sell_subsection.content, "Enable Post-Sell Engagement Monitoring",
+                             'auto_sell_target_engagement_enabled',
+                             self.sell_dependent_widgets, 'sell')
+        
+        create_param_entry(auto_sell_subsection.content, "Post-Sell Engagement Timeout (s):", 'auto_sell_target_engagement_timeout',
+                          self.engagement_timeout_dependent_widgets, 'engagement_timeout')
 
         self.test_sell_button = create_section_button(auto_sell_subsection.content, "Test Sell Click",
-                              self.dig_tool.test_sell_button_click,
+                              lambda: test_sell_button_click(self.dig_tool),
                               self.sell_dependent_widgets, 'sell')
         
         def update_test_button_text(*args):
             method = self.dig_tool.param_vars.get('auto_sell_method', tk.StringVar()).get()
             if method == "button_click":
                 self.test_sell_button.config(text="Test Sell Click")
+             
+                for widget in self.ui_sequence_widgets:
+                    widget.pack_forget()  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
+                    widget.pack_forget()  # type: ignore
+               
+                for widget in self.sell_button_widgets:
+                    widget.pack(fill='x', padx=PARAM_PADX, pady=BUTTON_PADY)  # type: ignore
+                
+                for widget in self.sell_delay_widgets:
+                    widget.pack(fill='x')  # type: ignore
+                    
             elif method == "ui_navigation":
                 self.test_sell_button.config(text="Test UI Navigation")
+             
+                for widget in self.ui_sequence_widgets:
+                    widget.pack(fill='x')  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
+                    widget.pack(fill='x')  # type: ignore
+            
+                for widget in self.sell_delay_widgets:
+                    widget.pack_forget()  # type: ignore
+                
+                for widget in self.sell_button_widgets:
+                    widget.pack_forget()  # type: ignore
+                    
             else:
                 self.test_sell_button.config(text="Test Sell")
-        
+                for widget in self.ui_sequence_widgets:
+                    widget.pack_forget()  # type: ignore
+                for widget in self.ui_navigation_key_widgets:
+                    widget.pack_forget()  # type: ignore
+                for widget in self.sell_delay_widgets:
+                    widget.pack_forget()  # type: ignore
+                for widget in self.sell_button_widgets:
+                    widget.pack_forget()  # type: ignore
+                    
         self.dig_tool.param_vars['auto_sell_method'].trace('w', update_test_button_text)
-        update_test_button_text()
+        self.dig_tool.root.after_idle(update_test_button_text)
+
+        # Auto-Rejoin subsection within Auto-Walk pane
+        auto_rejoin_subsection = CollapsibleSubsection(panes['auto_walk'].sub_frame, "Auto-Rejoin Settings",
+                                                      "#f0f0f8")
+        rejoin_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Auto-Rejoin", 'auto_rejoin_enabled')
+        
+        create_param_entry(auto_rejoin_subsection.content, "Server Link:", 'roblox_server_link')
+        
+        create_param_entry(auto_rejoin_subsection.content, "Check Interval (seconds):", 'rejoin_check_interval')
+        
+        create_param_entry(auto_rejoin_subsection.content, "Restart Delay (seconds):", 'auto_rejoin_restart_delay')
+        
+        discord_notif_checkbox = create_checkbox_param(auto_rejoin_subsection.content, "Enable Discord Notifications", 'auto_rejoin_discord_notifications')
 
         # ===== DISCORD PANE =====
-        create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id')
-        create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url')
-        create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval')
-        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Discord Notifications",
-                              'include_screenshot_in_discord')
-        create_section_button(panes['discord'].sub_frame, "Test Discord Ping", self.dig_tool.test_discord_ping)
+        discord_enable_checkbox = create_checkbox_param(panes['discord'].sub_frame, "Enable Discord", 'discord_enabled',
+                                                        validation_callback=self.validate_discord_toggle)
+        
+        create_param_entry(panes['discord'].sub_frame, "Discord User ID:", 'user_id', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Discord Server ID:", 'server_id', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Discord Webhook URL:", 'webhook_url', self.discord_dependent_widgets, 'discord')
+        create_param_entry(panes['discord'].sub_frame, "Milestone Interval:", 'milestone_interval', self.discord_dependent_widgets, 'discord')
+        create_checkbox_param(panes['discord'].sub_frame, "Include Screenshot in Milestone Notifications",
+                              'include_screenshot_in_discord', self.discord_dependent_widgets, 'discord')
+        
+        live_stats_per_dig_checkbox = create_checkbox_param(panes['discord'].sub_frame, "Update Per Dig", 
+                              'live_stats_per_dig_enabled', self.discord_dependent_widgets, 'discord')
+        
+        test_discord_btn = create_section_button(panes['discord'].sub_frame, "Test Discord Ping", lambda: test_discord_ping(self.dig_tool))
+        self.discord_dependent_widgets.append(test_discord_btn)
+
+        live_stats_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Live Stats Screenshots",
+                                                     "#f0f8ff")
+        live_stats_checkbox = create_checkbox_param(live_stats_subsection.content, "Enable Live Stats Screenshots", 
+                              'live_stats_screenshots_enabled', self.discord_dependent_widgets, 'discord')
+        live_stats_interval_entry = create_param_entry(live_stats_subsection.content, "Screenshot Every X Seconds:", 
+                          'live_stats_screenshot_interval', self.live_stats_screenshot_dependent_widgets, 'live_stats_screenshot')
+        self.discord_dependent_widgets.append(live_stats_interval_entry)
+
+        money_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Money Detection",
+                                                           "#e8f8e8")
+        create_checkbox_param(money_detection_subsection.content, "Enable Money Detection", 'enable_money_detection',
+                              dependent_list=self.discord_dependent_widgets, widget_type='discord',
+                              validation_callback=self.validate_money_detection_toggle)
+        money_tolerance_entry = create_param_entry(money_detection_subsection.content, "Color Tolerance:", 
+                          'money_color_tolerance', self.money_detection_dependent_widgets, 'money_detection')
+        self.discord_dependent_widgets.append(money_tolerance_entry)
+        money_area_btn = create_section_button(money_detection_subsection.content, "Select Money Area", 
+                              lambda: select_money_area(self.dig_tool))
+        self.discord_dependent_widgets.append(money_area_btn)
+        StatusTooltip(money_area_btn, "Click to select the money detection area",
+                      "Money area is set. Click to change it.", self.is_money_area_set)
+        self.money_test_button = create_section_button(money_detection_subsection.content, "Test Money OCR", 
+                              lambda: test_money_ocr(self.dig_tool))
+        self.discord_dependent_widgets.append(self.money_test_button)
+        StatusTooltip(self.money_test_button, "Money area must be set first before testing OCR.",
+                      "Click to test money OCR detection.", self.is_money_area_set)
+
+        item_detection_subsection = CollapsibleSubsection(panes['discord'].sub_frame, "Item Detection",
+                                                          "#f0f8f0")
+        create_checkbox_param(item_detection_subsection.content, "Enable Item Detection", 'enable_item_detection',
+                              dependent_list=self.discord_dependent_widgets, widget_type='discord',
+                              validation_callback=self.validate_item_detection_toggle)
+        item_area_btn = create_section_button(item_detection_subsection.content, "Select Item Area", 
+                              lambda: select_item_area(self.dig_tool))
+        self.discord_dependent_widgets.append(item_area_btn)
+        StatusTooltip(item_area_btn, "Click to select the item detection area",
+                      "Item area is set. Click to change it.", self.is_item_area_set)
+        self.item_test_button = create_section_button(item_detection_subsection.content, "Test Item OCR", 
+                              lambda: test_item_ocr(self.dig_tool))
+        self.discord_dependent_widgets.append(self.item_test_button)
+        StatusTooltip(self.item_test_button, "Item area must be set first before testing OCR.",
+                      "Click to test item OCR detection.", self.is_item_area_set)
+
+        notification_rarity_colors = {
+            'scarce': "#BB68F3",
+            'legendary': '#FF8C00', 
+            'mythical': '#FF1493',
+            'divine': "#FF0000",
+            'prismatic': "#F34545"
+        }
+        create_multi_checkbox_param(item_detection_subsection.content, "Notification Rarities:", 'notification_rarities',
+                                   ["scarce", "legendary", "mythical", "divine", "prismatic"],
+                                   colors=notification_rarity_colors,
+                                   dependent_list=self.discord_dependent_widgets, widget_type='discord')
 
         create_checkbox_param(panes['window'].sub_frame, "Main Window Always on Top", 'main_on_top')
-        self.dig_tool.param_vars['main_on_top'].trace_add('write', self.dig_tool.toggle_main_on_top)
+        self.dig_tool.param_vars['main_on_top'].trace_add('write', lambda *args: toggle_main_on_top(self.dig_tool, *args))
         create_checkbox_param(panes['window'].sub_frame, "Preview Window Always on Top", 'preview_on_top')
-        self.dig_tool.param_vars['preview_on_top'].trace_add('write', self.dig_tool.toggle_preview_on_top)
+        self.dig_tool.param_vars['preview_on_top'].trace_add('write', lambda *args: toggle_preview_on_top(self.dig_tool))
         create_checkbox_param(panes['window'].sub_frame, "Debug Window Always on Top", 'debug_on_top')
-        self.dig_tool.param_vars['debug_on_top'].trace_add('write', self.dig_tool.toggle_debug_on_top)
+        self.dig_tool.param_vars['debug_on_top'].trace_add('write', lambda *args: toggle_debug_on_top(self.dig_tool))
 
-        create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_clicks_enabled')
+        create_checkbox_param(panes['debug'].sub_frame, "Save Debug Screenshots", 'debug_enabled')
         create_param_entry(panes['debug'].sub_frame, "Screenshot FPS:", 'screenshot_fps')
-        create_section_button(panes['debug'].sub_frame, "Show Debug Console", self.dig_tool.show_debug_console)
+        create_section_button(panes['debug'].sub_frame, "Show Debug Console", lambda: show_debug_console(self.dig_tool))
+
+        create_section_button(panes['debug'].sub_frame, "Color Modules Overlay", 
+                             lambda: toggle_color_modules_overlay(self.dig_tool))
 
         def create_hotkey_setter(parent, text, key_name):
             frame = Frame(parent, bg=parent.cget('bg'))
             frame.pack(fill='x', pady=BUTTON_PADY, padx=PARAM_PADX)
 
-            label = Label(frame, text=text, font=(FONT_FAMILY, 10), bg=parent.cget('bg'), fg=TEXT_COLOR, width=22,
+            label = Label(frame, text=text, font=(FONT_FAMILY, 9), bg=parent.cget('bg'), fg=TEXT_COLOR, width=22,
                           anchor='w')
             label.pack(side='left')
 
@@ -1004,26 +1463,25 @@ class MainWindow:
                     if not current_key or current_key.strip() == "":
                         key_var.set(default_value)
                     button.config(text=key_var.get().upper(), state=tk.NORMAL, bg=BTN_BG, fg=TEXT_COLOR)
-                    self.dig_tool.apply_keybinds()
+                    apply_keybinds(self.dig_tool)
 
-            hotkey_btn = Button(frame, text=key_var.get().upper(), font=(FONT_FAMILY, 10, 'bold'), bg=BTN_BG,
+            hotkey_btn = Button(frame, text=key_var.get().upper(), font=(FONT_FAMILY, 9, 'bold'), bg=BTN_BG,
                                 fg=TEXT_COLOR, relief='solid', borderwidth=1, width=12, pady=4)
             hotkey_btn.config(command=lambda v=key_var, b=hotkey_btn:
             __import__('threading').Thread(target=set_hotkey_thread, args=(v, b), daemon=True).start())
             hotkey_btn.pack(side='right')
 
-        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Bot:", 'toggle_bot')
+        create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Tool:", 'toggle_bot')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle GUI:", 'toggle_gui')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Overlay:", 'toggle_overlay')
         create_hotkey_setter(panes['hotkeys'].sub_frame, "Toggle Auto Walk Overlay:", 'toggle_autowalk_overlay')
 
-        # Settings info button
         settings_info_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
         settings_info_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
-        Button(settings_info_frame, text="Open Settings Folder", command=self.dig_tool.show_settings_info,
+        Button(settings_info_frame, text="Open Dig Tool Folder", command=lambda: show_settings_info(self.dig_tool),
                font=(FONT_FAMILY, 9), bg=BTN_BG, fg=TEXT_COLOR, relief='solid', borderwidth=1, pady=4).pack(
             expand=True, fill=tk.X)
-        Tooltip(settings_info_frame.winfo_children()[0], "Open the settings folder in Windows Explorer to view or manage your settings files.")
+        Tooltip(settings_info_frame.winfo_children()[0], "Open the Dig Tool folder in Windows Explorer to view settings, debug logs, and other application files.")
 
         save_load_frame = Frame(panes['settings'].sub_frame, bg=panes['settings'].sub_frame.cget('bg'))
         save_load_frame.pack(fill='x', pady=(BUTTON_PADY, 4), padx=PARAM_PADX)
@@ -1047,20 +1505,34 @@ class MainWindow:
         self.dig_tool.param_vars['use_custom_cursor'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_otsu_detection'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['velocity_based_width_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['auto_sell_target_engagement_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['dynamic_walkspeed_enabled'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['live_stats_screenshots_enabled'].trace_add('write', self.update_dependent_widgets_state)
 
-        # Initialize previous auto walk state
         self._prev_auto_walk_enabled = self.dig_tool.param_vars.get('auto_walk_enabled', tk.BooleanVar()).get()
         
         self.update_dependent_widgets_state()
-
-        self.dig_tool.update_main_button_text()
-        self.dig_tool.toggle_main_on_top()
-        self.dig_tool.update_area_info()
-        self.dig_tool.update_sell_info()
-        self.dig_tool.update_cursor_info()
+        
+        from utils.ui_management import update_main_button_text
+        update_main_button_text(self.dig_tool)
+        toggle_main_on_top(self.dig_tool)
+        self.update_status_with_area_indicator()
         
         self.setup_drag_drop()
 
+    def update_status_with_area_indicator(self):
+        if hasattr(self.dig_tool, 'game_area') and self.dig_tool.game_area:
+            base_status = "Game area set. Press Start to begin."
+            if hasattr(self.dig_tool, 'game_area_indicator'):
+                self.dig_tool.game_area_indicator.config(text="✓ Game Area: Set", fg="#00aa00")
+        else:
+            base_status = "Select a game area to begin."
+            if hasattr(self.dig_tool, 'game_area_indicator'):
+                self.dig_tool.game_area_indicator.config(text="✗ Game Area: Not Set", fg="#cc0000")
+        
+        self.dig_tool.update_status(base_status)
+    
     def setup_drag_drop(self):
         if not DND_AVAILABLE:
             logger.info("tkinterdnd2 not available, drag and drop disabled")
@@ -1129,27 +1601,9 @@ class MainWindow:
             logger.error(f"Error in drag and drop handler: {e}")
             self.dig_tool.update_status("Error: Failed to process dropped file")
 
-    def test_color_param(self):
-        try:
-            use_color_picker = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
-            picked_color = self.dig_tool.param_vars.get('picked_color_rgb', tk.StringVar()).get()
-            color_tolerance = self.dig_tool.param_vars.get('color_tolerance', tk.DoubleVar()).get()
-            
-            logger.info(f"=== Color Parameter Test ===")
-            logger.info(f"use_color_picker_detection: {use_color_picker}")
-            logger.info(f"picked_color_rgb: '{picked_color}'")
-            logger.info(f"color_tolerance: {color_tolerance}")
-            
-            picked_via_get_param = self.dig_tool.get_param('picked_color_rgb')
-            logger.info(f"Via get_param: '{picked_via_get_param}'")
-            
-            test_color = "#00FF00"  
-            self.dig_tool.param_vars['picked_color_rgb'].set(test_color)
-            after_set = self.dig_tool.get_param('picked_color_rgb')
-            logger.info(f"After setting {test_color}: '{after_set}'")
-            
-            self.dig_tool.update_status(f"Color test complete - current: {after_set}")
-            
-        except Exception as e:
-            logger.error(f"Error in color test: {e}")
-            self.dig_tool.update_status(f"Color test error: {e}")
+
+def update_area_info(dig_tool_instance):
+    if hasattr(dig_tool_instance, 'main_window') and hasattr(dig_tool_instance.main_window, 'update_status_with_area_indicator'):
+        dig_tool_instance.main_window.update_status_with_area_indicator()
+    if hasattr(dig_tool_instance, 'main_window') and hasattr(dig_tool_instance.main_window, 'update_dependent_widgets_state'):
+        dig_tool_instance.main_window.update_dependent_widgets_state()
