@@ -71,8 +71,8 @@ Merge multiple detected zones that are close together into a single larger zone.
 **Zone Merge Distance (pixels)**  
 Maximum distance between zone centers to merge them together. Higher values will merge zones that are further apart.
 
-**Zone Connection Dilation**  
-Dilation size (pixels) applied during detection to connect nearby zones. This works by temporarily expanding detected areas to bridge gaps, then shrinking them back. Higher values connect zones that are further apart. 
+**Zone Connection Dilation (pixels)**  
+Dilation size applied during detection to connect nearby zones. This works by temporarily expanding detected areas to bridge gaps, then shrinking them back. Higher values connect zones that are further apart. 
 
 In the example below, you can see the target width percent setting visualized as the yellow box that appears in the preview window.
 

@@ -1095,7 +1095,7 @@ class MainWindow:
                               self.otsu_dependent_widgets, 'otsu', validation_callback=self.validate_zone_merge_toggle)
         create_param_entry(otsu_subsection.content, "Zone Merge Distance (px):", 'zone_merge_distance',
                           self.zone_merge_dependent_widgets, 'zone_merge')
-        create_param_entry(otsu_subsection.content, "Zone Connection Dilation:", 'zone_connection_dilation',
+        create_param_entry(otsu_subsection.content, "Zone Connection Dilation (px):", 'zone_connection_dilation',
                           self.zone_merge_dependent_widgets, 'zone_merge')
 
         # Color Picker Detection Settings (Collapsible)
