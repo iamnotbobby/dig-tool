@@ -68,6 +68,11 @@ class SettingsManager:
             "otsu_adaptive_area": True,
             "otsu_area_percentile": 0.1,
             "otsu_disable_color_lock": False,
+            "otsu_invert_mask": False,
+            # Zone merging parameters
+            "merge_nearby_zones": True,
+            "zone_merge_distance": 10,
+            "zone_connection_dilation": 50,
             # Color picker detection parameters
             "use_color_picker_detection": False,
             "picked_color_rgb": "",  # RGB color in hex format (e.g., "#FF0000")
@@ -150,6 +155,11 @@ class SettingsManager:
             "otsu_adaptive_area": "Use adaptive area filtering based on image size instead of fixed pixel values.",
             "otsu_area_percentile": "Minimum area as percentage of image size when using adaptive area filtering.",
             "otsu_disable_color_lock": "Disable color locking for Otsu detection. When enabled, detection runs continuously without locking to specific colors.",
+            "otsu_invert_mask": "Invert Otsu mask to detect zones within black areas instead of white areas. Useful when the target zone appears dark.",
+            # Zone merging help text
+            "merge_nearby_zones": "Merge nearby detected zones into a single larger zone. Useful when the target area is split into multiple separate detections.",
+            "zone_merge_distance": "Maximum distance (pixels) between zones to merge them together. Higher values merge zones that are further apart.",
+            "zone_connection_dilation": "Dilation size (pixels) to connect nearby zones before detection. Higher values connect zones that are further apart.",
             # Color picker detection help text
             "use_color_picker_detection": "Use a specific color picked from the screen. Click 'Pick Color' to select a target color.",
             "picked_color_rgb": "The RGB color value sampled from a screen area (automatically set when using Sample Area button).",
@@ -356,7 +366,7 @@ class SettingsManager:
             },
             "int_params": [
                 "line_sensitivity", "zone_min_width", "post_click_blindness", "sell_every_x_digs",
-                "sell_delay", "auto_sell_inventory_open_delay", "auto_sell_inventory_close_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "color_tolerance", "money_color_tolerance",
+                "sell_delay", "auto_sell_inventory_open_delay", "auto_sell_inventory_close_delay", "walk_duration", "max_wait_time", "otsu_min_area", "otsu_morph_kernel_size", "zone_merge_distance", "zone_connection_dilation", "color_tolerance", "money_color_tolerance",
                 "auto_rejoin_restart_delay", "shovel_slot", "shovel_timeout", "target_fps", "screenshot_fps",
                 "milestone_interval", "initial_item_count", "rejoin_check_interval", "live_stats_screenshot_interval"
             ],
@@ -370,7 +380,7 @@ class SettingsManager:
             "bool_params": [
                 "prediction_enabled", "main_on_top", "preview_on_top", "debug_on_top", "debug_enabled",
                 "auto_sell_enabled", "auto_sell_target_engagement_enabled", "auto_walk_enabled", "use_custom_cursor",
-                "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "use_color_picker_detection",
+                "auto_shovel_enabled", "use_otsu_detection", "otsu_adaptive_area", "otsu_disable_color_lock", "otsu_invert_mask", "merge_nearby_zones", "use_color_picker_detection",
                 "enable_money_detection", "enable_item_detection", "auto_rejoin_enabled", "auto_rejoin_discord_notifications",
                 "include_screenshot_in_discord", "live_stats_screenshots_enabled", "live_stats_per_dig_enabled", "discord_enabled"
             ],

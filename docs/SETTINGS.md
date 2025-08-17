@@ -65,6 +65,15 @@ Requires target zones to span at least this **PERCENTAGE** of the capture height
 **Target Width Percent (0-100)**  
 Smaller values requires more precise clicking, however, in some cases it may be too strict. Larger values are more forgiving but may be less accurate. In most cases, it is recommended to increase this until it's more consistent rather than vice versa.
 
+**Merge Nearby Zones**  
+Merge multiple detected zones that are close together into a single larger zone. Useful when the target area appears as separate parts but should be treated as one zone.
+
+**Zone Merge Distance (pixels)**  
+Maximum distance between zone centers to merge them together. Higher values will merge zones that are further apart.
+
+**Zone Connection Dilation**  
+Dilation size (pixels) applied during detection to connect nearby zones. This works by temporarily expanding detected areas to bridge gaps, then shrinking them back. Higher values connect zones that are further apart. 
+
 In the example below, you can see the target width percent setting visualized as the yellow box that appears in the preview window.
 
 ![Target Width Percent Example](/assets/docs/settings/target_width_percent_example.png)
@@ -119,6 +128,9 @@ Minimum area as percentage of image size when using adaptive area filtering.
 
 **Otsu Disable Color Lock**  
 Disable color locking for Otsu detection. When enabled, detection runs continuously without locking to specific colors. 
+
+**Otsu Invert Mask (Detect Black Areas)**  
+Invert Otsu mask to detect zones within black areas instead of white areas. Useful when the target zone appears dark in the debug panel instead of bright.
 
 **Use Color Picker Detection**  
 Uses a specific color you pick to detect target zones. Enable this, then click "Pick Color from Screen" to select your target color. Very precise when you know the exact color you want to detect, but cannot be used with Otsu Detection or Saturation Threshold. Will also not work in situations where environments may change (e.g., grass turns snowy).
