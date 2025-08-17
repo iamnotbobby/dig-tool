@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dig-tool"
-version = "1.5.4"
+version = "1.5.5"
 description = "Dig Tool"
 readme = "README.md"
 license = "MIT"
@@ -40,7 +40,7 @@ include-package-data = true
 "*" = ["*.ico", "*.png", "*.jpg", "*.md", "*.txt"]
 
 [tool.dig-tool]
-# version-beta = 7
+version-beta = 1
 
 [project.optional-dependencies]
 build = [
