@@ -9,8 +9,8 @@ Discord -> https://discord.com/invite/mxE7dzXMGf
 
 -->
 
-> [!CAUTION]
-> Only download Dig Tool from the **official** repository (https://github.com/iamnotbobby/dig-tool/releases). Never download from untrusted links.
+> [!IMPORTANT]
+> Dig Tool is no longer actively maintained due to "Dig" no longer having an active playerbase and other priorities.
 
 <img src="assets/icon.png" width="150`" align="right"/>
 
