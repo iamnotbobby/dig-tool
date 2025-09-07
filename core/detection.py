@@ -10,7 +10,7 @@ def detect_by_saturation(hsv, saturation_threshold):
 
 
 def detect_by_otsu_with_area_filter(
-    hsv, min_area=50, max_area=None, morph_kernel_size=3
+    hsv, min_area=50, max_area=None, morph_kernel_size=3, invert_mask=False, zone_connection_dilation=0
 ):
     # Extract saturation channel
     saturation = hsv[:, :, 1]
@@ -19,6 +19,10 @@ def detect_by_otsu_with_area_filter(
     threshold_value, otsu_mask = cv2.threshold(
         saturation, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
+    
+    # Invert the mask (detect black areas instead of white)
+    if invert_mask:
+        otsu_mask = cv2.bitwise_not(otsu_mask)
 
     # Optional: Apply morphological operations to clean up the mask
     if morph_kernel_size > 0:
@@ -29,6 +33,15 @@ def detect_by_otsu_with_area_filter(
         otsu_mask = cv2.morphologyEx(otsu_mask, cv2.MORPH_CLOSE, kernel)
         # Remove small noise
         otsu_mask = cv2.morphologyEx(otsu_mask, cv2.MORPH_OPEN, kernel)
+
+    # Apply zone connection dilation (to connect nearby zones)
+    if zone_connection_dilation > 0:
+        connection_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (zone_connection_dilation, zone_connection_dilation)
+        )
+        otsu_mask = cv2.dilate(otsu_mask, connection_kernel, iterations=1)
+        # Erode back to approximately original size but keep connections
+        otsu_mask = cv2.erode(otsu_mask, connection_kernel, iterations=1)
 
     # Apply area filtering
     if min_area > 0 or max_area is not None:
@@ -54,14 +67,91 @@ def detect_by_otsu_with_area_filter(
     return otsu_mask, threshold_value
 
 
-def detect_by_otsu_adaptive_area(hsv, area_percentile=0.1, morph_kernel_size=3):
+def detect_by_otsu_adaptive_area(hsv, area_percentile=0.1, morph_kernel_size=3, invert_mask=False, zone_connection_dilation=0):
     height, width = hsv.shape[:2]
     image_area = height * width
     min_area = int(image_area * (area_percentile / 100.0))
 
     return detect_by_otsu_with_area_filter(
-        hsv, min_area=min_area, morph_kernel_size=morph_kernel_size
+        hsv, min_area=min_area, morph_kernel_size=morph_kernel_size, invert_mask=invert_mask, zone_connection_dilation=zone_connection_dilation
     )
+
+
+def merge_nearby_contours(contours, merge_distance):
+    if not contours or len(contours) <= 1:
+        return contours
+    
+    # Calculate bounding rectangles for all contours
+    bounding_rects = [cv2.boundingRect(contour) for contour in contours]
+    merged_groups = []
+    used_indices = set()
+    
+    for i, rect1 in enumerate(bounding_rects):
+        if i in used_indices:
+            continue
+            
+        current_group = [i]
+        x1, y1, w1, h1 = rect1
+        
+        # Find all contours within merge_distance of this one
+        for j, rect2 in enumerate(bounding_rects):
+            if j == i or j in used_indices:
+                continue
+                
+            x2, y2, w2, h2 = rect2
+            
+            # Calculate distance between rectangle centers
+            center1_x, center1_y = x1 + w1/2, y1 + h1/2
+            center2_x, center2_y = x2 + w2/2, y2 + h2/2
+            distance = ((center1_x - center2_x)**2 + (center1_y - center2_y)**2)**0.5
+            
+            if distance <= merge_distance:
+                current_group.append(j)
+                used_indices.add(j)
+        
+        used_indices.add(i)
+        merged_groups.append(current_group)
+    
+    # Create merged contours
+    merged_contours = []
+    for group in merged_groups:
+        if len(group) == 1:
+            # Single contour, no merging needed
+            merged_contours.append(contours[group[0]])
+        else:
+            # Multiple contours, merge them by creating a mask and finding the combined contour
+            # Find the bounding box that encompasses all contours in the group
+            all_rects = [bounding_rects[idx] for idx in group]
+            min_x = min(rect[0] for rect in all_rects)
+            min_y = min(rect[1] for rect in all_rects)
+            max_x = max(rect[0] + rect[2] for rect in all_rects)
+            max_y = max(rect[1] + rect[3] for rect in all_rects)
+            
+            # Create a mask for the merged area
+            merged_width = max_x - min_x
+            merged_height = max_y - min_y
+            merged_mask = np.zeros((merged_height, merged_width), dtype=np.uint8)
+            
+            # Draw all contours in the group onto the mask
+            for idx in group:
+                contour_shifted = contours[idx].copy()
+                contour_shifted[:, :, 0] -= min_x
+                contour_shifted[:, :, 1] -= min_y
+                cv2.fillPoly(merged_mask, [contour_shifted], 255)
+            
+            # Find the external contour of the merged mask
+            merged_contour_list, _ = cv2.findContours(
+                merged_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+            
+            if merged_contour_list:
+                # Shift the merged contour back to original coordinates
+                largest_merged = max(merged_contour_list, key=cv2.contourArea)
+                largest_merged[:, :, 0] += min_x
+                largest_merged[:, :, 1] += min_y
+                merged_contours.append(largest_merged)
+    
+    return merged_contours
 
 
 def get_hsv_bounds(hsv_color, is_low_sat):

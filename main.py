@@ -682,16 +682,22 @@ class DigTool:
                         if get_param(self, "otsu_adaptive_area"):
                             area_percentile = get_param(self, "otsu_area_percentile")
                             morph_kernel = get_param(self, "otsu_morph_kernel_size")
+                            invert_mask = get_param(self, "otsu_invert_mask")
+                            zone_connection_dilation = get_param(self, "zone_connection_dilation")
                             final_mask, threshold_value = detect_by_otsu_adaptive_area(
                                 hsv,
                                 area_percentile=area_percentile,
                                 morph_kernel_size=morph_kernel,
+                                invert_mask=invert_mask,
+                                zone_connection_dilation=zone_connection_dilation,
                             )
                             detection_info = {
                                 "method": "Otsu (Adaptive)",
                                 "threshold": threshold_value,
                                 "area_percentile": area_percentile,
                                 "morph_kernel": morph_kernel,
+                                "invert_mask": invert_mask,
+                                "zone_connection_dilation": zone_connection_dilation,
                             }
                         else:
                             min_area = get_param(self, "otsu_min_area")
@@ -709,12 +715,16 @@ class DigTool:
                                 except (ValueError, TypeError):
                                     max_area = None
                             morph_kernel = get_param(self, "otsu_morph_kernel_size")
+                            invert_mask = get_param(self, "otsu_invert_mask")
+                            zone_connection_dilation = get_param(self, "zone_connection_dilation")
                             final_mask, threshold_value = (
                                 detect_by_otsu_with_area_filter(
                                     hsv,
                                     min_area=min_area,
                                     max_area=max_area,
                                     morph_kernel_size=morph_kernel,
+                                    invert_mask=invert_mask,
+                                    zone_connection_dilation=zone_connection_dilation,
                                 )
                             )
                             detection_info = {
@@ -725,6 +735,8 @@ class DigTool:
                                     max_area if max_area is not None else "Unlimited"
                                 ),
                                 "morph_kernel": morph_kernel,
+                                "invert_mask": invert_mask,
+                                "zone_connection_dilation": zone_connection_dilation,
                             }
                     else:
                         saturation = hsv[:, :, 1]
@@ -836,6 +848,12 @@ class DigTool:
                 contours, _ = cv2.findContours(
                     final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                 )
+
+                merge_nearby = get_param(self, "merge_nearby_zones")
+                if merge_nearby and len(contours) > 1:
+                    merge_distance = get_param(self, "zone_merge_distance")
+                    from core.detection import merge_nearby_contours
+                    contours = merge_nearby_contours(contours, merge_distance)
 
                 raw_zone_x, raw_zone_w = None, None
                 if contours:

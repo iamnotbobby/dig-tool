@@ -192,6 +192,7 @@ class MainWindow:
         self.cursor_dependent_widgets = []
         self.velocity_dependent_widgets = []
         self.otsu_dependent_widgets = []
+        self.zone_merge_dependent_widgets = []
         self.color_picker_dependent_widgets = []
         self.engagement_timeout_dependent_widgets = []
         self.money_detection_dependent_widgets = []
@@ -250,6 +251,15 @@ class MainWindow:
     def validate_otsu_toggle(self, *args):
         if self.dig_tool.param_vars['use_otsu_detection'].get():
             self.dig_tool.param_vars['use_color_picker_detection'].set(False)
+        else:
+            self.dig_tool.param_vars['merge_nearby_zones'].set(False)
+        self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
+
+    def validate_zone_merge_toggle(self, *args):
+        if self.dig_tool.param_vars['merge_nearby_zones'].get():
+            if not self.dig_tool.param_vars['use_otsu_detection'].get():
+                self.dig_tool.param_vars['merge_nearby_zones'].set(False)
+                return
         self.dig_tool.root.after_idle(self.update_dependent_widgets_state)
 
     def validate_color_picker_toggle(self, *args):
@@ -576,6 +586,11 @@ class MainWindow:
         otsu_enabled = self.dig_tool.param_vars.get('use_otsu_detection', tk.BooleanVar()).get()
         for widget in self.otsu_dependent_widgets:
             widget.config(state='normal' if otsu_enabled else 'disabled')
+
+        zone_merge_enabled = self.dig_tool.param_vars.get('merge_nearby_zones', tk.BooleanVar()).get()
+        zone_merge_available = otsu_enabled and zone_merge_enabled
+        for widget in self.zone_merge_dependent_widgets:
+            widget.config(state='normal' if zone_merge_available else 'disabled')
 
         color_picker_enabled = self.dig_tool.param_vars.get('use_color_picker_detection', tk.BooleanVar()).get()
         for widget in self.color_picker_dependent_widgets:
@@ -1066,12 +1081,22 @@ class MainWindow:
                               self.otsu_dependent_widgets, 'otsu')
         create_checkbox_param(otsu_subsection.content, "Disable Color Lock", 'otsu_disable_color_lock',
                               self.otsu_dependent_widgets, 'otsu')
+        create_checkbox_param(otsu_subsection.content, "Invert Mask (Detect Black Areas)", 'otsu_invert_mask',
+                              self.otsu_dependent_widgets, 'otsu')
         create_dual_param_entry(otsu_subsection.content, "Min Area (pixels):", 'otsu_min_area',
                                "Max Area (pixels):", 'otsu_max_area',
                                self.otsu_dependent_widgets, 'otsu')
         create_dual_param_entry(otsu_subsection.content, "Morph Kernel Size:", 'otsu_morph_kernel_size',
                                "Area Percentile:", 'otsu_area_percentile',
                                self.otsu_dependent_widgets, 'otsu')
+
+        # Zone Merging Settings (within Otsu section)
+        create_checkbox_param(otsu_subsection.content, "Merge Nearby Zones", 'merge_nearby_zones',
+                              self.otsu_dependent_widgets, 'otsu', validation_callback=self.validate_zone_merge_toggle)
+        create_param_entry(otsu_subsection.content, "Zone Merge Distance (px):", 'zone_merge_distance',
+                          self.zone_merge_dependent_widgets, 'zone_merge')
+        create_param_entry(otsu_subsection.content, "Zone Connection Dilation (px):", 'zone_connection_dilation',
+                          self.zone_merge_dependent_widgets, 'zone_merge')
 
         # Color Picker Detection Settings (Collapsible)
         color_picker_subsection = CollapsibleSubsection(panes['detection'].sub_frame, "Color Picker Detection (Simple Method)",
@@ -1504,6 +1529,7 @@ class MainWindow:
         self.dig_tool.param_vars['auto_sell_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_custom_cursor'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_otsu_detection'].trace_add('write', self.update_dependent_widgets_state)
+        self.dig_tool.param_vars['merge_nearby_zones'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['use_color_picker_detection'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['velocity_based_width_enabled'].trace_add('write', self.update_dependent_widgets_state)
         self.dig_tool.param_vars['auto_sell_target_engagement_enabled'].trace_add('write', self.update_dependent_widgets_state)
